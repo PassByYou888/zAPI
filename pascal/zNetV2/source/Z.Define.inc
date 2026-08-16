@@ -15,7 +15,6 @@
   {$GOTO ON}
   {$INLINE ON}
   {$MACRO ON}
-  {$HINTS OFF}
   {$IEEEERRORS OFF}
   {$packrecords c}
 
@@ -186,11 +185,17 @@
     {$UNDEF FirstCharInZero}
   {$ENDIF VER360}
 
-  // delphi 12.x
+  // delphi 13.x
   {$IFDEF VER370}
     {$DEFINE InstallMT19937CoreToDelphi}
     {$UNDEF FirstCharInZero}
   {$ENDIF VER370}
+
+  // delphi 14.x
+  {$IFDEF VER380}
+    {$DEFINE InstallMT19937CoreToDelphi}
+    {$UNDEF FirstCharInZero}
+  {$ENDIF VER380}
 
   // MT19937 of seed in the startup TCompute is 0
   {$DEFINE MT19937SeedOnTComputeThreadIs0}
@@ -266,13 +271,6 @@
     {$DEFINE PhysicsIO_On_FPC_CrossSocket}
   {$ELSE}
     // PhysicsIO interface
-    // {$DEFINE PhysicsIO_On_ICS}
-    // {$DEFINE PhysicsIO_On_ICS9}
-    // {$DEFINE PhysicsIO_On_CrossSocket}
-    // {$DEFINE PhysicsIO_On_FPC_CrossSocket}
-    // {$DEFINE PhysicsIO_On_DIOCP}
-    // {$DEFINE PhysicsIO_On_Indy}
-    //  {$DEFINE PhysicsIO_On_Synapse}
     {$DEFINE PhysicsIO_On_FPC_CrossSocket}
   {$IFEND}
 
