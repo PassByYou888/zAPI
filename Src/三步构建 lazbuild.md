@@ -4,14 +4,14 @@
 
 ---
 
-> **📌 本指南针对您的文件定制**  
+> **📌 本指南针对您的文件定制**
 >
-> - FPC 压缩包：`fpc-3.3.1.loongarch64-linux.tar.gz`（原生龙芯包）  
-> - Lazarus 源码包：`lazarus_4_8.rar`（来自 Git 标签 `lazarus_4_8` 的打包）  
-> - 操作系统：Loongnix / 任何 RHEL 系 Linux / Debian/Ubuntu  
-> - **所有步骤均需手动执行**，每步配有详细解释，确保您完全理解操作意图。  
-> - **流程通用性**：仅需替换架构名和压缩包名，即可迁移到其他 Linux 架构（x86_64、ARM、RISC‑V 等）。  
-> - **关于路径**：以下示例中，假设您的压缩包放在 `~/downloads/` 目录下。请您根据实际情况替换为您的真实路径（例如 `/home/你的用户名/downloads/` 或 `/root/downloads/`）。  
+> - FPC 压缩包：`fpc-3.3.1.loongarch64-linux.tar.gz`（原生龙芯包）
+> - Lazarus 源码包：`lazarus_4_8.zip`（来自 Git 标签 `lazarus_4_8` 的打包）
+> - 操作系统：Loongnix / 任何 RHEL 系 Linux / Debian/Ubuntu
+> - **所有步骤均需手动执行**，每步配有详细解释，确保您完全理解操作意图。
+> - **流程通用性**：仅需替换架构名和压缩包名，即可迁移到其他 Linux 架构（x86_64、ARM、RISC‑V 等）。
+> - **关于路径**：以下示例中，假设您的压缩包放在 `~/downloads/` 目录下。请您根据实际情况替换为您的真实路径（例如 `/home/你的用户名/downloads/` 或 `/root/downloads/`）。
 > - fpc3.3.1全系统打包+lazarus4.8分支源码,总共10G左右,百度网盘：[https://pan.baidu.com/s/1wnlNAjCv3-KaURp3kOaZzw](https://pan.baidu.com/s/1wnlNAjCv3-KaURp3kOaZzw) 提取码：vl5t
 >
 > **作者：老张 qq600585**
@@ -25,37 +25,30 @@
 将以下两个文件放到同一个目录，例如 `~/downloads/`（请根据实际修改）：
 
 - `fpc-3.3.1.loongarch64-linux.tar.gz`
-- `lazarus_4_8.rar`
+- `lazarus_4_8.zip`
 
-### 2. 安装解压工具（若未安装）
+### 2. 解压 Lazarus 源码包（.zip 格式）
 
-`.rar` 文件需要解压工具。我们提供三种选择，**推荐使用 `7z`（p7zip-full）**，因为它无需额外配置且支持大部分 RAR 格式。
+`.zip` 格式在 Linux 下使用 `unzip` 命令解压，绝大多数 Linux 发行版默认已安装该工具。若未安装，可通过包管理器快速安装：
 
 ```bash
-# 推荐：安装 7z（适用于所有发行版，无需额外源）
 # RHEL / CentOS / Loongnix
-yum install -y p7zip
+yum install -y unzip
 
 # Debian / Ubuntu
-apt install -y p7zip-full
+apt install -y unzip
 ```
 
-**若您偏好使用 `unrar`（官方版，支持 RAR5）**，在 Debian/Ubuntu 上需要先启用 `non-free` 软件源：
+**解压命令**：
 
 ```bash
-# Debian/Ubuntu 启用 non-free 源并安装 unrar
-sed -i.bak 's/bookworm[^ ]* main$/& non-free/g' /etc/apt/sources.list   # 将 bookworm 替换为您的版本代号
-apt update
-apt install -y unrar
+cd ~/downloads
+unzip lazarusr_4_8.zip
 ```
 
-**备选方案：`unrar-free`（开源版，但不支持 RAR5 格式）**
+解压后会得到一个目录（通常名为 `lazarus` 或 `lazarus-4.8`）。进入该目录，确认其中包含 `lcl`、`components` 等子目录，这就是 Lazarus 源码根目录。
 
-```bash
-apt install -y unrar-free
-```
-
-> **注意**：如果您不确定 RAR 文件的压缩版本，建议使用 `7z` 或官方 `unrar`。`unrar-free` 可能无法解压较新的 RAR 文件。
+> **关于 FPC 压缩包**：`fpc-3.3.1.loongarch64-linux.tar.gz` 是标准的 `.tar.gz` 格式，Linux 系统自带的 `tar` 命令即可解压，无需额外工具。解压命令见第二步。
 
 ---
 
@@ -83,10 +76,10 @@ apt install -y make gcc g++ binutils subversion zip unzip \
     gdb rsync cmake libgtk-3-dev
 ```
 
-> **为什么需要这些？**  
+> **为什么需要这些？**
 >
-> - `make`, `gcc`, `binutils`：编译必需品。  
-> - `gtk2-devel`, `cairo-devel`：LCL 图形库依赖，即使只编译 `lazbuild`（无 GUI），部分 Makefile 仍会引用，缺失会导致链接错误。  
+> - `make`, `gcc`, `binutils`：编译必需品。
+> - `gtk2-devel`, `cairo-devel`：LCL 图形库依赖，即使只编译 `lazbuild`（无 GUI），部分 Makefile 仍会引用，缺失会导致链接错误。
 > - `cmake`：一些构建辅助工具需要。
 
 **验证**：
@@ -166,7 +159,7 @@ find . -type d -print | sed 's|^\.||' | while read dir; do
 done >> /etc/fpc.cfg
 ```
 
-> **为什么这样做？**  
+> **为什么这样做？**
 > 不同架构的目录名不同（例如 x86_64-linux、aarch64-linux 等），通过 `ls` 查看后再进入，可以避免因硬编码路径导致的错误。`$(pwd)` 会动态获取当前绝对路径，确保添加的路径正确。
 
 #### ⑥ 清理临时文件（可选）
@@ -190,32 +183,15 @@ ppcloongarch64 -iV  # 同样输出版本号
 
 ### 操作步骤
 
-#### ① 解压 Lazarus 源码（.rar 格式）
+#### ① 进入 Lazarus 源码目录
+
+根据您在第 2 步中解压得到的实际目录名，进入 Lazarus 源码根目录：
 
 ```bash
-cd ~/downloads
-LAZARUS_RAR="lazarus_4_8.rar"
-mkdir -p /tmp/lazarus_build
-cd /tmp/lazarus_build
-
-# 使用 7z 解压（推荐，兼容性最好）
-7z x ~/downloads/"$LAZARUS_RAR"
-
-# 或者使用 unrar（如果已安装）
-# unrar x ~/downloads/"$LAZARUS_RAR"
+cd /path/to/lazarus   # 请替换为实际的 Lazarus 源码目录路径
 ```
 
-解压后，**先查看当前目录下的内容，确定解压出的顶层目录名**：
-
-```bash
-ls
-```
-
-通常会是 `lazarus` 或 `lazarus-4.8`。假设为 `lazarus`，则进入：
-
-```bash
-cd lazarus   # 如果目录名不同，请替换为实际名称
-```
+> 例如，如果您在 `~/downloads/` 下解压得到 `lazarus-4.8`，则执行 `cd ~/downloads/lazarus-4.8`。
 
 #### ② 编译 `lazbuild`
 
@@ -241,7 +217,7 @@ cp lazbuild /usr/local/bin/
 - **将 Lazarus 源码移动到固定位置**（例如 `/usr/local/share/lazarus`）：
   ```bash
   # 首先确认当前目录是 Lazarus 源码根目录（包含 lcl、components 等）
-  # 假设当前在 /tmp/lazarus_build/lazarus
+  # 假设当前在 /path/to/lazarus
   mkdir -p /usr/local/share
   rm -rf /usr/local/share/lazarus          # 如果已存在则先删除
   mv . /usr/local/share/lazarus            # 将当前目录整体移动
@@ -261,7 +237,7 @@ cp lazbuild /usr/local/bin/
   lazbuild --lazarusdir=/usr/local/share/lazarus 项目文件.lpi
   ```
 
-> **为什么要这么做？**  
+> **为什么要这么做？**
 > `lazbuild` 编译时记录的是编译时的临时路径，但该路径在解压后可能被删除或移动。将 Lazarus 源码固定到标准目录并配置环境变量，可以保证任何时候都能找到所需的 LCL 单元，避免编译失败。
 
 #### ⑤ 验证
@@ -287,15 +263,14 @@ lazbuild --version
 
 ## 📌 常见问题与解决
 
-| 问题                                            | 原因                   | 解决办法                                |
-| ----------------------------------------------- | ---------------------- | --------------------------------------- |
-| `fpc -iV` 报 `ppcloongarch64 can't be executed` | 未创建软链接           | 执行第二步第③条                         |
-| `make lazbuild` 报 `gtk/gtk.h: No such file`    | 图形库未安装           | 重新执行第一步，安装 `gtk2-devel`       |
-| 找不到 `DB`、`Variants` 等单元                  | `fpc.cfg` 缺少子目录   | 重新执行第二步第⑤条，确保所有子目录添加 |
-| `7z: command not found`                         | 未安装 p7zip           | 安装 `p7zip` 或 `p7zip-full`            |
-| `unrar: command not found`                      | 未安装 unrar           | 尝试安装 `unrar`（启用 non-free）或 `unrar-free`，或使用 `7z` |
-| 解压后目录名不匹配                              | 压缩包内顶层目录名不同 | 使用 `ls` 查看实际目录名，再 `cd` 进入  |
-| `lazbuild` 报 `Invalid Lazarus directory ""`    | 未设置 Lazarus 路径    | 执行第三步第④条，设置 `LAZARUS_DIR`     |
+| 问题 | 原因 | 解决办法 |
+| ---- | ---- | -------- |
+| `fpc -iV` 报 `ppcloongarch64 can't be executed` | 未创建软链接 | 执行第二步第③条 |
+| `make lazbuild` 报 `gtk/gtk.h: No such file` | 图形库未安装 | 重新执行第一步，安装 `gtk2-devel` |
+| 找不到 `DB`、`Variants` 等单元 | `fpc.cfg` 缺少子目录 | 重新执行第二步第⑤条，确保所有子目录添加 |
+| `unzip: command not found` | 未安装 unzip | 安装 `unzip`（yum/apt install unzip）|
+| 解压后目录名不匹配 | 压缩包内顶层目录名不同 | 使用 `ls` 查看实际目录名，再 `cd` 进入 |
+| `lazbuild` 报 `Invalid Lazarus directory ""` | 未设置 Lazarus 路径 | 执行第三步第④条，设置 `LAZARUS_DIR` |
 
 ---
 
@@ -327,5 +302,5 @@ for lpi in *.lpi; do lazbuild --build-mode=Release "$lpi"; done
 
 ---
 
-> **文档作者：老张 qq600585**  
+> **文档作者：老张 qq600585**
 > 本指南基于龙芯平台实测，欢迎反馈问题。
