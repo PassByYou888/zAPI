@@ -239,19 +239,46 @@ Linux 下，mimalloc **需要自行编译生成 `libmimalloc.so`**。详见 [第
 
 **安装解压工具**：
 
+`.rar` 文件需要解压工具，我们提供多种选择，**推荐使用 `7z`（p7zip）**，因为它无需额外配置且兼容性好。
+
 ```bash
-# RHEL/CentOS/Loongnix
-yum install -y unrar
-# 或使用 7z
+# 推荐：安装 7z（适用于所有发行版，无需额外源）
+# RHEL / CentOS / Loongnix
 yum install -y p7zip
+
+# Debian / Ubuntu
+apt install -y p7zip-full
 ```
+
+**若您偏好使用 `unrar`（官方版，支持 RAR5）**，在 Debian/Ubuntu 上需要先启用 `non-free` 软件源：
+
+```bash
+# Debian/Ubuntu 启用 non-free 源并安装 unrar
+sed -i.bak 's/bookworm[^ ]* main$/& non-free/g' /etc/apt/sources.list   # 将 bookworm 替换为您的版本代号
+apt update
+apt install -y unrar
+```
+
+**备选方案：`unrar-free`（开源版，但不支持 RAR5 格式）**
+
+```bash
+apt install -y unrar-free
+```
+
+> **注意**：如果您不确定 RAR 文件的压缩版本，建议使用 `7z` 或官方 `unrar`。`unrar-free` 可能无法解压较新的 RAR 文件。
 
 ### 5.2 第一步：安装系统编译依赖
 
 ```bash
+# RHEL / CentOS / Loongnix
 yum install -y make gcc gcc-c++ binutils subversion zip unzip \
     libX11-devel gtk2-devel gdk-pixbuf2-devel cairo-devel pango-devel \
     gdb rsync cmake gtk3-devel glibc-devel
+
+# Debian / Ubuntu
+apt install -y make gcc g++ binutils subversion zip unzip \
+    libx11-dev libgtk2.0-dev libgdk-pixbuf2.0-dev libcairo2-dev libpango1.0-dev \
+    gdb rsync cmake libgtk-3-dev
 ```
 
 > **为什么需要这些？** 即使只编译 `lazbuild`（无 GUI），部分 Makefile 仍会引用图形库，缺失会导致链接错误。
@@ -283,6 +310,8 @@ tar -xzf "$FPC_TARBALL" -C /tmp/fpc_deploy
 \cp -rf /tmp/fpc_deploy/share/* /usr/share/
 ```
 
+> 使用 `\cp` 避免交互式覆盖提示。
+
 **③ 创建后端编译器软链接**
 
 龙芯架构的后端编译器名为 `ppcloongarch64`：
@@ -303,15 +332,25 @@ ln -sf /usr/lib/fpc/3.3.1/ppcloongarch64 /usr/bin/ppcloongarch64
 
 **⑤ 将所有单元子目录添加到配置（关键步骤）**
 
+> **不要直接复制绝对路径**，请先进入目录查看实际架构名称。
+
 ```bash
-UNITS_DIR="/usr/lib/fpc/3.3.1/units/loongarch64-linux"
-cd "$UNITS_DIR"
+# 进入 FPC 单元根目录
+cd /usr/lib/fpc/3.3.1/units
+
+# 列出所有架构目录，找到您的目标（例如 loongarch64-linux）
+ls
+
+# 根据列出的名称，进入对应的架构目录（请将 loongarch64-linux 替换为实际看到的名称）
+cd loongarch64-linux   # 请替换为实际目录名
+
+# 现在将当前目录下的所有子目录添加到 fpc.cfg
 find . -type d -print | sed 's|^\.||' | while read dir; do
-    [ -n "$dir" ] && echo "-Fu${UNITS_DIR}${dir}"
+    [ -n "$dir" ] && echo "-Fu$(pwd)${dir}"
 done >> /etc/fpc.cfg
 ```
 
-> **关键**：这一步保证了编译器能搜索到 `fcl-db`、`rtl-objpas`、`fcl-xml` 等所有包的单元文件，避免后续编译报 `Can't find unit xxx`。
+> **为什么这样做？** 不同架构的目录名不同（例如 x86_64-linux、aarch64-linux 等），通过 `ls` 查看后再进入，可以避免因硬编码路径导致的错误。`$(pwd)` 会动态获取当前绝对路径，确保添加的路径正确。
 
 **⑥ 验证 FPC**
 
@@ -329,13 +368,17 @@ cd ~/downloads
 LAZARUS_RAR="lazarus_4_8.rar"
 mkdir -p /tmp/lazarus_build
 cd /tmp/lazarus_build
-unrar x ~/downloads/"$LAZARUS_RAR"
-# 或使用: 7z x ~/downloads/lazarus_4_8.rar
+
+# 使用 7z 解压（推荐，兼容性最好）
+7z x ~/downloads/"$LAZARUS_RAR"
+
+# 或者使用 unrar（如果已安装）
+# unrar x ~/downloads/"$LAZARUS_RAR"
 
 # 查看解压出的目录名
 ls
 # 假设为 lazarus，进入
-cd lazarus
+cd lazarus   # 如果目录名不同，请替换为实际名称
 ```
 
 **② 编译 `lazbuild`**
@@ -347,24 +390,60 @@ make lazbuild
 
 > 此过程约需 3~5 分钟。若内存较小可添加 `-j1` 限制并行数：`make lazbuild -j1`。
 
-**③ 复制到系统路径**
+**③ 复制 `lazbuild` 到系统路径**
 
 ```bash
 cp lazbuild /usr/local/bin/
 ```
 
-**④ 验证**
+**④ 配置 `lazbuild` 的 Lazarus 目录（关键步骤）**
+
+`lazbuild` 需要知道 Lazarus 源码的位置（即包含 `lcl`、`components` 等子目录的根目录），否则后续使用时可能报错 `Invalid Lazarus directory ""`。
+
+**推荐做法**：
+
+- **将 Lazarus 源码移动到固定位置**（例如 `/usr/local/share/lazarus`）：
+  ```bash
+  # 首先确认当前目录是 Lazarus 源码根目录（包含 lcl、components 等）
+  # 假设当前在 /tmp/lazarus_build/lazarus
+  mkdir -p /usr/local/share
+  rm -rf /usr/local/share/lazarus          # 如果已存在则先删除
+  mv . /usr/local/share/lazarus            # 将当前目录整体移动
+  # 注意：移动后当前目录会消失，需要切换到新位置
+  cd /usr/local/share/lazarus
+  ```
+
+- **设置环境变量 `LAZARUS_DIR`**（永久生效）：
+  ```bash
+  echo 'export LAZARUS_DIR=/usr/local/share/lazarus' >> ~/.bashrc
+  source ~/.bashrc
+  ```
+  这样以后直接运行 `lazbuild` 就会自动识别该目录。
+
+- **或者在每次调用时使用 `--lazarusdir` 参数**（临时方案）：
+  ```bash
+  lazbuild --lazarusdir=/usr/local/share/lazarus 项目文件.lpi
+  ```
+
+> **为什么要这么做？** `lazbuild` 编译时记录的是编译时的临时路径，但该路径在解压后可能被删除或移动。将 Lazarus 源码固定到标准目录并配置环境变量，可以保证任何时候都能找到所需的 LCL 单元，避免编译失败。
+
+**⑤ 验证**
 
 ```bash
 lazbuild --version
 ```
+
+应显示 Lazarus 4.8 版本信息。同时确认 `lazbuild` 能找到 Lazarus 目录（可尝试不带参数运行 `lazbuild`，应显示帮助信息，无报错）。
 
 ### 5.5 第四步：克隆并构建 zAPI
 
 ```bash
 git clone --recursive https://github.com/PassByYou888/zAPI.git
 cd zAPI/Src
+# 如果之前已经设置了 LAZARUS_DIR，直接运行
 lazbuild z_api_hub.lpi
+# 如果未设置，使用 --lazarusdir
+# lazbuild --lazarusdir=/usr/local/share/lazarus z_api_hub.lpi
 ```
 
 ### 5.6 常见问题与解决
@@ -374,8 +453,10 @@ lazbuild z_api_hub.lpi
 | `fpc -iV` 报 `ppcloongarch64 can't be executed` | 未创建软链接 | 执行第二步第③条 |
 | `make lazbuild` 报 `gtk/gtk.h: No such file` | 图形库未安装 | 重新执行第一步，安装 `gtk2-devel` |
 | 找不到 `DB`、`Variants` 等单元 | `fpc.cfg` 缺少子目录 | 重新执行第二步第⑤条 |
-| `unrar: command not found` | 未安装解压工具 | `yum install unrar` |
-| `lazbuild: command not found` | 未复制到系统路径 | 执行第三步第③条 |
+| `7z: command not found` | 未安装 p7zip | 安装 `p7zip` 或 `p7zip-full` |
+| `unrar: command not found` | 未安装 unrar | 尝试安装 `unrar`（启用 non-free）或 `unrar-free`，或使用 `7z` |
+| 解压后目录名不匹配 | 压缩包内顶层目录名不同 | 使用 `ls` 查看实际目录名，再 `cd` 进入 |
+| `lazbuild` 报 `Invalid Lazarus directory ""` | 未设置 Lazarus 路径 | 执行第三步第④条，设置 `LAZARUS_DIR` |
 
 > 更多详细排错请参考 [《三步构建 lazbuild》文档](./三步构建%20lazbuild（手动操作版%20·%20适配%20loongarch64%20+%20lazarus_4_8）.md) 中的"常见问题与解决"章节。
 
@@ -458,7 +539,7 @@ export LD_LIBRARY_PATH=/path/to/mimalloc/build:$LD_LIBRARY_PATH
 |------|----------|----------|
 | **Windows** | 安装 Lazarus，配置 PATH | `cd Src && lazbuild z_api_hub.lpi` |
 | **Linux**（有 Lazarus） | 安装 Lazarus | `cd Src && lazbuild z_api_hub.lpi` |
-| **Linux**（无 Lazarus） | 先按第五章编译 `lazbuild` | `cd Src && lazbuild z_api_hub.lpi` |
+| **Linux**（无 Lazarus） | 先按第五章编译 `lazbuild` | `cd Src && lazbuild z_api_hub.lpi`（需确保 `LAZARUS_DIR` 已设置） |
 
 ### 8.2 完整构建流程（通用）
 
