@@ -3,7 +3,9 @@ library z_api_hub;
 {$I ..\pascal\zNetV2\source\Z.Define.inc}
 
 uses
+  {$IFDEF MSWINDOWS}
   mimalloc4p,
+  {$ENDIF MSWINDOWS}
   {$IFDEF UNIX}
   cthreads,
   {$ENDIF}
