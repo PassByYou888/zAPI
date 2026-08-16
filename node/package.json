@@ -1,0 +1,11 @@
+{
+  "name": "zapi-node-client",
+  "version": "1.0.0",
+  "description": "Node.js client for zAPI via Python Gateway",
+  "main": "client.js",
+  "scripts": {
+    "start": "node client.js"
+  },
+  "author": "",
+  "license": "MIT"
+}

@@ -1,0 +1,13 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Client</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\ApiHubTool.Bindings\ApiHubTool.Bindings.vbproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Import Include="ApiHubTool.Bindings" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,625 @@
+(*
+MIT License
+
+Copyright (c) 2026 by.LaoZhang qq600585
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*)
+{ *  ZDB2 Pair String-Stream for HPC
+  *
+  *  This unit provides a high-performance, thread-safe string-keyed fragment
+  *  storage system built on top of the ZDB2 thread engine (Z.ZDB2.Thread).
+  *  It is a variant of the MD5-keyed storage, using arbitrary strings as keys
+  *  instead of MD5 hashes. This is ideal for use cases where keys are natural
+  *  identifiers such as file paths, user IDs, session tokens, or any other
+  *  string-based lookup.
+  *
+  *  Architecture:
+  *    - TZDB2_Pair_String_Stream_Tool is the main entry point. It owns a
+  *      TZDB2_Th_Engine_Marshal (which manages a pool of database engines)
+  *      and a string-to-data hash pool (TZDB2_Pair_String_Stream_Pool).
+  *    - TZDB2_Pair_String_Stream_Data represents a single stored fragment.
+  *      It inherits from TZDB2_Th_Engine_Data and links the actual database
+  *      entry to the string pool.
+  *    - The string pool provides O(1) lookup by string key, while the underlying
+  *      ZDB2 engine handles persistent storage, caching, and I/O.
+  *
+  *  Core Features:
+  *    - String-based key-value storage: store any binary data and retrieve it
+  *      by a string key.
+  *    - Thread-safe operations with asynchronous read/write support.
+  *    - Automatic key uniqueness: setting a fragment with an existing key only
+  *      updates the access time (moves to last) without duplicating data.
+  *    - Parallel extraction: rebuild the string pool from the database using
+  *      multiple threads (Extract_String_Pool).
+  *    - Backup and flush support inherited from TZDB2_Th_Engine_Marshal.
+  *    - Configurable hash pool size for optimal lookup performance.
+  *
+  *  Dependencies:
+  *    - Z.ZDB2.Thread (TZDB2_Th_Engine_Marshal, TZDB2_Th_Engine_Data)
+  *    - Z.ZDB2.Thread.Queue (TZDB2_Th_CMD_Stream_And_State, etc.)
+  *    - Z.HashList.Templet (TCritical_String_Big_Hash_Pair_Pool)
+  *    - Z.UnicodeMixedLib (string utilities)
+  *    - Z.MemoryStream (TMS64, TMem64)
+  *
+  *  Use Cases:
+  *    - Caching by URL, file path, or resource name.
+  *    - Temporary storage for computation results keyed by input strings.
+  *    - Configuration or metadata storage where keys are human-readable.
+  *    - Distributed key-value store as a local cache.
+  *
+  *  This unit is part of the modern ZDB2 ecosystem and is suitable for
+  *  high-concurrency, large-scale string-indexed fragment storage scenarios. }
+unit Z.ZDB2.Thread.Pair_String_Stream;
+
+{$DEFINE FPC_DELPHI_MODE}
+{$I Z.Define.inc}
+
+interface
+
+uses Z.Core,
+{$IFDEF FPC}
+  Z.FPC.GenericList,
+{$ENDIF FPC}
+  Z.PascalStrings, Z.UPascalStrings, Z.UnicodeMixedLib,
+  Z.MemoryStream, Z.HashList.Templet,
+  Z.Status, Z.Cipher, Z.ZDB2, Z.ListEngine, Z.TextDataEngine, Z.Notify, Z.IOThread,
+  Z.ZDB2.Thread.Queue, Z.ZDB2.Thread;
+
+type
+  TZDB2_Pair_String_Stream_Tool = class;
+  TZDB2_Pair_String_Stream_Data = class;
+
+  // Thread-safe critical section protected string hash pool mapping string keys to TZDB2_Pair_String_Stream_Data instances.
+  TZDB2_Pair_String_Stream_Pool__ = TCritical_String_Big_Hash_Pair_Pool<TZDB2_Pair_String_Stream_Data>;
+
+  // Extended string hash pool with custom free and comparison methods.
+  TZDB2_Pair_String_Stream_Pool = class(TZDB2_Pair_String_Stream_Pool__)
+  public
+    procedure DoFree(var Key: SystemString; var Value: TZDB2_Pair_String_Stream_Data); override; // Frees the value and removes it from the engine.
+    function Compare_Value(const Value_1, Value_2: TZDB2_Pair_String_Stream_Data): Boolean; override; // Compares two data instances by reference.
+  end;
+
+  // Data item representing a single string-keyed fragment stored in the ZDB2 engine.
+  TZDB2_Pair_String_Stream_Data = class(TZDB2_Th_Engine_Data)
+  public
+    Owner_String_Fragment_Tool: TZDB2_Pair_String_Stream_Tool; // Back-reference to the owning tool 每 set by Extract_String_Pool or Set_String_Fragment.
+    String_Fragment_Pool_Ptr: TZDB2_Pair_String_Stream_Pool__.PPair_Pool_Value__; // Pointer to this item's entry in the string pool 每 set by Do_Th_Data_Loaded or Set_String_Fragment.
+    constructor Create(); override;
+    destructor Destroy; override; // Removes itself from the string pool on destruction.
+  end;
+
+  // Main tool class for string-keyed fragment storage.
+  TZDB2_Pair_String_Stream_Tool = class(TCore_Object_Intermediate)
+  private
+    procedure Do_Th_Data_Loaded(Sender: TZDB2_Th_Engine_Data; IO_: TMS64); // Internal callback for parallel extraction 每 links each loaded data to the string pool.
+  public
+    ZDB2_Marshal: TZDB2_Th_Engine_Marshal; // Underlying thread engine marshal 每 created by constructor.
+    String_Pool: TZDB2_Pair_String_Stream_Pool; // Thread-safe string-to-data hash pool 每 created by constructor.
+
+    constructor Create(hash_size_: Integer); // Creates the tool with a given hash pool size.
+    destructor Destroy; override;
+
+    // Build an in-memory database engine (no persistence).
+    function BuildMemory(): TZDB2_Th_Engine;
+    // Build or open a file-based database. If Encrypt_ is True, uses Rijndael cipher with default password 'DTC40@ZSERVER'.
+    function BuildOrOpen(FileName_: U_String; OnlyRead_, Encrypt_: Boolean): TZDB2_Th_Engine; overload;
+    // Build or open with custom configuration.
+    function BuildOrOpen(FileName_: U_String; OnlyRead_, Encrypt_: Boolean; cfg: THashStringList): TZDB2_Th_Engine; overload;
+
+    // Hooks for custom build process.
+    function Begin_Custom_Build: TZDB2_Th_Engine;
+    function End_Custom_Build(Eng_: TZDB2_Th_Engine): Boolean;
+
+    // Extract all fragments from the database into the string pool using parallel threads.
+    procedure Extract_String_Pool(ThNum_: Integer);
+
+    // Clear all fragments from the pool and optionally delete them from the database.
+    procedure Clear(Delete_Data_: Boolean);
+
+    // Delete a specific fragment by its string key, optionally deleting the underlying data.
+    procedure Delete(Key_: SystemString; Delete_Data_: Boolean);
+
+    // Check if a fragment with the given key exists.
+    function Exists_String_Fragment(Key_: SystemString): Boolean;
+
+    // Asynchronous read operations (C, M, P callbacks) 每 read fragment into a stream or memory buffer.
+    procedure Async_Get_String_Fragment_C(Key_: SystemString; Source: TMS64; OnResult: TOn_Stream_And_State_Event_C); overload;
+    procedure Async_Get_String_Fragment_M(Key_: SystemString; Source: TMS64; OnResult: TOn_Stream_And_State_Event_M); overload;
+    procedure Async_Get_String_Fragment_P(Key_: SystemString; Source: TMS64; OnResult: TOn_Stream_And_State_Event_P); overload;
+    procedure Async_Get_String_Fragment_C(Key_: SystemString; Source: TMem64; OnResult: TOn_Mem64_And_State_Event_C); overload;
+    procedure Async_Get_String_Fragment_M(Key_: SystemString; Source: TMem64; OnResult: TOn_Mem64_And_State_Event_M); overload;
+    procedure Async_Get_String_Fragment_P(Key_: SystemString; Source: TMem64; OnResult: TOn_Mem64_And_State_Event_P); overload;
+
+    // Synchronous read: loads the fragment into the provided stream, returns True on success.
+    function Get_String_Fragment(Key_: SystemString; IO_: TMS64): Boolean;
+
+    // Store a fragment. The key is explicitly provided; the data is saved asynchronously.
+    procedure Set_String_Fragment(Key_: SystemString; IO_: TMS64; Done_Free_IO_: Boolean);
+
+    // Check and clean recycle pools (frees unreferenced data instances).
+    procedure Check_Recycle_Pool;
+    // Progress maintenance 每 returns True if any engine progressed.
+    function Progress: Boolean;
+
+    // Backup all engines, keeping Reserve_ copies.
+    procedure Backup(Reserve_: Word);
+    // Create a backup only if no backup exists.
+    procedure Backup_If_No_Exists();
+
+    // Flush all pending writes to disk.
+    procedure Flush; overload;
+    procedure Flush(WaitQueue_: Boolean); overload;
+    function Flush_Is_Busy: Boolean;
+
+    // Number of fragments currently in memory.
+    function Num: NativeInt;
+    // Total number of fragments (including those not in memory).
+    function Total: NativeInt;
+
+    // Database space statistics.
+    function Database_Size: Int64;
+    function Database_Physics_Size: Int64;
+
+    // RemoveDatabaseOnDestroy property (deletes database file when tool is destroyed).
+    function GetRemoveDatabaseOnDestroy: Boolean;
+    procedure SetRemoveDatabaseOnDestroy(const Value: Boolean);
+    property RemoveDatabaseOnDestroy: Boolean read GetRemoveDatabaseOnDestroy write SetRemoveDatabaseOnDestroy;
+
+    // Wait for all background tasks to complete.
+    procedure Wait();
+
+    // Test procedure.
+    class procedure Test();
+  end;
+
+implementation
+
+procedure TZDB2_Pair_String_Stream_Pool.DoFree(var Key: SystemString; var Value: TZDB2_Pair_String_Stream_Data);
+begin
+  if Value <> nil then
+    begin
+      Value.Owner_String_Fragment_Tool := nil;
+      Value.String_Fragment_Pool_Ptr := nil;
+      Value.Remove(False);
+      Value := nil;
+    end;
+end;
+
+function TZDB2_Pair_String_Stream_Pool.Compare_Value(const Value_1, Value_2: TZDB2_Pair_String_Stream_Data): Boolean;
+begin
+  Result := Value_1 = Value_2;
+end;
+
+constructor TZDB2_Pair_String_Stream_Data.Create;
+begin
+  inherited Create;
+  Owner_String_Fragment_Tool := nil;
+  String_Fragment_Pool_Ptr := nil;
+end;
+
+destructor TZDB2_Pair_String_Stream_Data.Destroy;
+begin
+  if (Owner_String_Fragment_Tool <> nil) and (String_Fragment_Pool_Ptr <> nil) then
+    begin
+      String_Fragment_Pool_Ptr^.Data.Second := nil;
+      TZDB2_Pair_String_Stream_Pool__(Owner_String_Fragment_Tool.String_Pool).Remove(String_Fragment_Pool_Ptr);
+    end;
+  inherited Destroy;
+end;
+
+procedure TZDB2_Pair_String_Stream_Tool.Do_Th_Data_Loaded(Sender: TZDB2_Th_Engine_Data; IO_: TMS64);
+var
+  Key_: SystemString;
+  obj_: TZDB2_Pair_String_Stream_Data;
+begin
+  Key_ := IO_.ReadString;
+  obj_ := Sender as TZDB2_Pair_String_Stream_Data;
+  obj_.Owner_String_Fragment_Tool := self;
+  obj_.String_Fragment_Pool_Ptr := String_Pool.Add(Key_, obj_, False);
+end;
+
+constructor TZDB2_Pair_String_Stream_Tool.Create(hash_size_: Integer);
+begin
+  inherited Create;
+  ZDB2_Marshal := TZDB2_Th_Engine_Marshal.Create(self);
+  ZDB2_Marshal.Current_Data_Class := TZDB2_Pair_String_Stream_Data;
+  String_Pool := TZDB2_Pair_String_Stream_Pool.Create(hash_size_, nil);
+end;
+
+destructor TZDB2_Pair_String_Stream_Tool.Destroy;
+begin
+  DisposeObject(ZDB2_Marshal);
+  DisposeObject(String_Pool);
+  inherited Destroy;
+end;
+
+function TZDB2_Pair_String_Stream_Tool.BuildMemory(): TZDB2_Th_Engine;
+begin
+  Result := TZDB2_Th_Engine.Create(ZDB2_Marshal);
+  Result.Cache_Mode := smBigData;
+  Result.Database_File := '';
+  Result.OnlyRead := False;
+  Result.Cipher_Security := TCipherSecurity.csNone;
+  Result.Build(ZDB2_Marshal.Current_Data_Class);
+end;
+
+function TZDB2_Pair_String_Stream_Tool.BuildOrOpen(FileName_: U_String; OnlyRead_, Encrypt_: Boolean): TZDB2_Th_Engine;
+begin
+  Result := TZDB2_Th_Engine.Create(ZDB2_Marshal);
+  Result.Cache_Mode := smNormal;
+  Result.Database_File := FileName_;
+  Result.OnlyRead := OnlyRead_;
+
+  if Encrypt_ then
+      Result.Cipher_Security := TCipherSecurity.csRijndael
+  else
+      Result.Cipher_Security := TCipherSecurity.csNone;
+
+  Result.Build(ZDB2_Marshal.Current_Data_Class);
+  if not Result.Ready then
+    begin
+      DisposeObjectAndNil(Result);
+      Result := BuildMemory();
+    end;
+end;
+
+function TZDB2_Pair_String_Stream_Tool.BuildOrOpen(FileName_: U_String; OnlyRead_, Encrypt_: Boolean; cfg: THashStringList): TZDB2_Th_Engine;
+begin
+  Result := TZDB2_Th_Engine.Create(ZDB2_Marshal);
+  Result.Cache_Mode := smNormal;
+  Result.Database_File := FileName_;
+  Result.OnlyRead := OnlyRead_;
+  if cfg <> nil then
+      Result.ReadConfig(FileName_, cfg);
+
+  if Encrypt_ then
+      Result.Cipher_Security := TCipherSecurity.csRijndael
+  else
+      Result.Cipher_Security := TCipherSecurity.csNone;
+
+  Result.Build(ZDB2_Marshal.Current_Data_Class);
+  if not Result.Ready then
+    begin
+      DisposeObjectAndNil(Result);
+      Result := BuildMemory();
+    end;
+end;
+
+function TZDB2_Pair_String_Stream_Tool.Begin_Custom_Build: TZDB2_Th_Engine;
+begin
+  Result := TZDB2_Th_Engine.Create(ZDB2_Marshal);
+end;
+
+function TZDB2_Pair_String_Stream_Tool.End_Custom_Build(Eng_: TZDB2_Th_Engine): Boolean;
+begin
+  Eng_.Build(ZDB2_Marshal.Current_Data_Class);
+  Result := Eng_.Ready;
+end;
+
+procedure TZDB2_Pair_String_Stream_Tool.Extract_String_Pool(ThNum_: Integer);
+begin
+  String_Pool.Clear;
+  ZDB2_Marshal.Parallel_Load_M(ThNum_, Do_Th_Data_Loaded, nil);
+end;
+
+procedure TZDB2_Pair_String_Stream_Tool.Clear(Delete_Data_: Boolean);
+begin
+  String_Pool.Clear;
+  if ZDB2_Marshal.Data_Marshal.Num <= 0 then
+      exit;
+
+  if Delete_Data_ then
+    begin
+      ZDB2_Marshal.Wait_Busy_Task();
+      with ZDB2_Marshal.Data_Marshal.Repeat_ do
+        repeat
+            Queue^.Data.Remove(True);
+        until not Next;
+      ZDB2_Marshal.Wait_Busy_Task();
+    end
+  else
+    begin
+      ZDB2_Marshal.Clear;
+    end;
+end;
+
+procedure TZDB2_Pair_String_Stream_Tool.Delete(Key_: SystemString; Delete_Data_: Boolean);
+var
+  data_: TZDB2_Pair_String_Stream_Data;
+begin
+  data_ := String_Pool[Key_];
+  if data_ <> nil then
+      data_.Remove(Delete_Data_);
+end;
+
+function TZDB2_Pair_String_Stream_Tool.Exists_String_Fragment(Key_: SystemString): Boolean;
+begin
+  Result := String_Pool.Exists_Key(Key_);
+end;
+
+procedure TZDB2_Pair_String_Stream_Tool.Async_Get_String_Fragment_C(Key_: SystemString; Source: TMS64; OnResult: TOn_Stream_And_State_Event_C);
+var
+  data_: TZDB2_Pair_String_Stream_Data;
+  tmp: TZDB2_Th_CMD_Stream_And_State;
+begin
+  data_ := String_Pool[Key_];
+  if data_ = nil then
+    begin
+      tmp.Stream := Source;
+      tmp.State := TCMD_State.csError;
+      OnResult(tmp);
+      exit;
+    end;
+  data_.Async_Load_Data_C(Source, OnResult);
+end;
+
+procedure TZDB2_Pair_String_Stream_Tool.Async_Get_String_Fragment_M(Key_: SystemString; Source: TMS64; OnResult: TOn_Stream_And_State_Event_M);
+var
+  data_: TZDB2_Pair_String_Stream_Data;
+  tmp: TZDB2_Th_CMD_Stream_And_State;
+begin
+  data_ := String_Pool[Key_];
+  if data_ = nil then
+    begin
+      tmp.Stream := Source;
+      tmp.State := TCMD_State.csError;
+      OnResult(tmp);
+      exit;
+    end;
+  data_.Async_Load_Data_M(Source, OnResult);
+end;
+
+procedure TZDB2_Pair_String_Stream_Tool.Async_Get_String_Fragment_P(Key_: SystemString; Source: TMS64; OnResult: TOn_Stream_And_State_Event_P);
+var
+  data_: TZDB2_Pair_String_Stream_Data;
+  tmp: TZDB2_Th_CMD_Stream_And_State;
+begin
+  data_ := String_Pool[Key_];
+  if data_ = nil then
+    begin
+      tmp.Stream := Source;
+      tmp.State := TCMD_State.csError;
+      OnResult(tmp);
+      exit;
+    end;
+  data_.Async_Load_Data_P(Source, OnResult);
+end;
+
+procedure TZDB2_Pair_String_Stream_Tool.Async_Get_String_Fragment_C(Key_: SystemString; Source: TMem64; OnResult: TOn_Mem64_And_State_Event_C);
+var
+  data_: TZDB2_Pair_String_Stream_Data;
+  tmp: TZDB2_Th_CMD_Mem64_And_State;
+begin
+  data_ := String_Pool[Key_];
+  if data_ = nil then
+    begin
+      tmp.Mem64 := Source;
+      tmp.State := TCMD_State.csError;
+      OnResult(tmp);
+      exit;
+    end;
+  data_.Async_Load_Data_C(Source, OnResult);
+end;
+
+procedure TZDB2_Pair_String_Stream_Tool.Async_Get_String_Fragment_M(Key_: SystemString; Source: TMem64; OnResult: TOn_Mem64_And_State_Event_M);
+var
+  data_: TZDB2_Pair_String_Stream_Data;
+  tmp: TZDB2_Th_CMD_Mem64_And_State;
+begin
+  data_ := String_Pool[Key_];
+  if data_ = nil then
+    begin
+      tmp.Mem64 := Source;
+      tmp.State := TCMD_State.csError;
+      OnResult(tmp);
+      exit;
+    end;
+  data_.Async_Load_Data_M(Source, OnResult);
+end;
+
+procedure TZDB2_Pair_String_Stream_Tool.Async_Get_String_Fragment_P(Key_: SystemString; Source: TMem64; OnResult: TOn_Mem64_And_State_Event_P);
+var
+  data_: TZDB2_Pair_String_Stream_Data;
+  tmp: TZDB2_Th_CMD_Mem64_And_State;
+begin
+  data_ := String_Pool[Key_];
+  if data_ = nil then
+    begin
+      tmp.Mem64 := Source;
+      tmp.State := TCMD_State.csError;
+      OnResult(tmp);
+      exit;
+    end;
+  data_.Async_Load_Data_P(Source, OnResult);
+end;
+
+function TZDB2_Pair_String_Stream_Tool.Get_String_Fragment(Key_: SystemString; IO_: TMS64): Boolean;
+var
+  obj_: TZDB2_Pair_String_Stream_Data;
+  tmp: TMem64;
+begin
+  obj_ := String_Pool.Get_Key_Value(Key_);
+  Result := obj_ <> nil;
+  if Result then
+    begin
+      tmp := TMem64.Create;
+      Result := obj_.Load_Data(tmp);
+      if Result then
+        begin
+          tmp.IgnoreReadString;
+          IO_.WritePtr(tmp.PosAsPtr, tmp.Size - tmp.Position);
+          IO_.Position := 0;
+        end;
+      DisposeObject(tmp);
+    end;
+end;
+
+procedure TZDB2_Pair_String_Stream_Tool.Set_String_Fragment(Key_: SystemString; IO_: TMS64; Done_Free_IO_: Boolean);
+var
+  obj_: TZDB2_Pair_String_Stream_Data;
+  tmp: TMem64;
+begin
+  if String_Pool.Exists_Key(Key_) then
+    begin
+      if Done_Free_IO_ then
+          DisposeObject(IO_);
+      String_Pool.Key_Value[Key_].MoveToLast;
+      exit;
+    end;
+
+  tmp := TMem64.CustomCreate(IO_.Size + 100);
+  tmp.WriteString(Key_);
+  tmp.WritePtr(IO_.Memory, IO_.Size);
+  if Done_Free_IO_ then
+      DisposeObject(IO_);
+
+  obj_ := ZDB2_Marshal.Add_Data_To_Minimize_Size_Engine as TZDB2_Pair_String_Stream_Data;
+  obj_.Owner_String_Fragment_Tool := self;
+  obj_.String_Fragment_Pool_Ptr := String_Pool.Add(Key_, obj_, True);
+  obj_.Async_Save_And_Free_Data(tmp);
+end;
+
+procedure TZDB2_Pair_String_Stream_Tool.Check_Recycle_Pool;
+begin
+  ZDB2_Marshal.Check_Recycle_Pool;
+end;
+
+function TZDB2_Pair_String_Stream_Tool.Progress: Boolean;
+begin
+  Result := ZDB2_Marshal.Progress;
+end;
+
+procedure TZDB2_Pair_String_Stream_Tool.Backup(Reserve_: Word);
+begin
+  ZDB2_Marshal.Backup(Reserve_);
+end;
+
+procedure TZDB2_Pair_String_Stream_Tool.Backup_If_No_Exists;
+begin
+  ZDB2_Marshal.Backup_If_No_Exists();
+end;
+
+procedure TZDB2_Pair_String_Stream_Tool.Flush;
+begin
+  ZDB2_Marshal.Flush;
+end;
+
+procedure TZDB2_Pair_String_Stream_Tool.Flush(WaitQueue_: Boolean);
+begin
+  ZDB2_Marshal.Flush(WaitQueue_);
+end;
+
+function TZDB2_Pair_String_Stream_Tool.Flush_Is_Busy: Boolean;
+begin
+  Result := ZDB2_Marshal.Flush_Is_Busy;
+end;
+
+function TZDB2_Pair_String_Stream_Tool.Num: NativeInt;
+begin
+  Result := ZDB2_Marshal.Data_Marshal.Num;
+end;
+
+function TZDB2_Pair_String_Stream_Tool.Total: NativeInt;
+begin
+  Result := ZDB2_Marshal.Total;
+end;
+
+function TZDB2_Pair_String_Stream_Tool.Database_Size: Int64;
+begin
+  Result := ZDB2_Marshal.Database_Size;
+end;
+
+function TZDB2_Pair_String_Stream_Tool.Database_Physics_Size: Int64;
+begin
+  Result := ZDB2_Marshal.Database_Physics_Size;
+end;
+
+function TZDB2_Pair_String_Stream_Tool.GetRemoveDatabaseOnDestroy: Boolean;
+begin
+  Result := ZDB2_Marshal.RemoveDatabaseOnDestroy;
+end;
+
+procedure TZDB2_Pair_String_Stream_Tool.SetRemoveDatabaseOnDestroy(const Value: Boolean);
+begin
+  ZDB2_Marshal.RemoveDatabaseOnDestroy := Value;
+end;
+
+procedure TZDB2_Pair_String_Stream_Tool.Wait;
+begin
+  ZDB2_Marshal.Wait_Busy_Task;
+end;
+
+class procedure TZDB2_Pair_String_Stream_Tool.Test;
+var
+  inst_: TZDB2_Pair_String_Stream_Tool;
+  data_List: TStringBigList;
+  i: Integer;
+  tmp: TMS64;
+begin
+  inst_ := TZDB2_Pair_String_Stream_Tool.Create($FF);
+  // inst_.BuildOrOpen('c:\temp\1.ox2', False, False);
+  inst_.BuildOrOpen('', False, False);
+  inst_.Extract_String_Pool(4);
+  data_List := TStringBigList.Create;
+
+  if inst_.ZDB2_Marshal.Data_Marshal.Num > 0 then
+    with inst_.ZDB2_Marshal.Data_Marshal.Repeat_ do
+      repeat
+          data_List.Add(TZDB2_Pair_String_Stream_Data(Queue^.Data).String_Fragment_Pool_Ptr^.Data.Primary);
+      until not Next;
+
+  for i := 0 to 100 do
+    begin
+      tmp := TMS64.Create;
+      tmp.Size := umlRandomRange(16384, 1024 * 1024 * 2);
+      TMT19937.Rand32(MaxInt, tmp.Memory, tmp.Size div 4);
+      inst_.Set_String_Fragment(umlMD5ToStr(tmp.ToMD5), tmp, True);
+      data_List.Add(inst_.String_Pool.Queue_Pool.Last^.Data^.Data.Primary);
+    end;
+  inst_.ZDB2_Marshal.Wait_Busy_Task;
+
+  if False then
+    while data_List.Num > 0 do
+      begin
+        inst_.Delete(data_List.First^.Data, True);
+        data_List.Next;
+      end;
+
+  if data_List.Num > 0 then
+    with data_List.Repeat_ do
+      repeat
+        tmp := TMS64.Create;
+        inst_.Get_String_Fragment(Queue^.Data, tmp);
+        if not umlMD5Compare(tmp.ToMD5, umlStrToMD5(Queue^.Data)) then
+            raiseInfo('error.');
+        DisposeObject(tmp);
+        if i__ mod 2 = 0 then
+            inst_.Delete(Queue^.Data, True);
+      until not Next;
+
+  inst_.ZDB2_Marshal.Wait_Busy_Task;
+  inst_.ZDB2_Marshal.Flush;
+
+  DisposeObject(data_List);
+  DisposeObject(inst_);
+end;
+
+end.
+ 

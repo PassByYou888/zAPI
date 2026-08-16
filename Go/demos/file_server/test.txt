@@ -1,0 +1,1 @@
+Hello API Hub from Go! This is a test file for bulk transfer.
