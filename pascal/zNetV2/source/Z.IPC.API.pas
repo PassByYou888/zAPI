@@ -358,7 +358,7 @@ end;
 function LoadIPCLibrary: Boolean;
 var
   LibName: string;
-  P: Pointer;
+  P: {$IFDEF FPC}PAnsiChar{$ELSE FPC}PWideChar{$ENDIF FPC};
 begin
   Result := False;
   if LibHandle <> 0 then
@@ -375,9 +375,16 @@ begin
   if LibHandle = 0 then
     begin
       // search dll-self directory
+
+{$IFDEF FPC}
       P := umlCombineFileName(umlGetFilePath(GetModuleName(0)), GetDefaultLibraryName).BuildAnsiChar;
       LibHandle := LoadLibrary(P);
       U_String.FreeAnsiChar(P);
+{$ELSE FPC}
+      P := umlCombineFileName(umlGetFilePath(GetModuleName(0)), GetDefaultLibraryName).BuildWideChar;
+      LibHandle := LoadLibrary(P);
+      U_String.FreeWideChar(P);
+{$ENDIF FPC}
       if LibHandle = 0 then
         begin
           DoStatus('Failed to load IPC library: ' + LibName);
