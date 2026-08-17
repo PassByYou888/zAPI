@@ -36,7 +36,7 @@ uses
   Z.FPC.GenericList,
 {$ENDIF FPC}
   Z.Core,
-  Z.Status, Z.PascalStrings, Z.UPascalStrings, Z.UnicodeMixedLib, Z.ListEngine, Z.Geometry2D;
+  Z.Status, Z.PascalStrings, Z.UPascalStrings, Z.UnicodeMixedLib, Z.ListEngine, Z.Int128;
 
 function IsEqual__(const Val1, Val2, Epsilon_: Single): Boolean; overload;
 function IsEqual__(const Val1, Val2, Epsilon_: Double): Boolean; overload;

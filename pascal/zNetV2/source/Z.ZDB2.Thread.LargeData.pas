@@ -160,7 +160,7 @@ uses DateUtils, SysUtils,
   Z.PascalStrings, Z.UPascalStrings, Z.UnicodeMixedLib,
   Z.MemoryStream,
   Z.Status, Z.Cipher, Z.ZDB2, Z.ListEngine, Z.TextDataEngine, Z.IOThread,
-  Z.HashList.Templet, Z.DFE, Z.Geometry2D,
+  Z.HashList.Templet, Z.DFE, Z.Geometry2D, Z.Int128,
   Z.Notify, Z.ZDB2.Thread.Queue, Z.ZDB2.Thread;
 
 type

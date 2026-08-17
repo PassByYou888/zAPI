@@ -546,7 +546,7 @@ type
 
 implementation
 
-uses Z.Geometry2D, Z.UnicodeMixedLib, Z.Status;
+uses Z.Int128, Z.UnicodeMixedLib, Z.Status;
 
 constructor TPart_Data.Create;
 begin

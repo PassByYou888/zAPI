@@ -16,105 +16,6 @@ const
   sNoTriangleForVertex = 'No triangle for vertex';
   sCrossSegmentIntersectionError = 'CrossSegment-Intersection Error';
 
-function CompareCardinal(const C1, C2: Cardinal): integer;
-begin
-  if C1 < C2 then
-      Result := -1
-  else
-    if C1 > C2 then
-      Result := 1
-  else
-      Result := 0;
-end;
-
-function CompareInteger(const Int1, Int2: integer): integer;
-begin
-  if Int1 < Int2 then
-      Result := -1
-  else
-    if Int1 > Int2 then
-      Result := 1
-  else
-      Result := 0;
-end;
-
-function CompareInt64(const Int1, Int2: Int64): integer;
-begin
-  if Int1 < Int2 then
-      Result := -1
-  else
-    if Int1 > Int2 then
-      Result := 1
-  else
-      Result := 0;
-end;
-
-function CompareUInt64(const Int1, Int2: UInt64): integer;
-begin
-  if Int1 < Int2 then
-      Result := -1
-  else
-    if Int1 > Int2 then
-      Result := 1
-  else
-      Result := 0;
-end;
-
-function ComparePointer(const Item1, Item2: pointer): integer;
-begin
-  if NativeUInt(Item1) < NativeUInt(Item2) then
-      Result := -1
-  else
-    if NativeUInt(Item1) > NativeUInt(Item2) then
-      Result := 1
-  else
-      Result := 0;
-end;
-
-function CompareBool(const Bool1, Bool2: boolean): integer;
-begin
-  if Bool1 < Bool2 then
-      Result := -1
-  else
-    if Bool1 > Bool2 then
-      Result := 1
-  else
-      Result := 0;
-end;
-
-function CompareDouble(const Double1, Double2: Double): integer;
-begin
-  if Double1 < Double2 then
-      Result := -1
-  else
-    if Double1 > Double2 then
-      Result := 1
-  else
-      Result := 0;
-end;
-
-function CompareInt128(const Int1, Int2: Int128): integer;
-begin
-  if Int1 < Int2 then
-      Result := -1
-  else
-    if Int1 > Int2 then
-      Result := 1
-  else
-      Result := 0;
-end;
-
-function CompareUInt128(const Int1, Int2: UInt128): integer;
-begin
-  if Int1 < Int2 then
-      Result := -1
-  else
-    if Int1 > Int2 then
-      Result := 1
-  else
-      Result := 0;
-end;
-
 procedure TCustomObjectList.Append(AItem: TCore_Object);
 begin
   Insert(Count, AItem);
@@ -2063,7 +1964,7 @@ begin
           httVtx1: OldVertex := Triangle.Vertices[1];
           httVtx2: OldVertex := Triangle.Vertices[2];
           else
-            OldVertex := nil;
+              OldVertex := nil;
         end;
         // In case a vertex lies too close to another one, we will not add this
         // vertex, but we must make sure any segments to-be-added do not use this
@@ -2494,7 +2395,7 @@ begin
         rsNonZero: MustRemove := R.WindingNumber = 0;
         rsNegative: MustRemove := R.WindingNumber < 0;
         else
-          MustRemove := false;
+            MustRemove := false;
       end; // case
       if MustRemove then
           RemoveTriangleFromMesh(T);

@@ -24,7 +24,7 @@ SOFTWARE.
 { ******************************************************************************
   * Z.Geometry2D – Comprehensive 2D Geometry Library
   *
-  * This unit provides a complete suite of 2D geometric primitives, algorithms,
+  * Provides a complete suite of 2D geometric primitives, algorithms,
   * and data structures for vector math, polygon operations, triangulation,
   * collision detection, shape analysis, and spatial organisation.
   *
@@ -107,12 +107,12 @@ uses
 
 
 type
-  { TGeoFloat is the fundamental floating‑point type used throughout the library.
-    Single precision is chosen for performance and memory efficiency. }
+  { * TGeoFloat is the fundamental floating‑point type used throughout the library.
+    * Single precision is chosen for performance and memory efficiency. }
   TGeoFloat = Single;
   TGeoFloatList = TGenericsList<TGeoFloat>; // Dynamic list of floating‑point values.
 
-  { TGeoInt is the signed integer type for indices, counts, and dimensions. }
+  { * TGeoInt is the signed integer type for indices, counts, and dimensions. }
   TGeoInt = Integer;
 
   { ----------------------------------------------------------------------------
@@ -181,7 +181,7 @@ type
 
 {$IFDEF FPC}
 
-  // Compatibility types for FPC – these mimic Delphi’s TPointf and TRectf.
+  // * Compatibility types for FPC – these mimic Delphi’s TPointf and TRectf.
   TPointf = record
     X: TGeoFloat;
     Y: TGeoFloat;
@@ -205,27 +205,9 @@ function Rectf(Left, Top, Right, Bottom: TGeoFloat): TRectf; // Construct a TRec
 {$ENDIF FPC}
 {$ENDREGION 'BaseType define'}
 {$REGION 'Compute_Function'}
-
   { ----------------------------------------------------------------------------
-    Comparison functions for primitive types. They return:
-    -1 if first < second,
-    0 if equal,
-    1 if first > second.
-    Used for sorting and ordering.
+    * Mathematical helpers
   }
-function CompareCardinal(const C1, C2: Cardinal): Integer; {$IFDEF INLINE_ASM}inline; {$ENDIF INLINE_ASM}
-function CompareInteger(const Int1, Int2: Integer): Integer; {$IFDEF INLINE_ASM}inline; {$ENDIF INLINE_ASM}
-function CompareInt64(const Int1, Int2: Int64): Integer; {$IFDEF INLINE_ASM}inline; {$ENDIF INLINE_ASM}
-function CompareUInt64(const Int1, Int2: UInt64): Integer; {$IFDEF INLINE_ASM}inline; {$ENDIF INLINE_ASM}
-function ComparePointer(const Item1, Item2: pointer): Integer; {$IFDEF INLINE_ASM}inline; {$ENDIF INLINE_ASM}
-function CompareBool(const Bool1, Bool2: Boolean): Integer; {$IFDEF INLINE_ASM}inline; {$ENDIF INLINE_ASM}
-function CompareDouble(const Double1, Double2: Double): Integer; {$IFDEF INLINE_ASM}inline; {$ENDIF INLINE_ASM}
-function CompareInt128(const Int1, Int2: Int128): Integer; {$IFDEF INLINE_ASM}inline; {$ENDIF INLINE_ASM}
-function CompareUInt128(const Int1, Int2: UInt128): Integer; {$IFDEF INLINE_ASM}inline; {$ENDIF INLINE_ASM}
-
-{ ----------------------------------------------------------------------------
-  Mathematical helpers
-}
 function Compute_PI(Num: Integer): Double; // Approximate π using numerical integration.
 function FAbs(const V: Single): Single; overload; // Absolute value for Single.
 function FAbs(const V: Double): Double; overload; // Absolute value for Double.
@@ -242,8 +224,8 @@ function CompareFloat(const f1, f2: TGeoFloat): ShortInt; overload; // Default t
 function CompareGeoInt(const g1, g2: TGeoInt): ShortInt;
 
 { ----------------------------------------------------------------------------
-  Vector construction helpers. These functions create TVec2 from various
-  input types. They are overloaded to accept floats, integers, TPoint, etc.
+  * Vector construction helpers. These functions create TVec2 from various
+  * input types. They are overloaded to accept floats, integers, TPoint, etc.
 }
 function MakeVec2(const X, Y: TGeoFloat): TVec2; overload;
 function MakeVec2(const X, Y: TGeoInt): TVec2; overload;
@@ -268,7 +250,7 @@ function vec2(const pt: TPoint): TVec2; overload;
 function vec2(const pt: TPointf): TVec2; overload;
 
 { ----------------------------------------------------------------------------
-  Line segment construction.
+  * Line segment construction.
 }
 function LineV2(const x1, y1, x2, y2: TGeoFloat): TLineV2; overload;
 function LineV2(const lb, le: TVec2): TLineV2; overload;
@@ -281,7 +263,7 @@ function RoundVec2(const V: TVec2): TVec2; // Round each component to nearest in
 function MakePointf(const pt: TVec2): TPointf; // Convert TVec2 to TPointf.
 
 { ----------------------------------------------------------------------------
-  Zero and NaN checks.
+  * Zero and NaN checks.
 }
 function IsZero(const V: TGeoFloat): Boolean; overload;
 function IsZero(const pt: TVec2): Boolean; overload;
@@ -291,7 +273,7 @@ function IsNan(const X, Y: TGeoFloat): Boolean; overload;
 function HypotX(const X, Y: TGeoFloat): TGeoFloat; // Euclidean norm (hypotenuse).
 
 { ----------------------------------------------------------------------------
-  Vector norm, negation, and inverse.
+  * Vector norm, negation, and inverse.
 }
 function PointNorm(const V: TVec2): TGeoFloat; // Squared length (norm²).
 function PointNegate(const V: TVec2): TVec2; // Unary minus.
@@ -301,15 +283,15 @@ function Vec2Inv(const V: TVec2): TVec2; // Swap X and Y.
 procedure SetVec2(var V: TVec2; const vSrc: TVec2);
 
 { ----------------------------------------------------------------------------
-  Direction and offset.
+  * Direction and offset.
 }
 function Vec2Direction(sour, dest: TVec2): TVec2; // dest - sour.
 function RectDirection(sour, dest: TRectV2): TRectV2; // component‑wise subtraction.
 
 { ----------------------------------------------------------------------------
-  Vector arithmetic: addition, subtraction, multiplication, division.
-  Overloaded for vector‑vector, vector‑scalar, scalar‑vector, and array
-  operations.
+  * Vector arithmetic: addition, subtraction, multiplication, division.
+  * Overloaded for vector‑vector, vector‑scalar, scalar‑vector, and array
+  * operations.
 }
 function Vec2Add(const v1, v2: TVec2): TVec2; overload;
 function Vec2Add(const v1: TVec2; v2: TGeoFloat): TVec2; overload;
@@ -341,7 +323,7 @@ function Vec2Div(const v1, v2: TVec2): TVec2; overload;
 function Vec2Div(const v1: TGeoFloat; const v2: TVec2): TVec2; overload;
 
 { ----------------------------------------------------------------------------
-  Normalisation (unit vector) and length.
+  * Normalisation (unit vector) and length.
 }
 function PointNormalize(const V: TVec2): TVec2; overload;
 function Vec2Normalize(const V: TVec2): TVec2; overload;
@@ -355,14 +337,14 @@ function PointDotProduct(const v1, v2: TVec2): TGeoFloat; overload;
 function Vec2DotProduct(const v1, v2: TVec2): TGeoFloat; overload;
 
 { ----------------------------------------------------------------------------
-  Line segment utilities: midpoint, shorten, lengthen.
+  * Line segment utilities: midpoint, shorten, lengthen.
 }
 procedure MidPoint(const x1, y1, x2, y2: TGeoFloat; out midx, midy: TGeoFloat);
 procedure ShortenSegment(const Amount: TGeoFloat; var x1, y1, x2, y2: TGeoFloat);
 procedure LengthenSegment(const Amount: TGeoFloat; out x1, y1, x2, y2: TGeoFloat);
 
 { ----------------------------------------------------------------------------
-  Barycentric coordinates (for 2D and 3D via signed area).
+  * Barycentric coordinates (for 2D and 3D via signed area).
 }
 function Signed(const x1, y1, x2, y2, Px, Py: TGeoFloat): TGeoFloat;
 function CalculateBarycentricBase(const x1, y1, x2, y2, x3, y3: TGeoFloat): TGeoFloat;
@@ -370,13 +352,13 @@ procedure ConvertCartesianToBarycentric(const x1, y1, x2, y2, x3, y3, Px, Py: TG
 procedure ConvertBarycentricToCartesian(const U, V, W, x1, y1, x2, y2, x3, y3: TGeoFloat; out X, Y: TGeoFloat);
 
 { ----------------------------------------------------------------------------
-  Closest point on a line (infinite line) from a point.
+  * Closest point on a line (infinite line) from a point.
 }
 procedure ClosestPointOnLineFromPoint(const x1, y1, x2, y2, Px, Py: TGeoFloat; out Nx, Ny: TGeoFloat);
 
 { ----------------------------------------------------------------------------
-  Mirror operations – reflect a point, rectangle, or triangle across a line.
-  NonSymmetricMirror allows a ratio (fractional reflection).
+  * Mirror operations – reflect a point, rectangle, or triangle across a line.
+  * NonSymmetricMirror allows a ratio (fractional reflection).
 }
 procedure NonSymmetricMirror(const Px, Py, x1, y1, x2, y2: TGeoFloat; const Ratio: TGeoFloat; out Nx, Ny: TGeoFloat); overload;
 function NonSymmetricMirror(const Point: TVec2; const Ratio: TGeoFloat; const Line: TLineV2): TVec2; overload;
@@ -389,7 +371,7 @@ function Mirror(const Rectangle: TRectV2; const Line: TLineV2): TRectV2; overloa
 function Mirror(const Triangle: TTriangle; const Line: TLineV2): TTriangle; overload;
 
 { ----------------------------------------------------------------------------
-  Distance functions.
+  * Distance functions.
 }
 function Distance(const x1, y1, x2, y2: TGeoFloat): TGeoFloat; overload;
 function Distance(const x1, y1, z1, x2, y2, z2: TGeoFloat): TGeoFloat; overload; // 3D distance.
@@ -405,7 +387,7 @@ function LayDistance(const x1, y1, x2, y2: TGeoFloat): TGeoFloat;
 function SqrDistance(const v1, v2: TVec2): TGeoFloat; overload;
 
 { ----------------------------------------------------------------------------
-  Linear interpolation (Lerp) for vectors.
+  * Linear interpolation (Lerp) for vectors.
 }
 function PointLerp(const v1, v2: TVec2; t: TGeoFloat): TVec2; overload;
 function PointLerpTo(const sour, dest: TVec2; const d: TGeoFloat): TVec2; overload; // move by distance d.
@@ -419,7 +401,7 @@ function MiddleVec2(const pt1, pt2: TVec2): TVec2; overload;
 function Vec2Middle(const pt1, pt2: TVec2): TVec2; overload;
 
 { ----------------------------------------------------------------------------
-  Equality and comparison with tolerance.
+  * Equality and comparison with tolerance.
 }
 function IsEqual(const Val1, Val2, Epsilon_: TGeoFloat): Boolean; overload;
 function IsEqual(const Val1, Val2: TGeoFloat): Boolean; overload;
@@ -438,7 +420,7 @@ function GreaterThanOrEqual(const Val1, Val2: TGeoFloat): Boolean; overload;
 function GetEquilateralTriangleCen(pt1, pt2: TVec2): TVec2; overload; // compute third vertex.
 
 { ----------------------------------------------------------------------------
-  Rotation and angle manipulation.
+  * Rotation and angle manipulation.
 }
 procedure Rotate(RotAng: TGeoFloat; const X, Y: TGeoFloat; out Nx, Ny: TGeoFloat); overload;
 function Rotate(const RotAng: TGeoFloat; const Point: TVec2): TVec2; overload;
@@ -462,7 +444,7 @@ function Vec2Rotation(const sour_r: TRectV2; const axis: TVec2; const Angle: TGe
 function RectRotation(const axis: TVec2; const R: TRectV2; const Angle: TGeoFloat): TRectV2;
 
 { ----------------------------------------------------------------------------
-  Geometric inclusion tests.
+  * Geometric inclusion tests.
 }
 function CircleInCircle(const cp1, cp2: TVec2; const r1, r2: TGeoFloat): Boolean; overload;
 function CircleInRect(const cp: TVec2; const radius: TGeoFloat; R: TRectV2): Boolean;
@@ -478,7 +460,7 @@ function Vec2InRect(const pt: TVec2; const R: TRectV2): Boolean; overload;
 function Vec2InRect(const Px, Py: TGeoFloat; const R: TRectV2): Boolean; overload;
 
 { ----------------------------------------------------------------------------
-  Rectangle intersection and containment.
+  * Rectangle intersection and containment.
 }
 function RectToRectIntersect(const x1, y1, x2, y2, x3, y3, x4, y4: TGeoFloat): Boolean; overload;
 function RectToRectIntersect(const x1, y1, x2, y2, x3, y3, x4, y4: TGeoInt): Boolean; overload;
@@ -495,7 +477,7 @@ function RectInRect(const r1, r2: TRectV2): Boolean; overload;
 function RectInRect(const r1, r2: TRect): Boolean; overload;
 
 { ----------------------------------------------------------------------------
-  Rectangle creation helpers.
+  * Rectangle creation helpers.
 }
 function MakeRectV2(const centre: TVec2; const width, height: TGeoFloat): TRectV2; overload;
 function MakeRectV2(const X, Y, radius: TGeoFloat): TRectV2; overload;
@@ -524,7 +506,7 @@ function MakeRect(const R: TRect): TRectV2; overload;
 function MakeRect(const R: TRectf): TRectV2; overload;
 
 { ----------------------------------------------------------------------------
-  Rectangle conversions and rounding.
+  * Rectangle conversions and rounding.
 }
 function RoundRect(const R: TRectV2): TRect; overload;
 function RoundRectV2(const R: TRectV2): TRectV2; overload;
@@ -538,7 +520,7 @@ function RectMake(const R: TRect): TRectV2; overload;
 function RectMake(const R: TRectf): TRectV2; overload;
 
 { ----------------------------------------------------------------------------
-  Rectangle arithmetic (component‑wise operations).
+  * Rectangle arithmetic (component‑wise operations).
 }
 function RectAdd(const R: TRectV2; v2: TVec2): TRectV2; overload;
 function RectAdd(const r1, r2: TRectV2): TRectV2; overload;
@@ -552,7 +534,7 @@ function RectDiv(const r1: TRectV2; f2: TGeoFloat): TRectV2; overload;
 function RectDiv(const r1: TRectV2; v2: TVec2): TRectV2; overload;
 
 { ----------------------------------------------------------------------------
-  Rectangle transformations and metrics.
+  * Rectangle transformations and metrics.
 }
 function RectOffset(const R: TRectV2; Offset: TVec2): TRectV2;
 function RectSizeLerp(const R: TRectV2; const rSizeLerp: TGeoFloat): TRectV2; // scale about top‑left.
@@ -566,7 +548,7 @@ function RectIOU(const r1, r2: TRectV2): TGeoFloat; // Intersection over Union.
 function RectDistance(const r1, r2: TRectV2): TGeoFloat; // distance between rectangle centres.
 
 { ----------------------------------------------------------------------------
-  Triangle utilities.
+  * Triangle utilities.
 }
 function Tri(const v1, v2, v3: TVec2): TTriangle;
 function TriAdd(const t: TTriangle; V: TVec2): TTriangle; // translation.
@@ -594,13 +576,13 @@ function TriangleType(const x1, y1, x2, y2, x3, y3: TGeoFloat): TTriangleType; o
 function TriangleType(const t: TTriangle): TTriangleType; overload;
 
 { ----------------------------------------------------------------------------
-  Edge extraction for triangles and rectangles.
+  * Edge extraction for triangles and rectangles.
 }
 function TriangleEdge(const Triangle: TTriangle; const Edge: Integer): TLineV2;
 function RectangleEdge(const Rectangle: TRectV2; const Edge: Integer): TLineV2;
 
 { ----------------------------------------------------------------------------
-  Projection transformations between rectangles.
+  * Projection transformations between rectangles.
 }
 function Vec2Transform(const sour, dest: TRectV2; sour_pt: TVec2): TVec2; overload;
 function Vec2Transform(const sour, dest: TRectV2; const sourAngle, destAngle: TGeoFloat; const sour_pt: TVec2): TVec2; overload;
@@ -609,7 +591,7 @@ function RectTransform(const sour, dest: TRectV2; const sour_rect: TRect): TRect
 function RectTransform(const sour, dest: TRectV2; const sour_rect: TRectf): TRectV2; overload;
 
 { ----------------------------------------------------------------------------
-  Scale‑space / fitting utilities.
+  * Scale‑space / fitting utilities.
 }
 function RectScaleSpace(const R: TRectV2; const SS_width, SS_height: TGeoFloat): TRectV2; overload;
 function RectScaleSpace(const R: TRect; const SS_width, SS_height: TGeoInt): TRect; overload;
@@ -624,7 +606,7 @@ function CalibrationRectInRect(const R, Area: TRectV2): TRectV2; overload; // cl
 function CalibrationRectInRect(const R, Area: TRect): TRect; overload;
 
 { ----------------------------------------------------------------------------
-  Jitter generation for data augmentation.
+  * Jitter generation for data augmentation.
 }
 function Make_Jitter_Box(rnd: TMT19937Random; XY_Offset_Scale_, Rotate_, Scale_: TGeoFloat; Fit_: Boolean;
   const source: TRectV2; var dest: TRectV2; var Angle: TGeoFloat): TGeoInt; overload;
@@ -649,13 +631,13 @@ procedure Make_Image_Jitter_Box(
   ); overload;
 
 { ----------------------------------------------------------------------------
-  Rectangle overlap tests.
+  * Rectangle overlap tests.
 }
 function Rect_Overlap_or_Intersect(r1, r2: TRectV2): Boolean;
 function Rect_1Overlap2_or_Intersect(r1, r2: TRectV2): Boolean;
 
 { ----------------------------------------------------------------------------
-  Rectangle normalisation (ensuring Left<=Right, Top<=Bottom).
+  * Rectangle normalisation (ensuring Left<=Right, Top<=Bottom).
 }
 procedure FixRect(var Left, Top, Right, Bottom: TGeoInt); overload;
 procedure FixRect(var Left, Top, Right, Bottom: TGeoFloat); overload;
@@ -671,7 +653,7 @@ function ForwardRect(R: TRectV2): TRectV2; overload;
 function ForwardRect(R: TRect): TRect; overload;
 
 { ----------------------------------------------------------------------------
-  Rectangle conversion to TRect/TRectf and dimension extraction.
+  * Rectangle conversion to TRect/TRectf and dimension extraction.
 }
 function MakeRect(const R: TRectV2): TRect; overload;
 function MakeRectf(const R: TRectV2): TRectf; overload;
@@ -693,7 +675,7 @@ function RectSize(const R: TRectV2): TVec2; overload; // returns (width, height)
 function RectSizeR(const R: TRectV2): TRectV2; overload; // rectangle from (0,0) to size.
 
 { ----------------------------------------------------------------------------
-  Rectangle fitting – scale sour to fit inside dest, optionally bound.
+  * Rectangle fitting – scale sour to fit inside dest, optionally bound.
 }
 function RectFit(const sour, dest: TRectV2; const Bound: Boolean): TRectV2; overload;
 function RectFit(const sour, dest: TRectV2): TRectV2; overload;
@@ -702,7 +684,7 @@ function FitRect(const sour, dest: TRectV2): TRectV2; overload;
 function FitRect(const width, height: TGeoFloat; const bk: TRectV2): TRectV2; overload;
 
 { ----------------------------------------------------------------------------
-  Bounding box computation from arrays of points/rectangles.
+  * Bounding box computation from arrays of points/rectangles.
 }
 function BoundRect(const buff: TArrayPoint): TRect; overload;
 function BoundRect(const p1, p2, p3: TPoint): TRect; overload;
@@ -719,14 +701,14 @@ function BoundRect(const r1: TRectV2; const p1, p2, p3: TVec2): TRectV2; overloa
 function BoundRect(const r1: TRectV2; const p1, p2, p3, p4: TVec2): TRectV2; overload;
 
 { ----------------------------------------------------------------------------
-  Centroid (area‑weighted centre) of a polygon.
+  * Centroid (area‑weighted centre) of a polygon.
 }
 function BuffCentroid(const buff: TArrayVec2): TVec2; overload;
 function BuffCentroid(const p1, p2, p3, p4: TVec2): TVec2; overload;
 function BuffCentroid(const p1, p2, p3: TVec2): TVec2; overload;
 
 { ----------------------------------------------------------------------------
-  Point‑in‑polygon test, polygon area, and vertex reduction.
+  * Point‑in‑polygon test, polygon area, and vertex reduction.
 }
 function PointInPolygon(pt: TVec2; const PolygonBuff: TArrayVec2): Boolean;
 function PolygonArea(buff: TArrayVec2): TGeoFloat; overload;
@@ -734,28 +716,28 @@ function FastRamerDouglasPeucker(var Points: TArrayVec2; Epsilon_: TGeoFloat): T
 procedure FastVertexReduction(Points: TArrayVec2; Epsilon_: TGeoFloat; var output: TArrayVec2);
 
 { ----------------------------------------------------------------------------
-  Clipping (intersection) of two rectangles.
+  * Clipping (intersection) of two rectangles.
 }
 function Clip(const x1, y1, x2, y2, x3, y3, x4, y4: TGeoFloat; out Cx1, Cy1, Cx2, Cy2: TGeoFloat): Boolean; overload;
 function Clip(const f, b: TRectV2; var R: TRectV2): Boolean; overload;
 function Clip(const f, b: TRectV2): TRectV2; overload;
 
 { ----------------------------------------------------------------------------
-  Intersection over Union (IoU) for rectangles.
+  * Intersection over Union (IoU) for rectangles.
 }
 function Compute_IoU(const r1, r2: TRectV2): TGeoFloat; overload;
 function Compute_IoU(const r1, r2: TRectV2; var R: TRectV2; var IoU: TGeoFloat): Boolean; overload;
 function Compute_IoU(const r1, r2: TRectV2; var R: TRectV2; var IoU, R1A, R2A, RA: TGeoFloat): Boolean; overload;
 
 { ----------------------------------------------------------------------------
-  Orientation and coplanarity tests.
+  * Orientation and coplanarity tests.
 }
 function Orientation(const x1, y1, x2, y2, Px, Py: TGeoFloat): TGeoInt; overload; // 2D orientation.
 function Orientation(const x1, y1, z1, x2, y2, z2, x3, y3, z3, Px, Py, Pz: TGeoFloat): TGeoInt; overload; // 3D orientation.
 function Coplanar(const x1, y1, z1, x2, y2, z2, x3, y3, z3, x4, y4, z4: TGeoFloat): Boolean;
 
 { ----------------------------------------------------------------------------
-  Line segment intersection tests.
+  * Line segment intersection tests.
 }
 function SimpleIntersect(const x1, y1, x2, y2, x3, y3, x4, y4: TGeoFloat): Boolean; overload;
 function SimpleIntersect(const Point1, Point2, Point3, Point4: TVec2): Boolean; overload;
@@ -767,23 +749,23 @@ function Intersect(const l1, l2: TLineV2; out pt: TVec2): Boolean; overload;
 function Intersect(const pt1, pt2, pt3, pt4: TVec2): Boolean; overload;
 
 { ----------------------------------------------------------------------------
-  Point‑in‑circle and vector‑in‑circle tests.
+  * Point‑in‑circle and vector‑in‑circle tests.
 }
 function PointInCircle(const pt, cp: TVec2; radius: TGeoFloat): Boolean; overload;
 function Vec2InCircle(const pt, cp: TVec2; radius: TGeoFloat): Boolean; overload;
 
 { ----------------------------------------------------------------------------
-  Point‑in‑triangle test.
+  * Point‑in‑triangle test.
 }
 function PointInTriangle(const Px, Py, x1, y1, x2, y2, x3, y3: TGeoFloat): Boolean;
 
 { ----------------------------------------------------------------------------
-  Build sine/cosine cache for fast repeated angle computations.
+  * Build sine/cosine cache for fast repeated angle computations.
 }
 procedure BuildSinCosCache(const oSin, oCos: PGeoFloatArray; const b, E: TGeoFloat);
 
 { ----------------------------------------------------------------------------
-  Closest point on a segment.
+  * Closest point on a segment.
 }
 procedure ClosestPointOnSegmentFromPoint(const x1, y1, x2, y2, Px, Py: TGeoFloat; out Nx, Ny: TGeoFloat); overload;
 function ClosestPointOnSegmentFromPoint(const lb, le, pt: TVec2): TVec2; overload;
@@ -791,7 +773,7 @@ function ClosestPointOnSegmentFromLine(const L: TLineV2; const pt: TVec2): TVec2
 function ClosestPointOnSegmentFromLine(const pt: TVec2; const L: TLineV2): TVec2; overload;
 
 { ----------------------------------------------------------------------------
-  Minimum distance from point to line segment.
+  * Minimum distance from point to line segment.
 }
 function MinimumDistanceFromPointToLine(const Px, Py, x1, y1, x2, y2: TGeoFloat): TGeoFloat; overload;
 function MinimumDistanceFromPointToLine(const pt: TVec2; const L: TLineV2): TGeoFloat; overload;
@@ -799,14 +781,14 @@ function MinimumDistanceFromPointToLine(const L: TLineV2; const pt: TVec2): TGeo
 function MinimumDistanceFromPointToLine(const lb, le, pt: TVec2): TGeoFloat; overload;
 
 { ----------------------------------------------------------------------------
-  Scale‑position utilities for placing rectangles.
+  * Scale‑position utilities for placing rectangles.
 }
 function Compute_Scale_Position_To_Abs_Size(box: TRectV2; size, sPos: TVec2): TRectV2; overload;
 function Compute_Scale_Position_To_Box_Size(box: TRectV2; size, sPos: TVec2): TRectV2; overload;
 function Compute_Scale_Position_To_Min_Edge_Box_Size(box: TRectV2; size, sPos: TVec2): TRectV2; overload;
 
 { ----------------------------------------------------------------------------
-  Projection (mapping) of points/rectangles between two coordinate frames.
+  * Projection (mapping) of points/rectangles between two coordinate frames.
 }
 function RectProjection(const sour, dest: TRectV2; const sour_pt: TVec2): TVec2; overload;
 function RectProjection(const sour, dest: TRectV2; const sour_rect: TRectV2): TRectV2; overload;
@@ -814,7 +796,7 @@ function RectProjection(const sour, dest: TRectV2; const sour_arry: TArrayVec2):
 function RectProjectionArrayV2(const sour, dest: TRectV2; const sour_arry: TArrayVec2): TArrayVec2;
 
 { ----------------------------------------------------------------------------
-  Projection with rotation (source and destination angles).
+  * Projection with rotation (source and destination angles).
 }
 function RectProjectionRotationDest(const sour, dest: TRectV2; const axis: TVec2; const Angle: TGeoFloat; const sour_pt: TVec2): TVec2; overload;
 function RectProjectionRotationDest(const sour, dest: TRectV2; const axis: TVec2; const Angle: TGeoFloat; const sour_rect: TRectV2): TRectV2; overload;
@@ -845,7 +827,7 @@ function RectRotationProjection(
   const sour_rect: TRectV2): TRectV2; overload;
 
 { ----------------------------------------------------------------------------
-  Quadrant determination and point projection along a direction.
+  * Quadrant determination and point projection along a direction.
 }
 function Quadrant(const Angle: TGeoFloat): TGeoInt;
 procedure ProjectionPoint(const Srcx, Srcy, Dstx, Dsty, Dist: TGeoFloat; out Nx, Ny: TGeoFloat); overload;
@@ -853,7 +835,7 @@ procedure ProjectionPoint(const Srcx, Srcy, Srcz, Dstx, Dsty, Dstz, Dist: TGeoFl
 procedure ProjectionPoint(const Px, Py, Angle, Distance: TGeoFloat; out Nx, Ny: TGeoFloat); overload;
 
 { ----------------------------------------------------------------------------
-  Miscellaneous geometric helpers.
+  * Miscellaneous geometric helpers.
 }
 function GetCicleRadiusInPolyEdge(R: TGeoFloat; PolySlices: TGeoInt): TGeoFloat;
 procedure Circle2LineIntersectionPoint(const lb, le, cp: TVec2; const radius: TGeoFloat;
@@ -863,7 +845,7 @@ procedure Circle2LineIntersectionPoint(const L: TLineV2; const cp: TVec2; radius
 procedure Circle2CircleIntersectionPoint(const cp1, cp2: TVec2; const r1, r2: TGeoFloat; out Point1, Point2: TVec2); overload;
 
 { ----------------------------------------------------------------------------
-  Circle collision detection.
+  * Circle collision detection.
 }
 function Detect_Circle2Circle(const p1, p2: TVec2; const r1, r2: TGeoFloat): Boolean; overload;
 function CircleCollision(const p1, p2: TVec2; const r1, r2: TGeoFloat): Boolean; overload;
@@ -872,23 +854,22 @@ function Detect_Circle2Line(const cp: TVec2; const R: TGeoFloat; const lb, le: T
 function Detect_Circle2Line(const cp: TVec2; const R: TGeoFloat; const L: TLineV2): Boolean; overload;
 
 { ----------------------------------------------------------------------------
-  Rectangular hull (bounding box) of an array of points.
+  * Rectangular hull (bounding box) of an array of points.
 }
 function RectangularHull(const buff: TArrayVec2): TRectV2;
 
 { ----------------------------------------------------------------------------
-  Compare two line segments by pointer addresses (for uniqueness).
+  * Compare two line segments by pointer addresses (for uniqueness).
 }
 function SameLinePtr(const lb1, le1, lb2, le2: PVec2): Boolean;
 
 { ----------------------------------------------------------------------------
-  Spline interpolation helpers.
+  * Spline interpolation helpers.
 }
 function ComputeCurvePartPrecision(const pt1, pt2, pt3, pt4: TVec2): TGeoInt;
 function Interpolation_OutSide(const T_: TGeoFloat): TGeoFloat;
 function Interpolation_InSide(const t: TGeoFloat): TGeoFloat;
 {$ENDREGION 'Compute_Function'}
-
 {$REGION 'TV2Rect4'}
 
 
@@ -1007,7 +988,6 @@ type
   TV2R4List = TV2Rect4List;
 
 {$ENDREGION 'TV2Rect4'}
-
 {$REGION 'TVec2List'}
   { ----------------------------------------------------------------------------
     TVec2_Buffer is a sorted list of TVec2, primarily used as an intermediate
@@ -1193,7 +1173,6 @@ type
   TVec2Pool = TV2L;
 
 {$ENDREGION 'TVec2List'}
-
 {$REGION 'PolygonGraph'}
 
   { ----------------------------------------------------------------------------
@@ -1295,7 +1274,6 @@ type
   end;
 
 {$ENDREGION 'PolygonGraph'}
-
 {$REGION 'DeflectionPolygon'}
 
   { ----------------------------------------------------------------------------
@@ -1519,7 +1497,6 @@ type
   end;
 
 {$ENDREGION 'DeflectionPolygon'}
-
 {$REGION 'TriangleList'}
 
   { ----------------------------------------------------------------------------
@@ -1546,7 +1523,6 @@ type
   end;
 
 {$ENDREGION 'TriangleList'}
-
 {$REGION 'RectPacking'}
 
   { ----------------------------------------------------------------------------
@@ -1603,7 +1579,6 @@ type
   end;
 
 {$ENDREGION 'RectPacking'}
-
 {$REGION 'Nearest_Box_Tool'}
 
   { ----------------------------------------------------------------------------
@@ -1680,7 +1655,6 @@ type
   end;
 
 {$ENDREGION 'Nearest_Box_Tool'}
-
 {$REGION 'Hausdorf'}
 
   { ----------------------------------------------------------------------------
@@ -1772,7 +1746,6 @@ type
 
 {$ENDREGION 'Hausdorf'}
 
-
   { ----------------------------------------------------------------------------
     Array conversion helpers.
   }
@@ -1784,7 +1757,7 @@ function ArrayVec2(const t: TTriangle): TArrayVec2; overload;
 function ArrayBoundRect(arry: TArrayVec2): TRectV2; overload;
 function ArrayBoundRect(arry: TArrayRectV2): TRectV2; overload;
 function ArrayBoundRect(arry: TArrayV2Rect4): TRectV2; overload;
-function RectProjection(const sour, dest: TRectV2; const sour_r4: TV2R4): TV2R4; {$IFDEF INLINE_ASM}inline; {$ENDIF INLINE_ASM} overload;
+function RectProjection(const sour, dest: TRectV2; const sour_r4: TV2R4): TV2R4; overload;
 
 const
   XPoint: T2DPoint = (1, 0);

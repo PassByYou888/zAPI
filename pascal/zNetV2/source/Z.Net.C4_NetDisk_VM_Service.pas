@@ -36,7 +36,7 @@ uses
   Z.FPC.GenericList,
 {$ENDIF FPC}
   Z.Core, Z.PascalStrings, Z.UPascalStrings, Z.Status, Z.UnicodeMixedLib, Z.ListEngine,
-  Z.Geometry2D, Z.DFE, Z.Json, Z.Expression,
+  Z.Geometry2D, Z.Int128, Z.DFE, Z.Json, Z.Expression,
   Z.Notify, Z.Cipher, Z.MemoryStream,
   Z.FragmentBuffer, // solve for discontinuous space
   Z.ZDB2,

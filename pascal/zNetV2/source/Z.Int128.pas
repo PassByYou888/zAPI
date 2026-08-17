@@ -60,9 +60,7 @@ unit Z.Int128;
 
 interface
 
-uses
-  SysUtils, Variants,
-  Z.Core, Z.PascalStrings;
+uses Z.Core, Z.PascalStrings;
 
 type
   { 16-byte raw storage for a 128-bit unsigned integer. }
@@ -547,7 +545,24 @@ type
 
   { -------------------- Standard Math Functions (overloaded for 128-bit) -------------------- }
 
-  { Returns the larger of two UInt64 values. }
+  { ----------------------------------------------------------------------------
+    Comparison functions for primitive types. They return:
+    -1 if first < second,
+    0 if equal,
+    1 if first > second.
+    Used for sorting and ordering.
+  }
+function CompareCardinal(const c1, c2: Cardinal): integer;
+function CompareInteger(const Int1, Int2: integer): integer;
+function CompareInt64(const Int1, Int2: Int64): integer;
+function CompareUInt64(const Int1, Int2: UInt64): integer;
+function ComparePointer(const Item1, Item2: pointer): integer;
+function CompareBool(const Bool1, Bool2: Boolean): integer;
+function CompareDouble(const Double1, Double2: Double): integer;
+function CompareInt128(const Int1, Int2: Int128): integer;
+function CompareUInt128(const Int1, Int2: UInt128): integer;
+
+{ Returns the larger of two UInt64 values. }
 function Max(const v1, v2: UInt64): UInt64; overload;
 { Returns the larger of two Cardinal values. }
 function Max(const v1, v2: Cardinal): Cardinal; overload;
@@ -1945,6 +1960,105 @@ end;
 class operator Int128.Dec(a: Int128): Int128;
 begin
   Result := a - Int128(1);
+end;
+
+function CompareCardinal(const c1, c2: Cardinal): integer;
+begin
+  if c1 < c2 then
+      Result := -1
+  else
+    if c1 > c2 then
+      Result := 1
+  else
+      Result := 0;
+end;
+
+function CompareInteger(const Int1, Int2: integer): integer;
+begin
+  if Int1 < Int2 then
+      Result := -1
+  else
+    if Int1 > Int2 then
+      Result := 1
+  else
+      Result := 0;
+end;
+
+function CompareInt64(const Int1, Int2: Int64): integer;
+begin
+  if Int1 < Int2 then
+      Result := -1
+  else
+    if Int1 > Int2 then
+      Result := 1
+  else
+      Result := 0;
+end;
+
+function CompareUInt64(const Int1, Int2: UInt64): integer;
+begin
+  if Int1 < Int2 then
+      Result := -1
+  else
+    if Int1 > Int2 then
+      Result := 1
+  else
+      Result := 0;
+end;
+
+function ComparePointer(const Item1, Item2: pointer): integer;
+begin
+  if NativeUInt(Item1) < NativeUInt(Item2) then
+      Result := -1
+  else
+    if NativeUInt(Item1) > NativeUInt(Item2) then
+      Result := 1
+  else
+      Result := 0;
+end;
+
+function CompareBool(const Bool1, Bool2: Boolean): integer;
+begin
+  if Bool1 < Bool2 then
+      Result := -1
+  else
+    if Bool1 > Bool2 then
+      Result := 1
+  else
+      Result := 0;
+end;
+
+function CompareDouble(const Double1, Double2: Double): integer;
+begin
+  if Double1 < Double2 then
+      Result := -1
+  else
+    if Double1 > Double2 then
+      Result := 1
+  else
+      Result := 0;
+end;
+
+function CompareInt128(const Int1, Int2: Int128): integer;
+begin
+  if Int1 < Int2 then
+      Result := -1
+  else
+    if Int1 > Int2 then
+      Result := 1
+  else
+      Result := 0;
+end;
+
+function CompareUInt128(const Int1, Int2: UInt128): integer;
+begin
+  if Int1 < Int2 then
+      Result := -1
+  else
+    if Int1 > Int2 then
+      Result := 1
+  else
+      Result := 0;
 end;
 
 function Max(const v1, v2: UInt64): UInt64;
