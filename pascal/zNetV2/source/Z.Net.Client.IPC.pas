@@ -184,7 +184,7 @@ type
       *   6. Trigger the framework's connect‑finished event.
       * @Example:
       *   if Client.Connect('ipc:my_server', 1311) then
-      *     WriteLn('Connected to queue my_server-1311');
+      *     WriteLn('Connected to queue my_server1311');
     }
     function Connect(addr: SystemString; Port: Word): Boolean; override;
 
@@ -398,7 +398,7 @@ begin
   if umlMultipleMatch('ipc:*', umlTrimSpace(n_addr)) then
       n_addr := umlTrimSpace(umlDeleteFirstStr(n_addr, ':'));
 
-  FIPC_queue_name := Format('%s-%d', [n_addr.Text, Port]); { * Build queue name }
+  FIPC_queue_name := Format('%s%d', [n_addr.Text, Port]); { * Build queue name }
 
   ipc_cli := TIPCClient.Create; { * Create high‑level IPC client }
   if not ipc_cli.Connect(FIPC_queue_name) then

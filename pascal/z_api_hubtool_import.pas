@@ -5,7 +5,7 @@ unit z_api_hubtool_import 修改一处编译开关（第229行）：
 
 {$IFDEF MSWINDOWS}
 const
-  {$IF Defined(CPUX64)}
+  {$IF Defined(CPU64) or Defined(CPUX64)}
     libapi_hub = 'z_api_hub64.dll';   // 64‑bit Windows
   {$ELSE}
     libapi_hub = 'z_api_hub32.dll';   // 32‑bit Windows
@@ -249,10 +249,10 @@ type
 
 {$IFDEF MSWINDOWS}
 const
-  {$IF Defined(CPUX64)}
-    libapi_hub = 'z_api_hub64.dll';   // 64‑bit Windows
+  {$IF Defined(CPU64) or Defined(CPUX64)}
+    libapi_hub = 'z_api_hub64.dll';   // 64-bit Windows
   {$ELSE}
-    libapi_hub = 'z_api_hub32.dll';   // 32‑bit Windows
+    libapi_hub = 'z_api_hub32.dll';   // 32-bit Windows
   {$ENDIF}
 {$ELSE}
   {$IFDEF DARWIN}

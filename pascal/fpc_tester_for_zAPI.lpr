@@ -355,7 +355,9 @@ begin
 
     ResetPrepare;
     PrepareService('ipc:test_svc', 'ipc:test_svc');
+    PrepareService('0.0.0.0:9988', '127.0.0.1:9988');
     PrepareClient('ipc:test_svc', App);
+    PrepareClient('127.0.0.1:9988', App);
 
     if not PrepareDone then
     begin

@@ -75,7 +75,7 @@ unit Z.IPC.Helper;
 
 interface
 
-uses Z.Core, Z.MemoryStream, Z.IPC.API;
+uses Z.Core, Z.PascalStrings, Z.UPascalStrings, Z.MemoryStream, Z.Status, Z.IPC.API;
 
 type
   TByteArray = TBytes; { * Alias for dynamic byte array, used in overloads }
@@ -288,13 +288,6 @@ type
     }
     function Start(const QueueName: string): Boolean; overload;
 
-    { * Start the server with a custom configuration record.
-      * @Param QueueName: Queue name.
-      * @Param Config: TIPCServerConfig record with explicit settings.
-      * @Returns True if successful.
-    }
-    function Start(const QueueName: string; const Config: TIPCServerConfig): Boolean; overload;
-
     { * Start the server with explicit parameters.
       * This is the most flexible startup method.
       * @Param QueueName: Queue name.
@@ -404,7 +397,7 @@ begin
     RaiseInfo raises an exception if the library cannot be loaded.
   }
   if not LoadIPCLibrary then
-    RaiseInfo('no found Z-IPC library.');
+      RaiseInfo('no found Z-IPC library.');
   inherited Create;
   FHandle := ipc_client_create; { * Create a raw C client handle }
   FConnected := False;
@@ -422,9 +415,9 @@ function TIPCClient.Connect(const QueueName: string): Boolean;
 begin
   Result := False;
   if FHandle = 0 then
-    Exit;
+      Exit;
   if FConnected then
-    Disconnect; { * Reconnect: disconnect first }
+      Disconnect; { * Reconnect: disconnect first }
   { * Call the raw C function. If successful, the client will have a response queue.
     The C function returns IPC_OK on success.
   }
@@ -448,7 +441,7 @@ function TIPCClient.GetRespQueueName: string;
 begin
   Result := '';
   if FHandle = 0 then
-    Exit;
+      Exit;
   Result := string(ipc_client_get_resp_queue_name(FHandle));
   { * Returns the internal C string as a Pascal string }
 end;
@@ -457,7 +450,7 @@ function TIPCClient.RegisterBinaryNotify(const Name: string; Handler: TIPCBinary
 begin
   Result := False;
   if FHandle = 0 then
-    Exit;
+      Exit;
   Result := ipc_client_register_binary_notify(FHandle, PAnsiChar(AnsiString(Name)), Handler, Trigger) = IPC_OK;
 end;
 
@@ -465,7 +458,7 @@ function TIPCClient.UnregisterBinaryNotify(const Name: string): Boolean;
 begin
   Result := False;
   if FHandle = 0 then
-    Exit;
+      Exit;
   Result := ipc_client_unregister_binary_notify(FHandle, PAnsiChar(AnsiString(Name))) = IPC_OK;
 end;
 
@@ -477,7 +470,7 @@ begin
   OutData.Clear;
   Result := IPC_ERR_UNKNOWN;
   if not FConnected or (FHandle = 0) then
-    Exit;
+      Exit;
   { * Call the raw C RPC function. The library will allocate outPtr using ipc_alloc,
     which we must free after copying the data to OutData.
   }
@@ -499,7 +492,7 @@ begin
   SetLength(OutData, 0);
   Result := IPC_ERR_UNKNOWN;
   if not FConnected or (FHandle = 0) then
-    Exit;
+      Exit;
   Result := ipc_client_call_binary(FHandle, PAnsiChar(AnsiString(FuncName)),
     Data, Size, outPtr, outSize);
   if Result = IPC_OK then
@@ -523,7 +516,7 @@ function TIPCClient.NotifyBinary(const FuncName: string; InData: TMem64): Intege
 begin
   Result := IPC_ERR_UNKNOWN;
   if not FConnected or (FHandle = 0) then
-    Exit;
+      Exit;
   Result := ipc_client_notify_binary(FHandle, PAnsiChar(AnsiString(FuncName)), InData.Memory, InData.Size);
 end;
 
@@ -531,7 +524,7 @@ function TIPCClient.NotifyBinary(const FuncName: string; const Data: Pointer; Si
 begin
   Result := IPC_ERR_UNKNOWN;
   if not FConnected or (FHandle = 0) then
-    Exit;
+      Exit;
   Result := ipc_client_notify_binary(FHandle, PAnsiChar(AnsiString(FuncName)), Data, Size);
 end;
 
@@ -553,7 +546,7 @@ function TIPCClient.IsConnected: Boolean;
 begin
   Result := False;
   if FHandle = 0 then
-    Exit;
+      Exit;
   Result := ipc_client_is_connected(FHandle) = 1; { * C returns 1 for true, 0 for false }
 end;
 
@@ -564,7 +557,7 @@ end;
 constructor TIPCServer.Create;
 begin
   if not LoadIPCLibrary() then
-    RaiseInfo('no found Z-IPC library.');
+      RaiseInfo('no found Z-IPC library.');
   inherited Create;
   FHandle := 0;
   FStarted := False;
@@ -583,25 +576,29 @@ begin
   Result := StartEx(QueueName, 0, 1000, 1024); { * Use default config }
 end;
 
-function TIPCServer.Start(const QueueName: string; const Config: TIPCServerConfig): Boolean;
-begin
-  Result := StartEx(QueueName, Config.thread_count, Config.max_queue_length, Config.max_msg_size);
-end;
-
 function TIPCServer.StartEx(const QueueName: string; ThreadCount: Integer; MaxQueueLength, MaxMsgSize: TSize_t): Boolean;
 var
-  cfg: TIPCServerConfig;
+  tmp: TIPCClient;
+  found_ipc_: Boolean;
 begin
   Result := False;
   if FStarted then
-    Stop; { * Stop any existing server before starting a new one }
+      Stop; { * Stop any existing server before starting a new one }
   if FHandle = 0 then
     begin
-      cfg.thread_count := ThreadCount;
-      cfg.max_queue_length := MaxQueueLength;
-      cfg.max_msg_size := MaxMsgSize;
+      found_ipc_ := False;
+      tmp := TIPCClient.Create;
+      found_ipc_ := tmp.Connect(QueueName);
+      DisposeObject(tmp);
+      if found_ipc_ then
+        begin
+          DoStatus('failed:same ipc-service "%s"', [QueueName]);
+          Result := False;
+          Exit;
+        end;
+
       { * Call the C function to create and start the server }
-      FHandle := ipc_server_create_ex(PAnsiChar(AnsiString(QueueName)), @cfg);
+      FHandle := ipc_server_create_ex(PAnsiChar(AnsiString(QueueName)), ThreadCount, MaxQueueLength, MaxMsgSize);
     end;
   if FHandle <> 0 then
     begin
@@ -624,7 +621,7 @@ function TIPCServer.RegisterBinaryHandler(const Name: string; Handler: TIPCBinar
 begin
   Result := False;
   if not FStarted or (FHandle = 0) then
-    Exit;
+      Exit;
   Result := ipc_server_register_binary_reply(FHandle, PAnsiChar(AnsiString(Name)), Handler, Trigger) = IPC_OK;
 end;
 
@@ -632,7 +629,7 @@ function TIPCServer.UnregisterBinaryHandler(const Name: string): Boolean;
 begin
   Result := False;
   if not FStarted or (FHandle = 0) then
-    Exit;
+      Exit;
   Result := ipc_server_unregister_binary_reply(FHandle, PAnsiChar(AnsiString(Name))) = IPC_OK;
 end;
 
@@ -640,7 +637,7 @@ function TIPCServer.RegisterBinaryNotify(const Name: string; Handler: TIPCBinary
 begin
   Result := False;
   if not FStarted or (FHandle = 0) then
-    Exit;
+      Exit;
   Result := ipc_server_register_binary_notify(FHandle, PAnsiChar(AnsiString(Name)), Handler, Trigger) = IPC_OK;
 end;
 
@@ -648,7 +645,7 @@ function TIPCServer.UnregisterBinaryNotify(const Name: string): Boolean;
 begin
   Result := False;
   if not FStarted or (FHandle = 0) then
-    Exit;
+      Exit;
   Result := ipc_server_unregister_binary_notify(FHandle, PAnsiChar(AnsiString(Name))) = IPC_OK;
 end;
 
@@ -656,7 +653,7 @@ function TIPCServer.SendNotifyBinary(const ClientRespQueue, FuncName: string; In
 begin
   Result := IPC_ERR_INVAL;
   if not FStarted or (FHandle = 0) then
-    Exit;
+      Exit;
   Result := ipc_server_send_notify_binary(FHandle,
     PAnsiChar(AnsiString(ClientRespQueue)),
     PAnsiChar(AnsiString(FuncName)),
@@ -667,7 +664,7 @@ function TIPCServer.SendNotifyBinary(const ClientRespQueue, FuncName: string; co
 begin
   Result := IPC_ERR_INVAL;
   if not FStarted or (FHandle = 0) then
-    Exit;
+      Exit;
   Result := ipc_server_send_notify_binary(FHandle,
     PAnsiChar(AnsiString(ClientRespQueue)),
     PAnsiChar(AnsiString(FuncName)),

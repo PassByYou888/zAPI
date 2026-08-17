@@ -488,7 +488,7 @@ begin
   if umlMultipleMatch('ipc:*', umlTrimSpace(n_host)) then
       n_host := umlTrimSpace(umlDeleteFirstStr(n_host, ':'));
 
-  ipc_queue_name := Format('%s-%d', [n_host.Text, Port]);
+  ipc_queue_name := Format('%s%d', [n_host.Text, Port]);
 
   // Start the server with explicit configuration
   Result := ipc_serv.StartEx(ipc_queue_name, IPC_Serv_ThreadCount, IPC_Serv_MaxQueueLength, IPC_Serv_MaxMsgSize);
