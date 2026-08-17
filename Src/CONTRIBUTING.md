@@ -85,7 +85,7 @@ D:\CoreLibrary\API_Hub_Tool\DLL-Build\     ← 项目根目录
 │   ├── z_api_hub.lpi                     ← ⭐ 主项目文件（构建动态库）
 │   ├── z_api_hub.lpr                     ← 程序入口
 │   ├── CONTRIBUTING.md                   ← 本文档
-│   ├── 三步构建 lazbuild（手动操作版 · 适配 loongarch64 + lazarus_4_8）.md
+│   ├── 三步构建 lazbuild.md
 │   └── FPC 3.3.1 预编译包清单.md
 ├── C++\                                  ← C/C++ 绑定和示例
 ├── Py\                                   ← Python 绑定和 Bridge
@@ -220,7 +220,7 @@ Linux 下，mimalloc **需要自行编译生成 `libmimalloc.so`**。详见 [第
 
 > **📌 完整的手动编译教程**已放在 `Src/` 目录下，名为：
 >
-> **[《三步构建 lazbuild（手动操作版 · 适配 loongarch64 + lazarus_4_8）.md》](./三步构建%20lazbuild（手动操作版%20·%20适配%20loongarch64%20+%20lazarus_4_8）.md)**
+> **[《三步构建 lazbuild.md》](./三步构建 lazbuild.md)**
 >
 > 该文档详细涵盖了：安装系统编译依赖、部署 FPC 3.3.1 原生编译器、配置 `fpc.cfg` 搜索路径、从 Lazarus 源码编译 `lazbuild`、常见问题与排错。
 >
@@ -458,7 +458,7 @@ lazbuild z_api_hub.lpi
 | 解压后目录名不匹配 | 压缩包内顶层目录名不同 | 使用 `ls` 查看实际目录名，再 `cd` 进入 |
 | `lazbuild` 报 `Invalid Lazarus directory ""` | 未设置 Lazarus 路径 | 执行第三步第④条，设置 `LAZARUS_DIR` |
 
-> 更多详细排错请参考 [《三步构建 lazbuild》文档](./三步构建%20lazbuild（手动操作版%20·%20适配%20loongarch64%20+%20lazarus_4_8）.md) 中的"常见问题与解决"章节。
+> 更多详细排错请参考 [《三步构建 lazbuild》文档](./三步构建 lazbuild.md) 中的"常见问题与解决"章节。
 
 
 ## 六、mimalloc 动态库的特别说明
@@ -571,7 +571,7 @@ ls -la *.dll *.so 2>/dev/null || echo "构建完成"
 
 | 文档 | 说明 |
 |------|------|
-| [《三步构建 lazbuild》](./三步构建%20lazbuild（手动操作版%20·%20适配%20loongarch64%20+%20lazarus_4_8）.md) | 手动编译 lazbuild 完整教程 |
+| [《三步构建 lazbuild》](./三步构建 lazbuild.md) | 手动编译 lazbuild 完整教程 |
 | [《FPC 3.3.1 预编译包清单》](./FPC%203.3.1%20预编译包清单.md) | FPC 预编译包平台索引 |
 | [zAPI 项目根目录 README](../readme.md) | 项目总览和语言绑定索引 |
 
@@ -583,7 +583,7 @@ ls -la *.dll *.so 2>/dev/null || echo "构建完成"
 2. Lazarus / FPC 是否正确安装（`lazbuild --version`、`fpc -iV`）
 3. 环境变量 `PATH` 是否包含 Lazarus 目录
 4. Linux 下 mimalloc 是否已编译并正确部署
-5. 对于手动编译 `lazbuild` 的情况，请仔细阅读同目录的 [《三步构建 lazbuild》](./三步构建%20lazbuild（手动操作版%20·%20适配%20loongarch64%20+%20lazarus_4_8）.md) 文档
+5. 对于手动编译 `lazbuild` 的情况，请仔细阅读同目录的 [《三步构建 lazbuild》](./三步构建 lazbuild.md) 文档
 
 ---
 
