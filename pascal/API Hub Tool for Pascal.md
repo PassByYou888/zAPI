@@ -35,7 +35,7 @@
 
 ## 1. 概述
 
-`z_api_hubtool_import` 是 API Hub 的 **Pascal 语言绑定单元**。它通过 `external` 动态链接方式加载底层 C 动态库（`z_api_hub64.dll` / `z_api_hub.so` / `z_api_hub.dylib`），让任何 Pascal 程序（Delphi / Free Pascal）能够：
+`z_api_hubtool_import` 是 API Hub 的 **Pascal 语言绑定单元**。它通过 `external` 动态链接方式加载底层 C 动态库（`z_api_hub64.dll` / `libz_api_hub.so` / `libz_api_hub.dylib`），让任何 Pascal 程序（Delphi / Free Pascal）能够：
 
 - 将普通 Pascal 函数暴露为**远程可调用 API**（请求-响应或单向通知）
 - 调用其他语言（C++、C#、Python、Go、Rust、PHP、Node.js 等）注册的远程服务
@@ -129,9 +129,9 @@ end);
 |----------|-----------|----------|
 | Windows 64-bit | `z_api_hub64.dll` | 可执行文件目录或 `PATH` |
 | Windows 32-bit | `z_api_hub32.dll` | 可执行文件目录或 `PATH` |
-| Linux | `z_api_hub.so` | `LD_LIBRARY_PATH` 或 `/usr/lib` |
-| BSD | `z_api_hub.so` | `LD_LIBRARY_PATH` 或标准库路径 |
-| macOS | `z_api_hub.dylib` | `DYLD_LIBRARY_PATH` 或 `/usr/local/lib` |
+| Linux | `libz_api_hub.so` | `LD_LIBRARY_PATH` 或 `/usr/lib` |
+| BSD | `libz_api_hub.so` | `LD_LIBRARY_PATH` 或标准库路径 |
+| macOS | `libz_api_hub.dylib` | `DYLD_LIBRARY_PATH` 或 `/usr/local/lib` |
 
 **依赖库**（需与主库同目录）：
 - Windows：`z_ipc_64.dll` / `z_ipc_32.dll`

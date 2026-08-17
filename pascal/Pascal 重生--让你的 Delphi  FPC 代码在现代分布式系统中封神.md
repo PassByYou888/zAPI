@@ -202,7 +202,7 @@ A：官方建议 Delphi 10.x+ / FPC 3.2+。但如果你非要战，用 Delphi 7 
 A：**不能！** 这是红线中的红线。一旦调了，轻则死锁卡死，重则进程崩给你看。把那个“远程调用”放到另一个线程里去执行，回调里只负责把数据丢进队列。
 
 **Q3：这玩意儿是不是只认 Windows？**
-A：错。`z_api_hub.so` 和 `libz_ipc.so` 就是给 Linux 和 BSD 准备的。Free Pascal 在 Linux 上编译完，直接跑，啥都不用改。macOS 也有 `dylib`。
+A：错。`libz_api_hub.so` 和 `libz_ipc.so` 就是给 Linux 和 BSD 准备的。Free Pascal 在 Linux 上编译完，直接跑，啥都不用改。macOS 也有 `dylib`。
 
 **Q4：我跑不起来，提示 `External exception` 或找不到 DLL。**
 A：99% 是 `z_api_hub64.dll` 不在 EXE 同级目录。检查一下是不是 32/64 位搞混了，或者 `PATH` 环境变量里没有。

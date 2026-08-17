@@ -57,7 +57,7 @@ API Hub Tool 是一个**基于纯 C ABI 的分布式 RPC 框架**，并提供**�
 | Windows 64-bit | `z_api_hub64.dll` |
 | Windows 32-bit | `z_api_hub32.dll` |
 | Linux (包括 BSD) | `libz_api_hub.so` |
-| macOS | `z_api_hub.dylib` |
+| macOS | `libz_api_hub.dylib` |
 
 将动态库放在可执行文件目录或系统搜索路径（Windows 的 `PATH`，Linux 的 `LD_LIBRARY_PATH`，macOS 的 `DYLD_LIBRARY_PATH`）。
 

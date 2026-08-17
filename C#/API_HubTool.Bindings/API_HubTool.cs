@@ -457,15 +457,15 @@ namespace API_HubTool.Bindings
                     }
                     else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
                     {
-                        libName = "z_api_hub.so";
+                        libName = "libz_api_hub.so";
                     }
                     else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
                     {
-                        libName = "z_api_hub.dylib";
+                        libName = "libz_api_hub.dylib";
                     }
                     else
                     {
-                        libName = "z_api_hub"; // unknown platform, fallback to logical name
+                        libName = "libz_api_hub"; // unknown platform, fallback to logical name
                     }
 
                     return NativeLibrary.Load(libName, assembly, searchPath);

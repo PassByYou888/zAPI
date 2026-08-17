@@ -270,9 +270,9 @@ int API_LoadLibrary(void)
     const char* dllName = "z_api_hub32.dll";
 #endif
 #elif defined(__APPLE__)
-    const char* dllName = "z_api_hub.dylib";
+    const char* dllName = "libz_api_hub.dylib";
 #else
-    const char* dllName = "z_api_hub.so";
+    const char* dllName = "libz_api_hub.so";
 #endif
 
     /* First, try to load from the executable directory */

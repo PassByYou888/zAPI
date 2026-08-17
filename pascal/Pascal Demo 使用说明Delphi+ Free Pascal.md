@@ -37,8 +37,8 @@ pascal/
 | -------------- | -------------------- | ---------------- |
 | Windows 64-bit | `z_api_hub64.dll`    | `z_ipc_64.dll`   |
 | Windows 32-bit | `z_api_hub32.dll`    | `z_ipc_32.dll`   |
-| Linux / BSD    | `z_api_hub.so`       | `libz_ipc.so`    |
-| macOS          | `z_api_hub.dylib`    | `libz_ipc.dylib` |
+| Linux / BSD    | `libz_api_hub.so`       | `libz_ipc.so`    |
+| macOS          | `libz_api_hub.dylib`    | `libz_ipc.dylib` |
 
 **注意**：动态库会自动加载，无需手动 `LoadLibrary`。
 

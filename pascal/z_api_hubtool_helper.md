@@ -2,7 +2,7 @@
 
 **版本：** 2.0  
 **适用编译器：** Free Pascal 3.0+ / Delphi XE+  
-**依赖：** `z_api_hubtool_import.pas` 和 C4 动态库（`z_api_hub64.dll` / `libz_api_hub.so` / `z_api_hub.dylib`）  
+**依赖：** `z_api_hubtool_import.pas` 和 C4 动态库（`z_api_hub64.dll` / `libz_api_hub.so` / `libz_api_hub.dylib`）  
 
 ---
 
@@ -49,7 +49,7 @@
 | Windows 64‑bit | `z_api_hub64.dll` | `z_ipc_64.dll` |
 | Windows 32‑bit | `z_api_hub32.dll` | `z_ipc_32.dll` |
 | Linux / BSD | `libz_api_hub.so` | `libz_ipc.so` |
-| macOS | `z_api_hub.dylib` | `libz_ipc.dylib` |
+| macOS | `libz_api_hub.dylib` | `libz_ipc.dylib` |
 
 > **提示**：`z_api_hubtool_import.pas` 会自动加载库，你无需调用任何 `LoadLibrary`。
 

@@ -77,8 +77,8 @@ java/
 API Hub 的核心是 C 动态库，你需要将 `Binary/` 目录下的文件放到合适位置：
 
 - Windows：`z_api_hub64.dll`（及依赖 `z_ipc_64.dll`、`mimalloc64.dll`）  
-- Linux：`z_api_hub.so`  
-- macOS：`z_api_hub.dylib`
+- Linux：`libz_api_hub.so`  
+- macOS：`libz_api_hub.dylib`
 
 **最简单的方法**：将这些文件复制到 `java/` 目录（与 `build.ps1` 同级），或确保系统 `PATH` 包含 `Binary/` 路径。我们提供的脚本会自动将 `../Binary` 加入 `PATH`，所以如果你保持项目结构不变，无需额外操作。
 

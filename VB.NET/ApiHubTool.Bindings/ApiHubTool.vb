@@ -92,7 +92,7 @@ Public NotInheritable Class API
                         ElseIf RuntimeInformation.IsOSPlatform(OSPlatform.OSX) Then
                             libName = "libz_api_hub.dylib"
                         Else
-                            libName = "z_api_hub"
+                            libName = "libz_api_hub"
                         End If
                         Return NativeLibrary.Load(libName, assembly, searchPath)
                     End If

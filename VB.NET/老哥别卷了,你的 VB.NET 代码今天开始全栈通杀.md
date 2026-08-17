@@ -81,8 +81,8 @@
 |------|--------|-----------|
 | Windows 64-bit | `z_api_hub64.dll` | `z_ipc_64.dll` |
 | Windows 32-bit | `z_api_hub32.dll` | `z_ipc_32.dll` |
-| Linux / BSD | `z_api_hub.so` | `libz_ipc.so` |
-| macOS | `z_api_hub.dylib` | `libz_ipc.dylib` |
+| Linux / BSD | `libz_api_hub.so` | `libz_ipc.so` |
+| macOS | `libz_api_hub.dylib` | `libz_ipc.dylib` |
 
 **下载解压，扔进 bin 目录，完事。比装个输入法还简单。**
 

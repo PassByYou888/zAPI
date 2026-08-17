@@ -234,7 +234,7 @@ private static void GoodCallback(IntPtr trigger, IntPtr input, IntPtr output)
 3. **复制动态库**到输出目录：
    - Windows: `z_api_hub64.dll` 或 `z_api_hub32.dll`
    - Linux: `libz_api_hub.so`
-   - macOS: `z_api_hub.dylib`
+   - macOS: `libz_api_hub.dylib`
 4. **运行示例**：
    - `HelloWorld.cs` – 本地调用入门
    - `Service.cs` + `Client1.cs` / `Client2.cs` – 多客户端交互

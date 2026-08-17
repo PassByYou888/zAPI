@@ -305,7 +305,7 @@ z_api_hubtool_import.pas - Pascal 导入单元
 - **Windows 64-bit**: `z_api_hub64.dll`
 - **Windows 32-bit**: `z_api_hub32.dll`
 - **Linux**: `libz_api_hub.so`
-- **macOS**: `z_api_hub.dylib`
+- **macOS**: `libz_api_hub.dylib`
 
 ### 2. 包含头文件
 

@@ -3,7 +3,7 @@
 Low‑level ctypes bindings for the API Hub dynamic library.
 
 All exported functions are loaded from the platform‑specific shared library
-(z_api_hub64.dll / z_api_hub.so / z_api_hub.dylib) at module import.
+(z_api_hub64.dll / libz_api_hub.so / libz_api_hub.dylib) at module import.
 
 =========================== THREAD SAFETY ===========================
 All functions are FULLY thread‑safe and can be called concurrently
@@ -47,9 +47,9 @@ def _find_library():
     if sys.platform == "win32":
         return "z_api_hub64.dll" if ctypes.sizeof(ctypes.c_void_p) == 8 else "z_api_hub32.dll"
     elif sys.platform == "darwin":
-        return "z_api_hub.dylib"
+        return "libz_api_hub.dylib"
     else:
-        return "z_api_hub.so"  # used on Linux, BSD, and other ELF systems
+        return "libz_api_hub.so"  # used on Linux, BSD, and other ELF systems
 
 def _load_library():
     """Locate and load the shared library, searching common paths across platforms."""

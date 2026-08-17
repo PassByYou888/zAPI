@@ -102,9 +102,9 @@ func getLibraryName() string {
 	case "windows":
 		return "z_api_hub64.dll"
 	case "linux":
-		return "z_api_hub.so"
+		return "libz_api_hub.so"
 	case "darwin":
-		return "z_api_hub.dylib"
+		return "libz_api_hub.dylib"
 	default:
 		return ""
 	}

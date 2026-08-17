@@ -25,7 +25,7 @@
 
 API Hub 是一个**基于 C4 分布式服务网格的轻量级 RPC 框架**，它通过一组纯 C 函数（ABI）让不同语言、不同进程、不同机器之间能够**像调用本地函数一样**进行通信。
 
-- **核心 C 动态库**：`z_api_hub64.dll` / `libz_api_hub.so` / `z_api_hub.dylib`，导出约 20 个 API。
+- **核心 C 动态库**：`z_api_hub64.dll` / `libz_api_hub.so` / `libz_api_hub.dylib`，导出约 20 个 API。
 - **Pascal 绑定**：`z_api_hubtool_import.pas` —— 这是**所有语言绑定的参考实现**，Go 绑定完全遵循其语义。
 - **Go 绑定**：基于 `cgo` 封装，提供 `DataHnd`、`Client`、`Server` 等类型，让 Go 开发者无痛接入跨语言 RPC 世界。
 
@@ -60,7 +60,7 @@ API Hub 是一个**基于 C4 分布式服务网格的轻量级 RPC 框架**，�
 | Windows 64-bit | `z_api_hub64.dll` | `z_ipc_64.dll`           |
 | Windows 32-bit | `z_api_hub32.dll` | `z_ipc_32.dll`           |
 | Linux / BSD    | `libz_api_hub.so` | `libz_ipc.so`            |
-| macOS          | `z_api_hub.dylib` | `libz_ipc.dylib`（如有） |
+| macOS          | `libz_api_hub.dylib` | `libz_ipc.dylib`（如有） |
 
 ### 3.2 Go 包安装
 

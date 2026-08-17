@@ -228,12 +228,12 @@ static INIT: Once = Once::new();
 #[cfg(target_os = "windows")]
 const LIB_NAME: &str = "z_api_hub64.dll";
 #[cfg(target_os = "linux")]
-const LIB_NAME: &str = "z_api_hub.so";
+const LIB_NAME: &str = "libz_api_hub.so";
 #[cfg(target_os = "macos")]
-const LIB_NAME: &str = "z_api_hub.dylib";
+const LIB_NAME: &str = "libz_api_hub.dylib";
 // BSD support (the library name is the same as on Linux)
 #[cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
-const LIB_NAME: &str = "z_api_hub.so";
+const LIB_NAME: &str = "libz_api_hub.so";
 
 /// Attempt to load the library from a set of candidate paths.
 fn find_library() -> Result<Library> {

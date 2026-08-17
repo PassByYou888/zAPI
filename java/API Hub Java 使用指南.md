@@ -35,7 +35,7 @@
 
 ## 1. 概述
 
-API Hub Java 绑定是一套基于 [JNA](https://github.com/java-native-access/jna) 的轻量级封装，它让 Java 程序能够**直接调用** C 动态库（`z_api_hub64.dll` / `z_api_hub.so`）导出的函数，从而接入由 **C4 分布式服务网格** 驱动的跨语言 RPC 网络。
+API Hub Java 绑定是一套基于 [JNA](https://github.com/java-native-access/jna) 的轻量级封装，它让 Java 程序能够**直接调用** C 动态库（`z_api_hub64.dll` / `libz_api_hub.so`）导出的函数，从而接入由 **C4 分布式服务网格** 驱动的跨语言 RPC 网络。
 
 ### 1.1 核心设计理念
 
@@ -64,8 +64,8 @@ API Hub Java 绑定是一套基于 [JNA](https://github.com/java-native-access/j
 - **JNA 5.14.0**（项目 lib 目录已包含）  
 - **API Hub 动态库**：从 `Binary/` 目录获取，根据操作系统放置：
   - Windows 64-bit：`z_api_hub64.dll`（附带 `z_ipc_64.dll`、`mimalloc64.dll`）
-  - Linux：`z_api_hub.so`
-  - macOS：`z_api_hub.dylib`
+  - Linux：`libz_api_hub.so`
+  - macOS：`libz_api_hub.dylib`
 
 > 动态库**必须**位于可执行文件的搜索路径中（`PATH` / `LD_LIBRARY_PATH` / `DYLD_LIBRARY_PATH`），或放在与 JAR 相同的目录。项目提供的 PowerShell 脚本会自动处理。
 

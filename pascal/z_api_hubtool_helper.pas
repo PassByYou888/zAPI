@@ -1,4 +1,10 @@
-﻿unit z_api_hubtool_helper;
+﻿(*
+2026-08-17 11:02
+update by.精灵 qq289161766
+unit z_api_hubtool_helper 新增重载（第360行处）：
+function PrepareService(const ListeningAddr, PhysicsAddr: string; App: TAppHandle): Integer; overload
+*)
+unit z_api_hubtool_helper;
 
 {$ifdef FPC}
   {$mode delphi}{$H+}

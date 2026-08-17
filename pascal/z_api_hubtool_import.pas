@@ -1,4 +1,27 @@
-﻿{*******************************************************************************
+﻿(*
+2026-08-17 11:02
+update by.精灵 qq289161766
+unit z_api_hubtool_import 修改一处编译开关（第229行）：
+
+{$IFDEF MSWINDOWS}
+const
+  {$IF Defined(CPUX64)}
+    libapi_hub = 'z_api_hub64.dll';   // 64‑bit Windows
+  {$ELSE}
+    libapi_hub = 'z_api_hub32.dll';   // 32‑bit Windows
+  {$ENDIF}
+{$ELSE}
+  {$IFDEF DARWIN}
+    const
+      libapi_hub = 'libz_api_hub.dylib';   // macOS
+  {$ELSE}
+    // Linux, BSD, and other ELF‑based systems
+    const
+      libapi_hub = 'libz_api_hub.so';
+  {$ENDIF}
+{$ENDIF}
+*)
+{*******************************************************************************
   ██████  ██████  ██    ██  █████  ██████  ██ ██   ██
   ██   ██ ██   ██ ██    ██ ██   ██ ██   ██ ██ ██   ██
   ██████  ██████  ██    ██ ███████ ██████  ██ ███████
@@ -234,11 +257,11 @@ const
 {$ELSE}
   {$IFDEF DARWIN}
     const
-      libapi_hub = 'z_api_hub.dylib';   // macOS
+      libapi_hub = 'libz_api_hub.dylib';   // macOS
   {$ELSE}
     // Linux, BSD, and other ELF‑based systems
     const
-      libapi_hub = 'z_api_hub.so';
+      libapi_hub = 'libz_api_hub.so';
   {$ENDIF}
 {$ENDIF}
 

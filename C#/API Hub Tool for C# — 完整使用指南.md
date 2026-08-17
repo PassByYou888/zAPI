@@ -36,7 +36,7 @@
 
 ## 1. 概述
 
-`API_HubTool.cs` 是 API Hub 的 **C# P/Invoke 绑定文件**。它通过自定义 DllImport 解析器自动加载底层 C 动态库（`z_api_hub64.dll` / `z_api_hub.so` / `z_api_hub.dylib`），让任何 .NET 程序（.NET Framework 4.6+、.NET Core 2.0+、.NET 5+）能够：
+`API_HubTool.cs` 是 API Hub 的 **C# P/Invoke 绑定文件**。它通过自定义 DllImport 解析器自动加载底层 C 动态库（`z_api_hub64.dll` / `libz_api_hub.so` / `libz_api_hub.dylib`），让任何 .NET 程序（.NET Framework 4.6+、.NET Core 2.0+、.NET 5+）能够：
 
 - 将普通 C# 方法暴露为**远程可调用 API**（请求-响应或单向通知）
 - 调用其他语言（C/C++、Python、Java、Go、Rust、Pascal、PHP、Node.js 等）注册的远程服务
@@ -55,7 +55,7 @@
 | Windows 64-bit | `z_api_hub64.dll` | 可执行文件目录或 `PATH` |
 | Windows 32-bit | `z_api_hub32.dll` | 可执行文件目录或 `PATH` |
 | Linux | `libz_api_hub.so` | `LD_LIBRARY_PATH` 或 `/usr/lib` |
-| macOS | `z_api_hub.dylib` | `DYLD_LIBRARY_PATH` 或 `/usr/local/lib` |
+| macOS | `libz_api_hub.dylib` | `DYLD_LIBRARY_PATH` 或 `/usr/local/lib` |
 
 **依赖库**（需与主库同目录）：
 - Windows：`z_ipc_64.dll` / `z_ipc_32.dll`
