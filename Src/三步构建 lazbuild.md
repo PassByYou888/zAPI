@@ -1,4 +1,4 @@
-## 三步构建 lazbuild（手动操作版 · 适配 loongarch64 + lazarus_4_8）
+# 三步构建 lazbuild（手动操作版 · 适配 loongarch64 + lazarus_4_8）
 
 ### 在 LoongArch64 Linux 上离线编译 Lazarus 命令行工具
 
@@ -12,11 +12,12 @@
 > - **所有步骤均需手动执行**，每步配有详细解释，确保您完全理解操作意图。
 > - **流程通用性**：仅需替换架构名和压缩包名，即可迁移到其他 Linux 架构（x86_64、ARM、RISC‑V 等）。
 > - **关于路径**：以下示例中，假设您的压缩包放在 `~/downloads/` 目录下。请您根据实际情况替换为您的真实路径（例如 `/home/你的用户名/downloads/` 或 `/root/downloads/`）。
-> - fpc3.3.1全系统打包+lazarus4.8分支源码,总共10G左右,百度网盘：[https://pan.baidu.com/s/1wnlNAjCv3-KaURp3kOaZzw](https://pan.baidu.com/s/1wnlNAjCv3-KaURp3kOaZzw) 提取码：vl5t
+> - fpc3.3.1全系统打包+lazarus4.8分支源码，总共10G左右，百度网盘：[https://pan.baidu.com/s/1wnlNAjCv3-KaURp3kOaZzw](https://pan.baidu.com/s/1wnlNAjCv3-KaURp3kOaZzw) 提取码：vl5t
 >
 > **作者：老张 qq600585**
 
 ---
+
 
 ## 📦 准备工作
 
@@ -26,6 +27,8 @@
 
 - `fpc-3.3.1.loongarch64-linux.tar.gz`
 - `lazarus_4_8.zip`
+
+> 完整的 FPC 3.3.1 预编译包平台清单，请参考同目录下的 [`FPC 3.3.1 预编译包清单.md`](./FPC%203.3.1%20预编译包清单.md)。
 
 ### 2. 解压 Lazarus 源码包（.zip 格式）
 
@@ -43,7 +46,7 @@ apt install -y unzip
 
 ```bash
 cd ~/downloads
-unzip lazarusr_4_8.zip
+unzip lazarus_4_8.zip
 ```
 
 解压后会得到一个目录（通常名为 `lazarus` 或 `lazarus-4.8`）。进入该目录，确认其中包含 `lcl`、`components` 等子目录，这就是 Lazarus 源码根目录。
@@ -57,6 +60,7 @@ unzip lazarusr_4_8.zip
 本机为 `loongarch64`，已确认。
 
 ---
+
 
 ## 🔧 第一步：安装系统编译依赖
 
@@ -94,9 +98,12 @@ cmake --version
 
 ---
 
+
 ## 📂 第二步：部署 FPC 并配置搜索路径
 
 **目的**：安装 FPC 编译器本体，配置单元搜索路径，确保后续编译能找到所有 `.ppu`。
+
+> 官方资源：[Free Pascal 官网](https://www.freepascal.org/) | [FPC 文档](https://www.freepascal.org/docs.html) | [FPC 论坛](https://forum.lazarus.freepascal.org/)
 
 ### 操作步骤
 
@@ -177,9 +184,12 @@ ppcloongarch64 -iV  # 同样输出版本号
 
 ---
 
+
 ## 🛠️ 第三步：编译 `lazbuild`
 
 **目的**：从 Lazarus 源码编译出命令行工具 `lazbuild`，用于后续自动化构建。
+
+> 官方资源：[Lazarus IDE 官网](https://www.lazarus-ide.org/) | [Lazarus 文档](https://wiki.lazarus.freepascal.org/) | [Lazarus 论坛](https://forum.lazarus.freepascal.org/)
 
 ### 操作步骤
 
@@ -250,6 +260,7 @@ lazbuild --version
 
 ---
 
+
 ## 🧪 最终验证
 
 ```bash
@@ -260,6 +271,7 @@ lazbuild --version
 一切正常，则环境已就绪。
 
 ---
+
 
 ## 📌 常见问题与解决
 
@@ -272,7 +284,10 @@ lazbuild --version
 | 解压后目录名不匹配 | 压缩包内顶层目录名不同 | 使用 `ls` 查看实际目录名，再 `cd` 进入 |
 | `lazbuild` 报 `Invalid Lazarus directory ""` | 未设置 Lazarus 路径 | 执行第三步第④条，设置 `LAZARUS_DIR` |
 
+> 更多问题可查阅 [FPC/Lazarus 社区论坛](https://forum.lazarus.freepascal.org/)。
+
 ---
+
 
 ## 💡 通用性说明
 
@@ -283,6 +298,7 @@ lazbuild --version
 **掌握这套流程，您可以在任何 Linux 平台上快速构建 `lazbuild`，实现 Lazarus 项目的命令行自动化编译。**
 
 ---
+
 
 ## 🚀 使用 `lazbuild` 编译项目
 
@@ -299,6 +315,37 @@ for lpi in *.lpi; do lazbuild --build-mode=Release "$lpi"; done
 ```
 
 更多用法请参考文档中的“批处理化”章节。
+
+
+## 🔗 相关资源
+
+### 本项目相关
+
+| 文档 | 说明 |
+|------|------|
+| [`CONTRIBUTING.md`](./CONTRIBUTING.md) | zAPI 动态库构建指南（总览） |
+| [`FPC 3.3.1 预编译包清单.md`](./FPC%203.3.1%20预编译包清单.md) | FPC 预编译包平台索引 |
+| [项目根目录 README](../readme.md) | zAPI 项目总览和语言绑定索引 |
+| [zAPI 项目仓库](https://github.com/PassByYou888/zAPI) | GitHub 主仓库 |
+| [zIPC 子模块仓库](https://github.com/PassByYou888/zIPC) | 进程通信组件 |
+
+### 官方资源
+
+| 资源 | 链接 |
+|------|------|
+| **Free Pascal 官网** | https://www.freepascal.org/ |
+| **Free Pascal 文档** | https://www.freepascal.org/docs.html |
+| **Lazarus IDE 官网** | https://www.lazarus-ide.org/ |
+| **Lazarus Wiki** | https://wiki.lazarus.freepascal.org/ |
+| **FPC/Lazarus 社区论坛** | https://forum.lazarus.freepascal.org/ |
+| **Lazarus 源码仓库** | https://gitlab.com/freepascal.org/lazarus/lazarus |
+
+### 其他参考
+
+| 资源 | 链接 |
+|------|------|
+| **mimalloc**（内存分配器） | https://github.com/microsoft/mimalloc |
+| **zAPI 文档索引** | 详见根目录 `readme.md` |
 
 ---
 
