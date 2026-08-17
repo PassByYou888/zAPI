@@ -1,0 +1,48 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{82FB5DB5-4E9A-4727-AF49-99D7DEF75620}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="EsayServer.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="EsayClient.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="EsayServer">
+        <MSBuild Projects="EsayServer.dproj"/>
+    </Target>
+    <Target Name="EsayServer:Clean">
+        <MSBuild Projects="EsayServer.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="EsayServer:Make">
+        <MSBuild Projects="EsayServer.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="EsayClient">
+        <MSBuild Projects="EsayClient.dproj"/>
+    </Target>
+    <Target Name="EsayClient:Clean">
+        <MSBuild Projects="EsayClient.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="EsayClient:Make">
+        <MSBuild Projects="EsayClient.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="EsayServer;EsayClient"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="EsayServer:Clean;EsayClient:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="EsayServer:Make;EsayClient:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>

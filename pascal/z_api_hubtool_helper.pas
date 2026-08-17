@@ -42,8 +42,7 @@
 interface
 
 uses
-  Classes, SysUtils,
-  z_api_hubtool_import;   // Low‑level C bindings
+  Classes, SysUtils, z_api_hubtool_import;   // Low‑level C bindings
 
 type
   { *
@@ -289,8 +288,7 @@ type
       * @param OnCall – cdecl callback function that implements the API.
       * @return True if registration succeeded, False if the API name already exists.
     }
-    function RegisterCall(const APIName, Desc: string; Trigger: Pointer;
-      OnCall: TAPI_Call): Boolean;
+    function RegisterCall(const APIName, Desc: string; Trigger: Pointer; OnCall: TAPI_Call): Boolean;
 
     { *
       * Registers a one‑way notification (Notify) API.
@@ -300,8 +298,7 @@ type
       * @param OnNotify – cdecl notification handler.
       * @return True if registration succeeded.
     }
-    function RegisterNotify(const APIName, Desc: string; Trigger: Pointer;
-      OnNotify: TAPI_Notify): Boolean;
+    function RegisterNotify(const APIName, Desc: string; Trigger: Pointer; OnNotify: TAPI_Notify): Boolean;
 
     { *
       * Unregisters a previously registered API from this application.
@@ -351,7 +348,16 @@ procedure ResetPrepare;
   * @param PhysicsAddr – Public address advertised to clients.
   * @return A service tag (informational, may be ignored).
 }
-function PrepareService(const ListeningAddr, PhysicsAddr: string): Integer;
+function PrepareService(const ListeningAddr, PhysicsAddr: string): Integer; overload;
+
+{ *
+  * Adds a service (listener) to the preparation list.
+  * @param ListeningAddr – Local address to bind (e.g., "0.0.0.0:9898" or "ipc:test").
+  * @param PhysicsAddr – Public address advertised to clients.
+  * @param App – Optional application handle to expose (may be nil).
+  * @return A service tag (informational, may be ignored).
+}
+function PrepareService(const ListeningAddr, PhysicsAddr: string; App: TAppHandle): Integer; overload;
 
 { *
   * Adds a client connection to the preparation list.
@@ -628,7 +634,8 @@ var
   Utf8: UTF8String;
 begin
   Result := ReadInt32(Len);          // Try to read length
-  if not Result then Exit;
+  if not Result then
+    Exit;
   SetLength(Utf8, Len);
   if Len > 0 then
     Result := ReadBuffer(Utf8[1], Len) = Len;   // Read the bytes
@@ -692,7 +699,7 @@ constructor TAppHandle.Create(const AppName, Desc: string);
 }
 begin
   FHandle := API_Create_APPHnd(PAnsiChar(Utf8String(AppName)),
-                               PAnsiChar(Utf8String(Desc)));
+    PAnsiChar(Utf8String(Desc)));
   if FHandle = nil then
     raise Exception.Create('TAppHandle.Create: API_Create_APPHnd failed');
   FName := AppName;
@@ -708,8 +715,7 @@ begin
   inherited;
 end;
 
-function TAppHandle.RegisterCall(const APIName, Desc: string; Trigger: Pointer;
-  OnCall: TAPI_Call): Boolean;
+function TAppHandle.RegisterCall(const APIName, Desc: string; Trigger: Pointer; OnCall: TAPI_Call): Boolean;
 {
   * Registers a Call API by converting the Pascal strings to UTF‑8 and
   * invoking the low‑level registration function. Returns True if the
@@ -717,23 +723,22 @@ function TAppHandle.RegisterCall(const APIName, Desc: string; Trigger: Pointer;
 }
 begin
   Result := API_Reg_Call(FHandle,
-                         PAnsiChar(Utf8String(APIName)),
-                         PAnsiChar(Utf8String(Desc)),
-                         Trigger,
-                         OnCall) = 1;
+    PAnsiChar(Utf8String(APIName)),
+    PAnsiChar(Utf8String(Desc)),
+    Trigger,
+    OnCall) = 1;
 end;
 
-function TAppHandle.RegisterNotify(const APIName, Desc: string; Trigger: Pointer;
-  OnNotify: TAPI_Notify): Boolean;
+function TAppHandle.RegisterNotify(const APIName, Desc: string; Trigger: Pointer; OnNotify: TAPI_Notify): Boolean;
 {
   * Registers a Notify API similarly.
 }
 begin
   Result := API_Reg_Notify(FHandle,
-                           PAnsiChar(Utf8String(APIName)),
-                           PAnsiChar(Utf8String(Desc)),
-                           Trigger,
-                           OnNotify) = 1;
+    PAnsiChar(Utf8String(APIName)),
+    PAnsiChar(Utf8String(Desc)),
+    Trigger,
+    OnNotify) = 1;
 end;
 
 function TAppHandle.Unregister(const APIName: string): Boolean;
@@ -785,7 +790,7 @@ function PrepareService(const ListeningAddr, PhysicsAddr: string): Integer;
 }
 begin
   Result := API_Prepare_Service(PAnsiChar(Utf8String(ListeningAddr)),
-                                PAnsiChar(Utf8String(PhysicsAddr)));
+    PAnsiChar(Utf8String(PhysicsAddr)));
 end;
 
 function PrepareClient(const PhysicsAddr: string; App: TAppHandle): Integer;
@@ -801,6 +806,19 @@ begin
   else
     AppPtr := nil;
   Result := API_Prepare_Client(PAnsiChar(Utf8String(PhysicsAddr)), AppPtr);
+end;
+
+function PrepareService(const ListeningAddr, PhysicsAddr: string; App: TAppHandle): Integer; overload;
+{
+  * Converts addresses to UTF‑8 and calls API_Prepare_Service.
+  * Converts the address and extracts the raw application handle (if any)
+  * before calling API_Prepare_Client.
+}
+begin
+  Result := API_Prepare_Service(PAnsiChar(Utf8String(ListeningAddr)),
+    PAnsiChar(Utf8String(PhysicsAddr)));
+
+  PrepareClient(PAnsiChar(Utf8String(PhysicsAddr)), App);
 end;
 
 function PrepareDone: Boolean;
@@ -860,3 +878,4 @@ begin
 end;
 
 end.
+
