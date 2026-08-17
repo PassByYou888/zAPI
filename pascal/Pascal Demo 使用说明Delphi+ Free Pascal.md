@@ -6,7 +6,6 @@
 
 > **v2.0 新特性：** 支持 `API_UnReg` 动态注销 API 和 `API_SetOption` 运行时配置；PHP 和 Node.js 可通过 ZAPI Bridge 调用 Pascal 服务。
 
----
 
 ## 📂 文件结构
 
@@ -18,11 +17,15 @@ pascal/
 ├── zAPIBenchServer.lpr               // 20 个 API 的压测服务端
 ├── zAPIBenchClient.lpr               // 并发压测客户端（每调用一线程）
 ├── fpc_tester_for_zAPI.lpr           // 完整功能测试套件
-└── ZCoreSrc/                         // Z 系列基础库（用于压测服务端/客户端）
-    └── ...（依赖单元）
+└── ZNetV2/                           // Z 系列基础库（用于压测服务端/客户端）
+    └── source/                       // 核心源码目录
+        ├── Z.Core.pas
+        ├── Z.Net.pas
+        ├── Z.Json.pas
+        ├── Z.Expression.pas
+        └── ...（所有 Z 系列依赖单元）
 ```
 
----
 
 ## 🚀 快速上手（5 分钟）
 
@@ -39,7 +42,6 @@ pascal/
 
 **注意**：动态库会自动加载，无需手动 `LoadLibrary`。
 
----
 
 ### 2️⃣ 编译最简单的服务端（CalcServer）
 
@@ -101,7 +103,6 @@ fpc CalcServer.lpr
 **编译**（Delphi）：
 直接将 `z_api_hubtool_import.pas` 添加到项目，编译即可（无需任何额外设置）。
 
----
 
 ### 3️⃣ 编写客户端并调用
 
@@ -154,7 +155,6 @@ end.
 10 + 20 = 30
 ```
 
----
 
 ## 📦 核心文件说明
 
@@ -174,7 +174,6 @@ end.
 - **同样完全兼容 Delphi/FPC**，建议在新项目中使用。
 - **v2.0 新增**：`TAppHandle.Unregister` 方法和全局 `SetOption` 函数。
 
----
 
 ## 🔧 编译与运行
 
@@ -193,9 +192,8 @@ end.
 ### 依赖项
 
 - 仅依赖标准 RTL（System、SysUtils 等）。
-- 压测服务端/客户端（`zAPIBenchServer`/`zAPIBenchClient`）还依赖 `ZCoreSrc` 目录中的 Z 系列库（如 Z.Json、Z.Expression 等），但**核心绑定本身不依赖任何 Z 库**。
+- 压测服务端/客户端（`zAPIBenchServer`/`zAPIBenchClient`）还依赖 `ZNetV2/source` 目录中的 Z 系列库（如 Z.Json、Z.Expression 等），但**核心绑定本身不依赖任何 Z 库**。
 
----
 
 ## 📊 提供的示例程序
 
@@ -222,7 +220,6 @@ end.
 - 覆盖 TDataHandle 所有读写方法、TAppHandle 注册/调用、并发、性能、资源泄漏、UTF-8 国际化等。
 - **用途**：验证绑定单元的正确性，适合开发者运行自检。
 
----
 
 ## 🧠 核心 API 速查
 
@@ -247,7 +244,6 @@ end.
 | `API_Exit_MainThread`             | 停止内部事件循环                | |
 | `API_shutdown`                    | 关闭框架，释放资源              | |
 
----
 
 ## ⚠️ 重要注意事项
 
@@ -286,7 +282,6 @@ API_Reg_Call(app, PAnsiChar(Utf8String('中文API')), ...);
 - **运行时配置**：`API_SetOption` 支持动态调整认证密码、等待连接、IPC 线程池等。
 - **PHP/Node.js 支持**：通过 ZAPI Bridge 调用 Pascal 服务，详见 [Bridge 完整手册](../Py/bridge/📖%20ZAPI%20Bridge%20完整使用手册.md)。
 
----
 
 ## 🧩 迁移到 Delphi（无痛）
 
@@ -298,7 +293,6 @@ API_Reg_Call(app, PAnsiChar(Utf8String('中文API')), ...);
 
 **Delphi 版本要求**：Delphi 2007 及以上（支持 `cdecl` 和泛型语法）。
 
----
 
 ## 🛠 更多资源
 
@@ -307,7 +301,6 @@ API_Reg_Call(app, PAnsiChar(Utf8String('中文API')), ...);
 - [其他语言绑定（C++、Python、Go 等）](../)
 - [📖 ZAPI Bridge 完整使用手册](../Py/bridge/📖%20ZAPI%20Bridge%20完整使用手册.md)
 
----
 
 ## 🤝 社区与支持
 
@@ -315,7 +308,6 @@ API_Reg_Call(app, PAnsiChar(Utf8String('中文API')), ...);
 - 作者 QQ：`600585`
 - 欢迎 Star、Fork、Issue 和 PR！
 
----
 
 **现在，您可以在 Delphi 或 Free Pascal 中直接使用 zAPI，让您的 Pascal 代码融入多语言分布式生态！** 🚀
 
