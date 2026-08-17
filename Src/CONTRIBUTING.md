@@ -8,6 +8,7 @@
 
 **本文档的目标：看完这一篇，就能搞定构建，不需要翻其他文档。**
 
+---
 
 ## 📖 目录
 
@@ -40,8 +41,8 @@ zAPI 依赖两个核心子模块，克隆时必须一并拉取：
 
 | 组件 | 仓库地址 | 说明 |
 |------|----------|------|
-| **zIPC** | [https://github.com/PassByYou888/zIPC](https://github.com/PassByYou888/zIPC) | 进程间通信核心库 |
-| **mimalloc4p** | [https://github.com/PassByYou888/mimalloc4p](https://github.com/PassByYou888/mimalloc4p) | mimalloc Pascal 绑定 |
+| **zIPC** | https://github.com/PassByYou888/zIPC | 进程间通信核心库 |
+| **mimalloc4p** | https://github.com/PassByYou888/mimalloc4p | mimalloc Pascal 绑定 |
 
 ### 1.4 构建 zAPI 动态库的三种方式
 
@@ -117,7 +118,7 @@ git submodule update --init --recursive
 
 ### 3.2 安装 Lazarus
 
-1. 访问 [https://www.lazarus-ide.org](https://www.lazarus-ide.org)
+1. 访问 https://www.lazarus-ide.org
 2. 下载适用于 Windows 的安装包（推荐最新稳定版，如 Lazarus 2.2.6+）
 3. 运行安装程序，按提示完成安装（建议安装到 `C:\lazarus`）
 
@@ -186,7 +187,7 @@ sudo dnf install lazarus
 ```
 
 **方法二：从官网下载安装包**
-- 访问 [https://www.lazarus-ide.org](https://www.lazarus-ide.org)
+- 访问 https://www.lazarus-ide.org
 - 下载适用于你 Linux 发行版的安装包
 - 按安装包说明完成安装
 
@@ -216,58 +217,55 @@ Linux 下，mimalloc **需要自行编译生成 `libmimalloc.so`**。详见 [第
 
 ## 五、Linux 平台构建（无 Lazarus 支持 — 以 LoongArch64 为例）
 
-某些 Linux 架构（如 **LoongArch64**、RISC-V 等）可能没有官方 Lazarus 包。这时需要**先手动编译 `lazbuild`**，再用它构建 zAPI。
-
-> **📌 完整的手动编译教程**已放在 `Src/` 目录下，名为：
+> **本指南针对您的文件定制**
 >
-> **[《三步构建 lazbuild.md》](./三步构建 lazbuild.md)**
+> - FPC 压缩包：`fpc-3.3.1.loongarch64-linux.tar.gz`（原生龙芯包）
+> - Lazarus 源码包：`lazarus_4_8.zip`（来自 Git 标签 `lazarus_4_8` 的打包）
+> - 操作系统：Loongnix / 任何 RHEL 系 Linux / Debian/Ubuntu
+> - **所有步骤均需手动执行**，每步配有详细解释，确保您完全理解操作意图。
+> - **流程通用性**：仅需替换架构名和压缩包名，即可迁移到其他 Linux 架构（x86_64、ARM、RISC‑V 等）。
+> - **关于路径**：以下示例中，假设您的压缩包放在 `~/downloads/` 目录下。请您根据实际情况替换为您的真实路径。
+> - FPC 3.3.1 全系统打包 + Lazarus 4.8 分支源码，总共约 10 GB，百度网盘：[https://pan.baidu.com/s/1wnlNAjCv3-KaURp3kOaZzw](https://pan.baidu.com/s/1wnlNAjCv3-KaURp3kOaZzw) 提取码：`vl5t`
 >
-> 该文档详细涵盖了：安装系统编译依赖、部署 FPC 3.3.1 原生编译器、配置 `fpc.cfg` 搜索路径、从 Lazarus 源码编译 `lazbuild`、常见问题与排错。
->
-> **流程通用**：仅需替换架构名和压缩包名，即可迁移到其他 Linux 架构（x86_64、ARM、RISC-V 等）。
+> **作者：老张 qq600585**
 
 ### 5.1 准备工作
 
-**下载所需文件**（示例中放在 `~/downloads/` 目录）：
+**确认文件位置**
 
-| 文件 | 说明 |
-|------|------|
-| `fpc-3.3.1.loongarch64-linux.tar.gz` | FPC 原生编译器包（约 218 MB） |
-| `lazarus_4_8.rar` | Lazarus 4.8 源码包 |
+将以下两个文件放到同一个目录，例如 `~/downloads/`（请根据实际修改）：
 
-> **FPC 3.3.1 预编译包**：完整的平台清单请参考同目录下的 [《FPC 3.3.1 预编译包清单.md》](./FPC%203.3.1%20预编译包清单.md)。百度网盘链接 [https://pan.baidu.com/s/1wnlNAjCv3-KaURp3kOaZzw](https://pan.baidu.com/s/1wnlNAjCv3-KaURp3kOaZzw) 提取码：`vl5t`
+- `fpc-3.3.1.loongarch64-linux.tar.gz`
+- `lazarus_4_8.zip`
 
-**安装解压工具**：
+**解压 Lazarus 源码包（.zip 格式）**
 
-`.rar` 文件需要解压工具，我们提供多种选择，**推荐使用 `7z`（p7zip）**，因为它无需额外配置且兼容性好。
+`.zip` 格式在 Linux 下使用 `unzip` 命令解压，绝大多数 Linux 发行版默认已安装该工具。若未安装，可通过包管理器快速安装：
 
 ```bash
-# 推荐：安装 7z（适用于所有发行版，无需额外源）
 # RHEL / CentOS / Loongnix
-yum install -y p7zip
+yum install -y unzip
 
 # Debian / Ubuntu
-apt install -y p7zip-full
+apt install -y unzip
 ```
 
-**若您偏好使用 `unrar`（官方版，支持 RAR5）**，在 Debian/Ubuntu 上需要先启用 `non-free` 软件源：
+**解压命令**：
 
 ```bash
-# Debian/Ubuntu 启用 non-free 源并安装 unrar
-sed -i.bak 's/bookworm[^ ]* main$/& non-free/g' /etc/apt/sources.list   # 将 bookworm 替换为您的版本代号
-apt update
-apt install -y unrar
+cd ~/downloads
+unzip lazarus_4_8.zip
 ```
 
-**备选方案：`unrar-free`（开源版，但不支持 RAR5 格式）**
+解压后会得到一个目录（通常名为 `lazarus` 或 `lazarus-4.8`）。进入该目录，确认其中包含 `lcl`、`components` 等子目录，这就是 Lazarus 源码根目录。
 
-```bash
-apt install -y unrar-free
-```
-
-> **注意**：如果您不确定 RAR 文件的压缩版本，建议使用 `7z` 或官方 `unrar`。`unrar-free` 可能无法解压较新的 RAR 文件。
+> **关于 FPC 压缩包**：`fpc-3.3.1.loongarch64-linux.tar.gz` 是标准的 `.tar.gz` 格式，Linux 系统自带的 `tar` 命令即可解压，无需额外工具。
 
 ### 5.2 第一步：安装系统编译依赖
+
+**目的**：安装编译 Lazarus 所需的基础开发工具和图形库。
+
+以 root 执行：
 
 ```bash
 # RHEL / CentOS / Loongnix
@@ -281,7 +279,11 @@ apt install -y make gcc g++ binutils subversion zip unzip \
     gdb rsync cmake libgtk-3-dev
 ```
 
-> **为什么需要这些？** 即使只编译 `lazbuild`（无 GUI），部分 Makefile 仍会引用图形库，缺失会导致链接错误。
+> **为什么需要这些？**
+>
+> - `make`, `gcc`, `binutils`：编译必需品。
+> - `gtk2-devel`, `cairo-devel`：LCL 图形库依赖，即使只编译 `lazbuild`（无 GUI），部分 Makefile 仍会引用，缺失会导致链接错误。
+> - `cmake`：一些构建辅助工具需要。
 
 **验证**：
 
@@ -291,7 +293,11 @@ gcc --version
 cmake --version
 ```
 
+均应正常输出。
+
 ### 5.3 第二步：部署 FPC 并配置搜索路径
+
+**目的**：安装 FPC 编译器本体，配置单元搜索路径，确保后续编译能找到所有 `.ppu`。
 
 **① 解压 FPC 包**
 
@@ -301,6 +307,8 @@ FPC_TARBALL="fpc-3.3.1.loongarch64-linux.tar.gz"
 mkdir -p /tmp/fpc_deploy
 tar -xzf "$FPC_TARBALL" -C /tmp/fpc_deploy
 ```
+
+解压后，`/tmp/fpc_deploy` 下会得到 `bin/`、`lib/`、`share/` 三个目录。
 
 **② 复制文件到系统目录**
 
@@ -332,7 +340,7 @@ ln -sf /usr/lib/fpc/3.3.1/ppcloongarch64 /usr/bin/ppcloongarch64
 
 **⑤ 将所有单元子目录添加到配置（关键步骤）**
 
-> **不要直接复制绝对路径**，请先进入目录查看实际架构名称。
+> **注意**：不要直接复制绝对路径，请先进入目录查看实际架构名称。
 
 ```bash
 # 进入 FPC 单元根目录
@@ -350,36 +358,35 @@ find . -type d -print | sed 's|^\.||' | while read dir; do
 done >> /etc/fpc.cfg
 ```
 
-> **为什么这样做？** 不同架构的目录名不同（例如 x86_64-linux、aarch64-linux 等），通过 `ls` 查看后再进入，可以避免因硬编码路径导致的错误。`$(pwd)` 会动态获取当前绝对路径，确保添加的路径正确。
+> **为什么这样做？**
+> 不同架构的目录名不同（例如 x86_64-linux、aarch64-linux 等），通过 `ls` 查看后再进入，可以避免因硬编码路径导致的错误。`$(pwd)` 会动态获取当前绝对路径，确保添加的路径正确。
 
-**⑥ 验证 FPC**
+**⑥ 清理临时文件（可选）**
+
+```bash
+rm -rf /tmp/fpc_deploy
+```
+
+**验证 FPC**：
 
 ```bash
 fpc -iV          # 应输出 3.3.1
-ppcloongarch64 -iV
+ppcloongarch64 -iV  # 同样输出版本号
 ```
 
 ### 5.4 第三步：编译 `lazbuild`
 
-**① 解压 Lazarus 源码**
+**目的**：从 Lazarus 源码编译出命令行工具 `lazbuild`，用于后续自动化构建。
+
+**① 进入 Lazarus 源码目录**
+
+根据您在第 5.1 步中解压得到的实际目录名，进入 Lazarus 源码根目录：
 
 ```bash
-cd ~/downloads
-LAZARUS_RAR="lazarus_4_8.rar"
-mkdir -p /tmp/lazarus_build
-cd /tmp/lazarus_build
-
-# 使用 7z 解压（推荐，兼容性最好）
-7z x ~/downloads/"$LAZARUS_RAR"
-
-# 或者使用 unrar（如果已安装）
-# unrar x ~/downloads/"$LAZARUS_RAR"
-
-# 查看解压出的目录名
-ls
-# 假设为 lazarus，进入
-cd lazarus   # 如果目录名不同，请替换为实际名称
+cd /path/to/lazarus   # 请替换为实际的 Lazarus 源码目录路径
 ```
+
+> 例如，如果您在 `~/downloads/` 下解压得到 `lazarus-4.8`，则执行 `cd ~/downloads/lazarus-4.8`。
 
 **② 编译 `lazbuild`**
 
@@ -388,7 +395,7 @@ make clean
 make lazbuild
 ```
 
-> 此过程约需 3~5 分钟。若内存较小可添加 `-j1` 限制并行数：`make lazbuild -j1`。
+> 此过程约需 3~5 分钟，若内存较小可添加 `-j1` 限制并行数：`make lazbuild -j1`。
 
 **③ 复制 `lazbuild` 到系统路径**
 
@@ -405,7 +412,7 @@ cp lazbuild /usr/local/bin/
 - **将 Lazarus 源码移动到固定位置**（例如 `/usr/local/share/lazarus`）：
   ```bash
   # 首先确认当前目录是 Lazarus 源码根目录（包含 lcl、components 等）
-  # 假设当前在 /tmp/lazarus_build/lazarus
+  # 假设当前在 /path/to/lazarus
   mkdir -p /usr/local/share
   rm -rf /usr/local/share/lazarus          # 如果已存在则先删除
   mv . /usr/local/share/lazarus            # 将当前目录整体移动
@@ -425,7 +432,8 @@ cp lazbuild /usr/local/bin/
   lazbuild --lazarusdir=/usr/local/share/lazarus 项目文件.lpi
   ```
 
-> **为什么要这么做？** `lazbuild` 编译时记录的是编译时的临时路径，但该路径在解压后可能被删除或移动。将 Lazarus 源码固定到标准目录并配置环境变量，可以保证任何时候都能找到所需的 LCL 单元，避免编译失败。
+> **为什么要这么做？**
+> `lazbuild` 编译时记录的是编译时的临时路径，但该路径在解压后可能被删除或移动。将 Lazarus 源码固定到标准目录并配置环境变量，可以保证任何时候都能找到所需的 LCL 单元，避免编译失败。
 
 **⑤ 验证**
 
@@ -449,16 +457,21 @@ lazbuild z_api_hub.lpi
 ### 5.6 常见问题与解决
 
 | 问题 | 原因 | 解决办法 |
-|------|------|----------|
+| ---- | ---- | -------- |
 | `fpc -iV` 报 `ppcloongarch64 can't be executed` | 未创建软链接 | 执行第二步第③条 |
 | `make lazbuild` 报 `gtk/gtk.h: No such file` | 图形库未安装 | 重新执行第一步，安装 `gtk2-devel` |
-| 找不到 `DB`、`Variants` 等单元 | `fpc.cfg` 缺少子目录 | 重新执行第二步第⑤条 |
-| `7z: command not found` | 未安装 p7zip | 安装 `p7zip` 或 `p7zip-full` |
-| `unrar: command not found` | 未安装 unrar | 尝试安装 `unrar`（启用 non-free）或 `unrar-free`，或使用 `7z` |
+| 找不到 `DB`、`Variants` 等单元 | `fpc.cfg` 缺少子目录 | 重新执行第二步第⑤条，确保所有子目录添加 |
+| `unzip: command not found` | 未安装 unzip | 安装 `unzip`（yum/apt install unzip）|
 | 解压后目录名不匹配 | 压缩包内顶层目录名不同 | 使用 `ls` 查看实际目录名，再 `cd` 进入 |
 | `lazbuild` 报 `Invalid Lazarus directory ""` | 未设置 Lazarus 路径 | 执行第三步第④条，设置 `LAZARUS_DIR` |
 
-> 更多详细排错请参考 [《三步构建 lazbuild》文档](./三步构建 lazbuild.md) 中的"常见问题与解决"章节。
+### 5.7 通用性说明
+
+- **不同架构**：只需将 `ARCH` 改为对应名称（如 `x86_64`、`arm`、`aarch64`、`riscv64`），并下载对应的 FPC 包。Lazarus 源码通用。
+- **不同发行版**：调整包管理器命令（`yum`/`apt`/`pacman`）即可，后续步骤完全相同。
+- **离线编译**：所有资源均来自本地压缩包，无需联网。
+
+**掌握这套流程，您可以在任何 Linux 平台上快速构建 `lazbuild`，实现 Lazarus 项目的命令行自动化编译。**
 
 
 ## 六、mimalloc 动态库的特别说明
