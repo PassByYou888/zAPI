@@ -1,4 +1,4 @@
-program EsayServer;
+program EasyServer;
 
 {$APPTYPE CONSOLE}
 

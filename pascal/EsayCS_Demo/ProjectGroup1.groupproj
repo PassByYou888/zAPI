@@ -3,10 +3,10 @@
         <ProjectGuid>{82FB5DB5-4E9A-4727-AF49-99D7DEF75620}</ProjectGuid>
     </PropertyGroup>
     <ItemGroup>
-        <Projects Include="EsayServer.dproj">
+        <Projects Include="EasyServer.dproj">
             <Dependencies/>
         </Projects>
-        <Projects Include="EsayClient.dproj">
+        <Projects Include="EasyClient.dproj">
             <Dependencies/>
         </Projects>
     </ItemGroup>
@@ -17,32 +17,32 @@
             <Default.Personality/>
         </BorlandProject>
     </ProjectExtensions>
-    <Target Name="EsayServer">
-        <MSBuild Projects="EsayServer.dproj"/>
+    <Target Name="EasyServer">
+        <MSBuild Projects="EasyServer.dproj"/>
     </Target>
-    <Target Name="EsayServer:Clean">
-        <MSBuild Projects="EsayServer.dproj" Targets="Clean"/>
+    <Target Name="EasyServer:Clean">
+        <MSBuild Projects="EasyServer.dproj" Targets="Clean"/>
     </Target>
-    <Target Name="EsayServer:Make">
-        <MSBuild Projects="EsayServer.dproj" Targets="Make"/>
+    <Target Name="EasyServer:Make">
+        <MSBuild Projects="EasyServer.dproj" Targets="Make"/>
     </Target>
-    <Target Name="EsayClient">
-        <MSBuild Projects="EsayClient.dproj"/>
+    <Target Name="EasyClient">
+        <MSBuild Projects="EasyClient.dproj"/>
     </Target>
-    <Target Name="EsayClient:Clean">
-        <MSBuild Projects="EsayClient.dproj" Targets="Clean"/>
+    <Target Name="EasyClient:Clean">
+        <MSBuild Projects="EasyClient.dproj" Targets="Clean"/>
     </Target>
-    <Target Name="EsayClient:Make">
-        <MSBuild Projects="EsayClient.dproj" Targets="Make"/>
+    <Target Name="EasyClient:Make">
+        <MSBuild Projects="EasyClient.dproj" Targets="Make"/>
     </Target>
     <Target Name="Build">
-        <CallTarget Targets="EsayServer;EsayClient"/>
+        <CallTarget Targets="EasyServer;EasyClient"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="EsayServer:Clean;EsayClient:Clean"/>
+        <CallTarget Targets="EasyServer:Clean;EasyClient:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="EsayServer:Make;EsayClient:Make"/>
+        <CallTarget Targets="EasyServer:Make;EasyClient:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>

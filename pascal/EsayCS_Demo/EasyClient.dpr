@@ -1,4 +1,4 @@
-program EsayClient;
+program EasyClient;
 
 {$APPTYPE CONSOLE}
 
