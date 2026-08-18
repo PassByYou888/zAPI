@@ -22,23 +22,40 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *)
 {
-  * Z.MemoryStream – High-performance memory stream with 64‑bit addressing,
-  * compression, serialisation, and zero‑copy mapping.
+  * ****************************************************************************
+  * Z.MemoryStream
+  * ==============
+  * High‑performance 64‑bit memory stream and compression library for Delphi/FPC.
   *
-  * This unit provides two main classes:
-  *   – TMS64: a TStream descendant for drop‑in compatibility.
-  *   – TMem64: a standalone object with the same capabilities.
+  * Provides two main stream classes:
+  *   - TMS64  : inherits from TCore_Stream (TStream), suitable as a drop‑in
+  *              replacement for TMemoryStream with 64‑bit addressing.
+  *   - TMem64 : independent object, also 64‑bit, but not derived from TStream.
   *
   * Both support:
-  *   – 64‑bit sizes and positions (streams > 2 GiB).
-  *   – Delta‑based capacity growth (reduces reallocations).
-  *   – Protected (read‑only) mode for safe external buffer mapping.
-  *   – Built‑in LZ4 and Snappy compression.
-  *   – Rich serialisation of primitive types, strings, MD5, etc.
+  *   - 64‑bit capacity (up to >2GB)
+  *   - Delta‑based incremental expansion (customisable growth step)
+  *   - Zero‑copy memory mapping (read‑only or read‑write)
+  *   - Protected (read‑only) mode
+  *   - Built‑in LZ4, Snappy and ZLIB compression/decompression
+  *   - Rich serialisation methods for basic types, strings, MD5, etc.
   *
-  * The design favours performance, low memory overhead, and ease of use
-  * in both server and client applications.
-}
+  * Additionally, the unit provides global compression/decompression routines,
+  * parallel compression, stream‑based serialisation helpers and trigger
+  * interfaces for monitoring I/O.
+  *
+  * @Example (basic usage):
+  *   var
+  *     ms: TMS64;
+  *   begin
+  *     ms := TMS64.Create;
+  *     ms.WriteString('Hello, world!');
+  *     ms.Position := 0;
+  *     WriteLn(ms.ReadString); // prints the string
+  *     ms.Free;
+  *   end;
+  * ****************************************************************************
+  * }
 unit Z.MemoryStream;
 
 {$DEFINE FPC_DELPHI_MODE}
@@ -57,366 +74,441 @@ uses
   Z.Core, Z.PascalStrings, Z.UPascalStrings, Z.Int128;
 
 type
-  TMem64 = class; // forward declaration for mutual references
+  { *
+    * TMem64: Forward declaration needed for cross‑references between TMS64 and
+    * TMem64, as they can map to each other.
+  }
+  TMem64 = class;
 
-  {
-    * TMS64 – A 64‑bit memory stream that inherits from TCore_Stream (TStream).
+  { *
+    * TMS64: 64‑bit memory stream that inherits from TCore_Stream (TStream).
+    * It can be used anywhere a TStream is expected, but offers extended
+    * capabilities: 64‑bit addressing, delta expansion, mapping, compression,
+    * and typed serialisation.
     *
-    * It overcomes the 2 GiB limitation of TMemoryStream and adds advanced
-    * features:
-    *   – Delta‑based growth: you control how much capacity increases each time.
-    *   – Protected mode: once mapped to an external buffer, the stream becomes
-    *     read‑only, preventing accidental writes.
-    *   – Zero‑copy mapping: you can map any memory block without copying.
-    *   – Compression: LZ4 and Snappy are built in.
-    *   – Serialisation helpers: write/read Boolean, Integer, String, MD5, etc.
+    * @Note: The stream is not thread‑safe; external locking is required for
+    *        concurrent access.
     *
-    * @Example:
-    *   var ms: TMS64;
-    *       s: TPascalString;
+    * @Example (create, write, read, compress):
+    *   var
+    *     ms, compressed: TMS64;
     *   begin
-    *     ms := TMS64.Create;                  // delta = 256 bytes
-    *     ms.WriteString('Hello, world!');     // writes length + UTF‑8
-    *     ms.Position := 0;
-    *     s := ms.ReadString;                  // 'Hello, world!'
-    *     ms.Free;
-    *   end;
-    *
-    * @Example (mapping an external buffer):
-    *   var data: TBytes;
-    *       ms: TMS64;
-    *   begin
-    *     data := TFile.ReadAllBytes('file.bin');
     *     ms := TMS64.Create;
-    *     ms.Mapping(@data[0], Length(data));  // read‑only view
-    *     // ms.WriteString('x') would raise an exception
+    *     ms.WriteInt32(12345);           // write integer
+    *     ms.WriteString('data');         // write string (UTF‑8)
+    *     compressed := ms.LZ4;           // compress with LZ4
+    *     // ... use compressed ...
+    *     compressed.Free;
     *     ms.Free;
-    *   end;
-    *
-    * @Example (compression):
-    *   var orig, comp: TMS64;
-    *   begin
-    *     orig := TMS64.Create;
-    *     orig.WriteString('some data');
-    *     comp := orig.LZ4;                    // compressed version
-    *     // comp contains a header: [orig size][comp size][data]
-    *     comp.Free;
-    *     orig.Free;
     *   end;
   }
   TMS64 = class(TCore_Stream)
   private
-    FDelta: NativeInt; // capacity growth increment (bytes)
-    FMemory: Pointer; // pointer to allocated or mapped buffer
-    FSize: NativeUInt; // current logical size
-    FPosition: NativeUInt; // current read/write position
-    FCapacity: NativeUInt; // total allocated bytes (>= FSize)
-    FProtectedMode: Boolean; // True if read‑only (external mapping)
-    FMem64: TMem64; // associated TMem64, if any
+    FDelta: NativeInt; // Growth step size (clamped 64..1MB)
+    FMemory: Pointer; // Pointer to the raw memory buffer
+    FSize: NativeUInt; // Current used size (bytes)
+    FPosition: NativeUInt; // Current read/write position (bytes)
+    FCapacity: NativeUInt; // Allocated buffer size (bytes)
+    FProtectedMode: Boolean; // If True, the stream is read‑only (mapped)
+    FMem64: TMem64; // Cached TMem64 mapping instance (if any)
   protected
-    { * Sets the internal memory pointer and size (used by Realloc). }
+    { *
+      * SetPointer: Assigns an external buffer to the stream, updating FMemory
+      * and FSize. Used internally by Mapping and SetPointerWithProtectedMode.
+    }
     procedure SetPointer(buffPtr: Pointer; const BuffSize: NativeUInt);
-    { * Changes the capacity; does nothing in protected mode. }
+
+    { *
+      * SetCapacity: Reallocates the buffer to NewCapacity bytes (if not in
+      * protected mode). The actual allocation is performed by Realloc.
+    }
     procedure SetCapacity(NewCapacity: NativeUInt);
-    { * Reallocates the buffer to NewCapacity (delta‑aligned).
-      * @param NewCapacity Requested capacity; will be rounded up.
-      * @return New pointer or nil.
+
+    { *
+      * Realloc: Performs the low‑level memory allocation or reallocation.
+      * Returns the new pointer. If NewCapacity=0, frees the buffer.
+      * Uses DeltaStep to round up NewCapacity to a multiple of FDelta.
+      * Raises an exception on out‑of‑memory.
     }
     function Realloc(var NewCapacity: NativeUInt): Pointer; virtual;
-    { * Sets FDelta with clamping to [64, 1,048,576]. }
+
+    { *
+      * SetDelta: Sets the growth step (clamped to 64..1MB). The value is
+      * applied via DeltaStep when expanding the buffer.
+    }
     procedure SetDelta(const Value: NativeInt);
-    { * Current allocated capacity (read‑only). }
+
+    { *
+      * Capacity: The currently allocated buffer size (read‑only through
+      * property, but can be set via SetCapacity).
+    }
     property Capacity: NativeUInt read FCapacity write SetCapacity;
   public
-    { * Creates a stream with default delta = 256 bytes. }
+    { * Default constructor, uses Delta = 256. }
     constructor Create;
-    { * Creates a stream with a custom delta (growth increment).
-      * @param customDelta Minimum bytes to add when growing; clamped to [64, 1 MiB].
+
+    { *
+      * CustomCreate: Creates the stream with a specified Delta growth step.
+      * @param customDelta: initial growth step (will be clamped).
     }
     constructor CustomCreate(const customDelta: NativeInt);
+
+    { * Destructor: frees the buffer and any cached TMem64 instance. }
     destructor Destroy; override;
 
-    { * Returns a TMem64 instance that maps to this stream’s data.
-      * @param Mapping_Begin_As_Position_ If True, map from current position to end.
-      * @return A TMem64 sharing the same buffer.
+    { *
+      * Mem64: Returns a TMem64 object that maps to this stream's data.
+      * If Mapping_Begin_As_Position_=True, the mapping starts at the current
+      * position and covers the remaining bytes; otherwise it maps the entire
+      * stream. The TMem64 is cached and reused.
+      * @param Mapping_Begin_As_Position_: if True, maps from current position
+      *        to end; if False, maps the whole stream.
+      * @return a TMem64 instance referencing the same memory.
     }
     function Mem64(Mapping_Begin_As_Position_: Boolean): TMem64; overload;
-    { * Returns a TMem64 mapping the entire stream. Equivalent to Mem64(False). }
+
+    { * Overloaded version: maps the whole stream (calls Mem64(False)). }
     function Mem64: TMem64; overload;
 
-    { * Creates a deep copy (clone) of the stream. }
+    { *
+      * NewClone: Creates an independent deep copy of the stream.
+      * The clone has its own buffer and the same Delta, size, and position.
+    }
     function NewClone: TMS64;
 
-    { * Creates a new TMS64 that shares the same memory buffer (zero‑copy, read‑only).
-      * The caller must free the returned instance.
+    { *
+      * Create_Mapping_Instance: Creates a new TMS64 that maps (zero‑copy) to
+      * this stream's buffer. The new stream is read‑only and shares the same
+      * memory. The caller must not free the original while the mapping is used.
     }
     function Create_Mapping_Instance: TMS64;
-    { * Creates a TMem64 that shares the same buffer. }
+
+    { * Same as Create_Mapping_Instance but returns a TMem64 instead. }
     function Create_Mapping_Instance_Mem64: TMem64;
 
-    { * Swaps internal state with a newly created TMS64, effectively moving data out.
-      * Leaves the current stream empty. Useful for passing data without copying.
-      * @return A new TMS64 containing the original data.
+    { *
+      * Swap_To_New_Instance: Creates a new, empty TMS64 and swaps its internal
+      * data with this stream. After the call, this stream becomes empty and
+      * the new instance holds the original data.
     }
     function Swap_To_New_Instance: TMS64;
 
-    { * Discards the memory pointer without freeing – use with extreme caution. }
+    { *
+      * DiscardMemory: Releases the internal buffer pointer without freeing it.
+      * Use with extreme caution – the memory becomes inaccessible and the
+      * stream is left in an invalid state. Typically used when the buffer is
+      * owned externally and must not be freed by the stream.
+    }
     procedure DiscardMemory;
 
-    { * Frees the memory and resets size and position (not allowed in protected mode). }
+    { *
+      * Clear: Frees the buffer and resets size and position to 0. No‑op in
+      * protected mode.
+    }
     procedure Clear;
 
-    { * Reinitialises the stream using parameters from another TMS64.
-      * The current stream is cleared first.
+    { *
+      * NewParam: Replaces the stream's internal state with another TMS64.
+      * The current buffer is cleared first, then the internal fields are copied.
+      * The source stream remains unchanged.
     }
     procedure NewParam(source: TMS64); overload;
-    { * Reinitialises using parameters from a TMem64. }
+
+    { * Same as above, but copies from a TMem64. }
     procedure NewParam(source: TMem64); overload;
 
-    { * Swaps internal state with another TMS64 (O(1) operation). }
+    { *
+      * SwapInstance: Efficiently exchanges the entire internal state (buffer,
+      * size, position, capacity, delta, protected mode) with another TMS64.
+      * O(1) operation, no data copying.
+    }
     procedure SwapInstance(source: TMS64); overload;
-    { * Swaps internal state with a TMem64. }
+
+    { * Same as above, but with a TMem64. }
     procedure SwapInstance(source: TMem64); overload;
 
-    { * Returns a copy of the stream data as a TBytes array. }
+    { *
+      * ToBytes: Copies the stream's data into a dynamic TBytes array.
+      * The caller receives a separate copy.
+    }
     function ToBytes: TBytes;
-    { * Computes the MD5 hash of the entire stream content. }
+
+    { * ToMD5: Computes the MD5 hash of the entire stream content. }
     function ToMD5: TMD5;
 
-    { * Compresses the stream using LZ4.
-      * Output: [OriginalSize: Int64][CompressedSize: Int64][CompressedData].
-      * @return A new TMS64 containing the compressed data.
+    { *
+      * Same: Compares this stream's content with a TMem64 for equality.
+      * Returns True if both have the same size and identical byte content.
+    }
+    function Same(source: TMem64): Boolean;
+
+    { *
+      * LZ4: Compresses the stream's data using the LZ4 algorithm.
+      * Returns a new TMS64 containing the compressed data in the format:
+      *   [OriginalSize: Int64][CompressedSize: Int64][CompressedData].
     }
     function LZ4: TMS64;
-    { * Decompresses LZ4 data from the stream (must be in LZ4 format). }
+
+    { *
+      * UnLZ4: Decompresses data that was compressed with LZ4 (format above).
+      * Returns a new TMS64 with the original data.
+    }
     function UnLZ4: TMS64;
-    { * Compresses using Snappy. Same header format as LZ4. }
+
+    { *
+      * Snappy_Pas: Compresses the stream using Snappy (pure Pascal
+      * implementation). Output format same as LZ4.
+    }
     function Snappy_Pas: TMS64;
-    { * Decompresses Snappy data. }
+
+    { * UnSnappy_Pas: Decompresses Snappy‑compressed data. }
     function UnSnappy_Pas: TMS64;
 
-    { * The delta (capacity growth increment). Clamped to [64, 1,048,576]. }
+    { * Delta: The growth step (can be read or set). }
     property Delta: NativeInt read FDelta write SetDelta;
-    { * True if the stream is read‑only (mapped to external buffer). }
+
+    { * ProtectedMode: True if the stream is read‑only (mapped). }
     property ProtectedMode: Boolean read FProtectedMode;
 
-    { * Maps to an external buffer (protected mode). }
+    { *
+      * SetPointerWithProtectedMode: Same as Mapping, sets the stream to
+      * point to an external buffer with read‑only protection.
+    }
     procedure SetPointerWithProtectedMode(buffPtr: Pointer; const BuffSize: Int64);
-    { * Alias for SetPointerWithProtectedMode. }
+
+    { *
+      * Mapping: Makes the stream point to an external buffer. The stream
+      * becomes protected (read‑only) and will not own the memory.
+      * @param buffPtr: pointer to the external buffer.
+      * @param BuffSize: size in bytes.
+    }
     procedure Mapping(buffPtr: Pointer; const BuffSize: Int64); overload;
-    { * Maps to another TMS64 (protected mode). }
+
+    { * Maps the stream to another TMS64's buffer. }
     procedure Mapping(m64: TMS64); overload;
-    { * Maps to a TMem64 (protected mode). }
+
+    { * Maps the stream to a TMem64's buffer. }
     procedure Mapping(m64: TMem64); overload;
 
-    { * Returns a pointer to the data at the given offset. }
+    { *
+      * PositionAsPtr: Returns a pointer to the byte at the given position.
+      * Does not change the current position.
+    }
     function PositionAsPtr(const Position_: Int64): Pointer; overload;
-    { * Returns a pointer to the data at the current position. }
+
+    { * Returns a pointer to the current position. }
     function PositionAsPtr: Pointer; overload;
-    { * Aliases for PositionAsPtr. }
+
+    { * Alias for PositionAsPtr. }
     function PosAsPtr(const Position_: Int64): Pointer; overload;
     function PosAsPtr: Pointer; overload;
 
-    { * Replaces the stream content by reading from another stream. }
+    { *
+      * LoadFromStream: Reads the entire content of another stream into this
+      * one, replacing its current data. The source stream is read from position 0.
+    }
     procedure LoadFromStream(stream: TCore_Stream); virtual;
-    { * Loads from a file. }
+
+    { * Loads data from a file (binary). }
     procedure LoadFromFile(FileName: SystemString);
-    { * Writes the entire stream content to another stream. }
+
+    { *
+      * SaveToStream: Writes the stream's data to another stream. If the
+      * destination is a TMS64, it uses zero‑copy for efficiency. Otherwise,
+      * writes in chunks of 64MB to handle large sizes.
+    }
     procedure SaveToStream(stream: TCore_Stream); virtual;
-    { * Saves to a file. }
+
+    { * Saves the stream's data to a file. }
     procedure SaveToFile(FileName: SystemString);
 
-    { * Sets the stream size; if larger, expands capacity. }
+    { *
+      * SetSize: Changes the stream's size. If the new size is larger, the
+      * buffer is expanded (if not protected). If smaller, the size is truncated.
+      * Position is adjusted if it exceeds the new size.
+    }
     procedure SetSize(const NewSize: Int64); overload; override;
-    { * 32‑bit overload for SetSize. }
     procedure SetSize(NewSize: longint); overload; override;
 
-    { * Writes Count bytes from buffer; expands stream if needed.
-      * @return Actual bytes written (should equal Count).
+    { *
+      * Write64: Writes Count bytes from buffer to the stream at the current
+      * position. Expands the stream if necessary. Returns the number of bytes
+      * written (should equal Count on success, 0 if protected mode or invalid).
     }
     function Write64(const buffer; Count: Int64): Int64; virtual;
-    { * Writes from a pointer. }
+
+    { * WritePtr: Writes Count bytes from the given pointer. }
     function WritePtr(const p: Pointer; Count: Int64): Int64;
-    { * 32‑bit overload for TStream compatibility. }
+
+    { * Override of TStream.Write (32‑bit Count). }
     function write(const buffer; Count: longint): longint; overload; override;
-    { * Writes a TBytes array. }
+
+    { * WriteBytes: Writes a TBytes array. }
     procedure WriteBytes(const buff: TBytes);
 
-    { * Reads up to Count bytes into buffer.
-      * @return Actual bytes read (might be less than Count if EOF).
+    { *
+      * Read64: Reads up to Count bytes from the stream into buffer at the
+      * current position. Returns the actual number of bytes read (may be less
+      * than Count if end of stream).
     }
     function Read64(var buffer; Count: Int64): Int64; virtual;
-    { * Reads into a pointer buffer. }
+
+    { * ReadPtr: Reads Count bytes into the given pointer. }
     function ReadPtr(const p: Pointer; Count: Int64): Int64;
-    { * 32‑bit overload for TStream compatibility. }
+
+    { * Override of TStream.Read (32‑bit Count). }
     function read(var buffer; Count: longint): longint; overload; override;
+
 {$IFDEF DELPHI}
-    { * Delphi‑specific overload for writing from a TBytes slice. }
+    { * Delphi‑specific overloads for TBytes with offset/count. }
     function write(const buffer: TBytes; Offset, Count: longint): longint; overload; override;
-    { * Delphi‑specific overload for reading into a TBytes slice. }
     function read(buffer: TBytes; Offset, Count: longint): longint; overload; override;
 {$ENDIF DELPHI}
-    { * Seeks to a new position. }
+    { *
+      * Seek: Changes the current position. Returns the new position.
+      * @param Offset: offset relative to origin.
+      * @param origin: soBeginning, soCurrent, or soEnd.
+    }
     function Seek(const Offset: Int64; origin: TSeekOrigin): Int64; override;
 
-    { * Returns a pointer to the start of the memory buffer. }
+    { * Memory: Pointer to the raw buffer (read‑only). }
     property Memory: Pointer read FMemory;
 
-    { * Copies data from a TMem64 into this stream.
-      * Advances the source position.
-      * @param Count Number of bytes to copy.
-      * @return Bytes actually copied (should equal Count).
+    { *
+      * CopyMem64: Copies Count bytes from a TMem64's current position into
+      * this stream, advancing both positions. Returns number of bytes copied.
     }
     function CopyMem64(const source: TMem64; Count: Int64): Int64;
-    { * Copies from any TCore_Stream. If Count < 0, copies all.
-      * @return Bytes copied.
+
+    { *
+      * CopyFrom: Copies data from another stream. If Count is negative, copies
+      * the entire source stream from position 0. Returns bytes copied.
     }
     function CopyFrom(const source: TCore_Stream; Count: Int64): Int64; overload;
-    { * Copies from a TMem64. }
     function CopyFrom(const source: TMem64; Count: Int64): Int64; overload;
 
-    // --- Serialisation writers -------------------------------------------------
-    { * Writes a Boolean (1 byte). }
+    { ****** Typed write methods ********** }
     procedure WriteBool(const buff: Boolean);
-    { * Writes a signed 8‑bit integer. }
     procedure WriteInt8(const buff: ShortInt);
-    { * Writes a signed 16‑bit integer. }
     procedure WriteInt16(const buff: SmallInt);
-    { * Writes a signed 32‑bit integer. }
     procedure WriteInt32(const buff: Integer);
-    { * Writes a signed 64‑bit integer. }
     procedure WriteInt64(const buff: Int64);
-    { * Writes a 128‑bit integer (Int128). }
     procedure WriteInt128(const buff: Int128);
-    { * Writes an unsigned 8‑bit integer. }
     procedure WriteUInt8(const buff: Byte);
-    { * Writes an unsigned 16‑bit integer. }
     procedure WriteUInt16(const buff: Word);
-    { * Writes an unsigned 32‑bit integer. }
     procedure WriteUInt32(const buff: Cardinal);
-    { * Writes an unsigned 64‑bit integer. }
     procedure WriteUInt64(const buff: UInt64);
-    { * Writes an unsigned 128‑bit integer (UInt128). }
     procedure WriteUInt128(const buff: UInt128);
-    { * Writes a 32‑bit floating‑point value (Single). }
     procedure WriteSingle(const buff: Single);
-    { * Writes a 64‑bit floating‑point value (Double). }
     procedure WriteDouble(const buff: Double);
-    { * Writes a Currency value (stored as Double). }
     procedure WriteCurrency(const buff: Currency);
-
-    { * Writes a TPascalString as UTF‑8 with a 32‑bit length prefix.
-      * Format: [Length: UInt32][UTF‑8 bytes].
+    { *
+      * WriteString: Writes a TPascalString as UTF‑8.
+      * Format: 4‑byte length (UInt32) followed by the UTF‑8 bytes.
     }
     procedure WriteString(const buff: TPascalString);
-    { * Writes the ANSI bytes of a TPascalString (no length prefix).
-      * Use when the receiver knows the expected length.
+    { *
+      * WriteANSI: Writes the ANSI (system code page) bytes of the string.
+      * No length prefix is written.
     }
     procedure WriteANSI(const buff: TPascalString); overload;
-    { * Writes exactly L ANSI bytes; if buff is shorter, only L bytes are written.
-      * The caller must ensure L <= Length(buff.ANSI).
-    }
     procedure WriteANSI(const buff: TPascalString; const L: Integer); overload;
-    { * Writes an MD5 digest (16 bytes). }
     procedure WriteMD5(const buff: TMD5);
 
-    // --- Serialisation readers ------------------------------------------------
-    { * Reads a Boolean. }
+    { ****** Typed read methods ********** }
     function ReadBool: Boolean;
-    { * Reads a signed 8‑bit integer. }
     function ReadInt8: ShortInt;
-    { * Reads a signed 16‑bit integer. }
     function ReadInt16: SmallInt;
-    { * Reads a signed 32‑bit integer. }
     function ReadInt32: Integer;
-    { * Reads a signed 64‑bit integer. }
     function ReadInt64: Int64;
-    { * Reads a 128‑bit integer. }
     function ReadInt128: Int128;
-    { * Reads an unsigned 8‑bit integer. }
     function ReadUInt8: Byte;
-    { * Reads an unsigned 16‑bit integer. }
     function ReadUInt16: Word;
-    { * Reads an unsigned 32‑bit integer. }
     function ReadUInt32: Cardinal;
-    { * Reads an unsigned 64‑bit integer. }
     function ReadUInt64: UInt64;
-    { * Reads an unsigned 128‑bit integer. }
     function ReadUInt128: UInt128;
-    { * Reads a Single. }
     function ReadSingle: Single;
-    { * Reads a Double. }
     function ReadDouble: Double;
-    { * Reads a Currency (stored as Double). }
     function ReadCurrency: Currency;
 
-    { * Checks if there is enough data to read a string (4‑byte length + payload).
-      * @return True if the full string can be read safely.
+    { *
+      * PrepareReadString: Checks that there are at least 4 bytes for the length
+      * and that the full string fits in the stream. Returns True if safe.
     }
     function PrepareReadString: Boolean;
-    { * Reads a TPascalString (UTF‑8 with length prefix). Returns empty on error. }
+
+    { *
+      * ReadString: Reads a string that was written with WriteString.
+      * Returns the decoded UTF‑8 string.
+    }
     function ReadString: TPascalString;
-    { * Reads the raw UTF‑8 bytes of a string without decoding. }
+
+    { *
+      * ReadStringAsBuff: Reads the string but returns the raw UTF‑8 bytes
+      * without decoding.
+    }
     function ReadStringAsBuff: TBytes;
-    { * Skips a string in the stream. }
+
+    { *
+      * IgnoreReadString: Skips over a string without reading its content.
+    }
     procedure IgnoreReadString;
-    { * Reads L bytes as ANSI and converts to TPascalString. }
+
+    { *
+      * ReadANSI: Reads L bytes as ANSI and returns them as a TPascalString.
+      * No length prefix is expected.
+    }
     function ReadANSI(L: Integer): TPascalString;
-    { * Reads an MD5 digest. }
+
     function ReadMD5: TMD5;
   end;
 
-  { Type aliases for arrays and collections. }
   TMS64_Array = array of TMS64;
   TStream64_Array = TMS64_Array;
   TMemoryStream64_Array = TMS64_Array;
   TStream64 = TMS64;
   TMemoryStream64 = TMS64;
 
+  { *
+    * TMemoryStream64List_Decl: Alias for TGenericsList<TMS64>.
+  }
   TMemoryStream64List_Decl = TGenericsList<TMS64>;
 
-  {
-    * TMemoryStream64List – A generic list that manages TMS64 instances.
-    * Provides Clean (frees all) and To_Array methods.
+  { *
+    * TMemoryStream64List: A simple list of TMS64 objects. Provides Clean to
+    * free all contained streams.
   }
   TMemoryStream64List = class(TMemoryStream64List_Decl)
   public
-    { * Frees all contained streams and clears the list. }
+    { * Clean: Frees all streams in the list and clears the list. }
     procedure Clean;
-    { * Returns an array of all contained streams. }
+    { * To_Array: Returns a dynamic array of the contained streams. }
     function To_Array: TMS64_Array;
   end;
 
   TStream64List = TMemoryStream64List;
   TMS64List = TMemoryStream64List;
+
+  { * TMS64_Pool: Object pool (TBig_Object_List) for TMS64. }
   TMS64_Pool = TBig_Object_List<TMS64>;
 
-  {
-    * TMemoryStream64ThreadList – Thread‑safe list for TMS64.
-    * Uses a TCritical for locking and can auto‑free streams on removal.
+  { *
+    * TMemoryStream64ThreadList: Thread‑safe list of TMS64 streams, using a
+    * critical section. Optionally auto‑frees streams when removed.
   }
   TMemoryStream64ThreadList = class(TMemoryStream64List_Decl)
   private
-    FCritical: TCritical; // lock object
+    FCritical: TCritical; // Lock for thread safety
   public
-    AutoFree_Stream: Boolean; // if True, streams are freed when removed
+    AutoFree_Stream: Boolean; // If True, streams are freed on removal
     constructor Create;
     destructor Destroy; override;
-
-    { * Acquires the lock. }
     procedure Lock;
-    { * Releases the lock. }
     procedure UnLock;
-
-    { * Removes a stream; if AutoFree_Stream, frees it. }
     procedure Remove(obj: TMS64);
-    { * Deletes at index; frees the stream if AutoFree_Stream. }
     procedure Delete(index: Integer);
-    { * Clears the list; frees all streams if AutoFree_Stream. }
     procedure Clear;
-    { * Frees all streams and clears the list (ignores AutoFree_Stream). }
-    procedure Clean;
-    { * Returns an array of all streams. }
+    procedure Clean; // Frees all streams and clears list
     function To_Array: TMS64_Array;
   end;
 
@@ -425,22 +517,15 @@ type
   TStream64ThreadList = TMemoryStream64ThreadList;
   TMS64ThreadList = TMemoryStream64ThreadList;
 
-  { Interface for write notification. }
+  { *
+    * IMemoryStream64WriteTrigger: Interface for write notifications.
+  }
   IMemoryStream64WriteTrigger = interface
-    { * Called after a write operation. }
     procedure TriggerWrite64(Count: Int64);
   end;
 
-  {
-    * TMemoryStream64OfWriteTrigger – TMS64 that triggers a callback on every write.
-    *
-    * @Example:
-    *   type TMyTrigger = class(TInterfacedObject, IMemoryStream64WriteTrigger)
-    *     procedure TriggerWrite64(Count: Int64);
-    *   end;
-    *   ...
-    *   ms := TMemoryStream64OfWriteTrigger.Create(MyTrigger);
-    *   ms.WriteString('test'); // calls TriggerWrite64
+  { *
+    * TMemoryStream64OfWriteTrigger: A TMS64 that calls a trigger on every write.
   }
   TMemoryStream64OfWriteTrigger = class(TMS64)
   public
@@ -449,12 +534,10 @@ type
     function Write64(const buffer; Count: Int64): Int64; override;
   end;
 
-  { Interface for read notification. }
   IMemoryStream64ReadTrigger = interface
     procedure TriggerRead64(Count: Int64);
   end;
 
-  { * TMS64 that triggers a callback on every read. }
   TMemoryStream64OfReadTrigger = class(TMS64)
   public
     Trigger: IMemoryStream64ReadTrigger;
@@ -462,13 +545,11 @@ type
     function Read64(var buffer; Count: Int64): Int64; override;
   end;
 
-  { Interface for both read and write notification. }
   IMemoryStream64ReadWriteTrigger = interface
     procedure TriggerWrite64(Count: Int64);
     procedure TriggerRead64(Count: Int64);
   end;
 
-  { * TMS64 that triggers callbacks on both read and write. }
   TMemoryStream64OfReadWriteTrigger = class(TMS64)
   public
     Trigger: IMemoryStream64ReadWriteTrigger;
@@ -477,32 +558,33 @@ type
     function Write64(const buffer; Count: Int64): Int64; override;
   end;
 
-  {
-    * TMem64 – A 64‑bit memory stream that does NOT inherit from TStream.
+  { *
+    * TMem64: 64‑bit memory buffer that does not inherit from TStream.
+    * It offers the same capabilities as TMS64 but is a standalone object.
+    * It can be converted to TMS64 via Stream64().
     *
-    * It provides almost identical functionality to TMS64 but is a standalone
-    * object, making it useful in contexts where TStream compatibility is not
-    * required. It can be converted to a TMS64 via Stream64().
+    * @Note: Unlike TMS64, its Size/Position properties are Int64 (signed),
+    *        but they still support >2GB.
     *
     * @Example:
-    *   var mem: TMem64;
+    *   var
+    *     mem: TMem64;
     *   begin
     *     mem := TMem64.Create;
     *     mem.WriteString('Hello');
-    *     mem.Position := 0;
-    *     s := mem.ReadString;   // 'Hello'
+    *     WriteLn(mem.Size); // 9 (4 bytes length + 5 bytes UTF‑8)
     *     mem.Free;
     *   end;
   }
   TMem64 = class(TCore_Object_Intermediate)
   private
-    FDelta: NativeInt;
-    FMemory: Pointer;
-    FSize: Int64;
-    FPosition: Int64;
-    FCapacity: Int64;
-    FProtectedMode: Boolean;
-    FStream64: TMS64;
+    FDelta: NativeInt; // growth step
+    FMemory: Pointer; // pointer to buffer
+    FSize: Int64; // current used size (signed)
+    FPosition: Int64; // current position (signed)
+    FCapacity: Int64; // allocated buffer size (signed)
+    FProtectedMode: Boolean; // read‑only flag
+    FStream64: TMS64; // cached TMS64 mapping
   protected
     procedure SetPointer(buffPtr: Pointer; const BuffSize: Int64);
     procedure SetCapacity(NewCapacity: Int64);
@@ -520,47 +602,35 @@ type
     constructor CustomCreate(const customDelta: NativeInt);
     destructor Destroy; override;
 
-    { * Returns a TMS64 that maps to this TMem64’s data.
-      * @param Mapping_Begin_As_Position_ If True, map from current position.
-    }
+    { * Stream64: Returns a TMS64 that maps to this buffer. }
     function Stream64(Mapping_Begin_As_Position_: Boolean): TMS64; overload;
-    { * Returns a TMS64 mapping the entire buffer. }
     function Stream64: TMS64; overload;
 
-    { * Creates a deep copy (clone). }
+    { * NewClone: Deep copy. }
     function NewClone: TMem64;
-    { * Creates a new TMem64 that shares the same memory (zero‑copy, read‑only). }
+
+    { * Create_Mapping_Instance: Zero‑copy mapping (read‑only). }
     function Create_Mapping_Instance: TMem64;
-    { * Creates a TMS64 that shares the same memory. }
     function Create_Mapping_Instance_MS64: TMS64;
-    { * Moves data to a new TMem64 instance by swapping. }
+
+    { * Swap_To_New_Instance: Creates new empty instance and swaps data. }
     function Swap_To_New_Instance: TMem64;
 
-    { * Discards the memory pointer without freeing – use with caution. }
     procedure DiscardMemory;
-    { * Clears the stream (frees memory, resets). }
     procedure Clear;
-    { * Reinitialises from a TMS64. }
     procedure NewParam(source: TMS64); overload;
-    { * Reinitialises from another TMem64. }
     procedure NewParam(source: TMem64); overload;
-    { * Swaps state with a TMS64. }
     procedure SwapInstance(source: TMS64); overload;
-    { * Swaps state with another TMem64. }
     procedure SwapInstance(source: TMem64); overload;
 
-    { * Copies data to a TBytes array. }
     function ToBytes: TBytes;
-    { * Computes MD5 of the content. }
     function ToMD5: TMD5;
+    function Same(source: TMem64): Boolean;
 
-    { * LZ4 compression. }
+    { * Compression methods, same format as TMS64. }
     function LZ4: TMem64;
-    { * Decompresses LZ4 data. }
     function UnLZ4: TMem64;
-    { * Snappy compression. }
     function Snappy_Pas: TMem64;
-    { * Decompresses Snappy data. }
     function UnSnappy_Pas: TMem64;
 
     property Delta: NativeInt read GetDelta write SetDelta;
@@ -569,57 +639,35 @@ type
     property Size: Int64 read GetSize write SetSize;
     property ProtectedMode: Boolean read FProtectedMode;
 
-    { * Maps an external buffer (protected mode). }
     procedure SetPointerWithProtectedMode(buffPtr: Pointer; const BuffSize: Int64);
-    { * Alias for SetPointerWithProtectedMode. }
     procedure Mapping(buffPtr: Pointer; const BuffSize: Int64); overload;
-    { * Maps to a TMS64 (protected). }
     procedure Mapping(m64: TMS64); overload;
-    { * Maps to another TMem64 (protected). }
     procedure Mapping(m64: TMem64); overload;
 
-    { * Returns pointer at given offset. }
     function PositionAsPtr(const Position_: Int64): Pointer; overload;
-    { * Returns pointer at current position. }
     function PositionAsPtr: Pointer; overload;
-    { * Aliases. }
     function PosAsPtr(const Position_: Int64): Pointer; overload;
     function PosAsPtr: Pointer; overload;
 
-    { * Loads from another stream. }
     procedure LoadFromStream(stream: TCore_Stream);
-    { * Loads from a file. }
     procedure LoadFromFile(FileName: SystemString);
-    { * Saves to another stream. }
     procedure SaveToStream(stream: TCore_Stream);
-    { * Saves to a file. }
     procedure SaveToFile(FileName: SystemString);
 
-    { * Writes Count bytes from buffer. }
+    { * I/O methods (no override, but similar to TMS64). }
     function Write64(const buffer; Count: Int64): Int64;
-    { * Writes from a pointer. }
     function WritePtr(const p: Pointer; Count: Int64): Int64;
-    { * Alias for Write64. }
     function write(const buffer; Count: Int64): Int64;
-    { * Writes a TBytes array, returns bytes written. }
     function WriteBytes(const buffer: TBytes): Int64;
-
-    { * Reads into buffer. }
     function Read64(var buffer; Count: Int64): Int64;
-    { * Reads into a pointer. }
     function ReadPtr(const p: Pointer; Count: Int64): Int64;
-    { * Alias for Read64. }
     function read(var buffer; Count: Int64): Int64;
-
-    { * Seeks to a new position. }
     function Seek(const Offset: Int64; origin: TSeekOrigin): Int64;
 
-    { * Copies from a TCore_Stream. }
     function CopyFrom(const source: TCore_Stream; Count: Int64): Int64; overload;
-    { * Copies from another TMem64. }
     function CopyFrom(const source: TMem64; Count: Int64): Int64; overload;
 
-    // --- Serialisation writers (same as TMS64) --------------------------------
+    { ****** Typed write/read (same as TMS64) ********** }
     procedure WriteBool(const buff: Boolean);
     procedure WriteInt8(const buff: ShortInt);
     procedure WriteInt16(const buff: SmallInt);
@@ -639,7 +687,6 @@ type
     procedure WriteANSI(const buff: TPascalString; const L: Integer); overload;
     procedure WriteMD5(const buff: TMD5);
 
-    // --- Serialisation readers ------------------------------------------------
     function ReadBool: Boolean;
     function ReadInt8: ShortInt;
     function ReadInt16: SmallInt;
@@ -664,23 +711,24 @@ type
 
   TMem64_Array = array of TMem64;
   TM64 = TMem64;
+
+  { * TMem64List: List of TMem64 with Clean method. }
   TMem64List_Decl = TGenericsList<TMem64>;
 
-  {
-    * TMem64List – A generic list for TMem64 with a Clean method.
-  }
   TMem64List = class(TMem64List_Decl)
   public
-    { * Frees all contained TMem64 objects and clears the list. }
     procedure Clean;
   end;
 
   TM64List = TMem64List;
   TMem64_Pool = TBig_Object_List<TMem64>;
 
+  { *
+    * TDecompressionStream and TCompressionStream are aliases to the ZLib
+    * implementations. Under FPC, we use zstream; under Delphi, ZLib.
+  }
 {$IFDEF FPC}
 
-  { FPC compatibility wrappers for zlib streams. }
   TDecompressionStream = class(zstream.TDecompressionStream)
   public
   end;
@@ -692,119 +740,153 @@ type
   end;
 {$ELSE}
 
-  { Delphi uses ZLib unit’s classes. }
   TDecompressionStream = ZLib.TZDecompressionStream;
   TCompressionStream = ZLib.TZCompressionStream;
 {$ENDIF}
-  {
-    * TSelectCompressionMethod – Enumerates supported compression algorithms.
-    * Used with SelectCompressStream and SelectDecompressStream.
+  { *
+    * TSelectCompressionMethod: Enumeration of supported compression algorithms.
   }
   TSelectCompressionMethod = (scmNone, scmZLIB, scmZLIB_Fast, scmZLIB_Max,
     scmDeflate, scmBRRC, scmLZ4, scmSnappy_Pas);
 
-  // ---------- Compression and Decompression Functions ----------
+  { ****** Global compression/decompression functions ********** }
 
-  { * Compresses sour into dest using maximum ZLIB compression. }
+  { *
+    * MaxCompressStream: Compresses sour into dest using ZLIB with maximum
+    * compression. Writes the original size (8 bytes) before the compressed data.
+    * Returns True on success.
+  }
 function MaxCompressStream(sour, dest: TCore_Stream): Boolean;
-{ * Compresses using fast ZLIB compression. }
+
+{ *
+  * FastCompressStream: Compresses using ZLIB with fastest compression.
+}
 function FastCompressStream(sour, dest: TCore_Stream): Boolean;
-{ * Compresses using default ZLIB compression. }
+
+{ *
+  * CompressStream: Compresses using ZLIB with default compression.
+}
 function CompressStream(sour, dest: TCore_Stream): Boolean; overload;
-{ * Decompresses data from a memory pointer into dest. }
+
+{ *
+  * DecompressStream: Decompresses data from a pointer or stream.
+  * Overloads accept pointer+size, source stream, and can output to a stream
+  * or a pointer (allocated by the function).
+}
 function DecompressStream(DataPtr: Pointer; siz: NativeInt; dest: TCore_Stream): Boolean; overload;
-{ * Decompresses data from sour into dest. }
 function DecompressStream(sour: TCore_Stream; dest: TCore_Stream): Boolean; overload;
-{ * Decompresses data from sour into a newly allocated pointer. }
 function DecompressStreamToPtr(sour: TCore_Stream; var dest: Pointer): Boolean; overload;
-{ * Compresses a file using ZLIB. }
+
+{ * CompressFile / DecompressFile: File‑to‑file compression (ZLIB). }
 function CompressFile(sour, dest: SystemString): Boolean;
-{ * Decompresses a file using ZLIB. }
 function DecompressFile(sour, dest: SystemString): Boolean;
 
-{ * Compresses using a selected method; writes method identifier first. }
+{ *
+  * SelectCompressStream: Compresses using a specified method. The first byte
+  * written is the method ID, so SelectDecompressStream can auto‑detect.
+}
 function SelectCompressStream(const scm: TSelectCompressionMethod; const sour, dest: TCore_Stream): Boolean;
-{ * Decompresses automatically detecting the method from the data. }
+
+{ *
+  * SelectDecompressStream: Reads the method ID and decompresses accordingly.
+  * Returns True on success. Optionally returns the method used.
+}
 function SelectDecompressStream(const sour, dest: TCore_Stream): Boolean; overload;
-{ * Decompresses and returns the detected method. }
 function SelectDecompressStream(const sour, dest: TCore_Stream; var scm: TSelectCompressionMethod): Boolean; overload;
 
-{ * Parallel compression using multiple threads. }
+{ ****** Parallel compression/decompression ********** }
+
+{ *
+  * ParallelCompressMemory: Splits the source TMS64 into strips and compresses
+  * each strip in parallel (using the thread pool). The output format is:
+  *   [StripCount: Integer]
+  *   for each strip: [StripSize: Int64][CompressedData]
+  * The dest stream receives the concatenated output.
+}
 procedure ParallelCompressMemory(const ThNum: Integer; const scm: TSelectCompressionMethod; const StripNum_: Integer; const sour: TMS64; const dest: TCore_Stream); overload;
 procedure ParallelCompressMemory(const scm: TSelectCompressionMethod; const StripNum_: Integer; const sour: TMS64; const dest: TCore_Stream); overload;
 procedure ParallelCompressMemory(const scm: TSelectCompressionMethod; const sour: TMS64; const dest: TCore_Stream); overload;
 procedure ParallelCompressMemory(const sour: TMS64; const dest: TCore_Stream); overload;
 
-{ * Parallel decompression using multiple threads. }
+{ * ParallelDecompressStream: Decompresses a stream that was created with ParallelCompressMemory. }
 procedure ParallelDecompressStream(const ThNum: Integer; const sour_, dest_: TCore_Stream); overload;
 procedure ParallelDecompressStream(const sour_, dest_: TCore_Stream); overload;
 
-{ * Parallel file compression/decompression. }
+{ * File‑based parallel compress/decompress. }
 procedure ParallelCompressFile(const sour, dest: SystemString);
 procedure ParallelDecompressFile(const sour, dest: SystemString);
 
-{ * Compresses UTF‑8 data with a small header (FF FF + original size). }
+{ *
+  * CompressUTF8 / DecompressUTF8: Utility to compress a TBytes using ZLIB
+  * max, with a header (0xFF,0xFF, original size) if compression is beneficial.
+  * If compression does not reduce size, the original is returned.
+}
 function CompressUTF8(const sour_: TBytes): TBytes;
-{ * Decompresses UTF‑8 data produced by CompressUTF8. }
 function DecompressUTF8(const sour_: TBytes): TBytes;
 
-// ---------- Stream Serialisation Functions (standalone) ----------
-procedure StreamWriteBool(const stream: TCore_Stream; const buff: Boolean); // Writes a Boolean to a stream.
-procedure StreamWriteInt8(const stream: TCore_Stream; const buff: ShortInt); // Writes an Int8.
-procedure StreamWriteInt16(const stream: TCore_Stream; const buff: SmallInt); // Writes an Int16.
-procedure StreamWriteInt32(const stream: TCore_Stream; const buff: Integer); // Writes an Int32.
-procedure StreamWriteInt64(const stream: TCore_Stream; const buff: Int64); // Writes an Int64.
-procedure StreamWriteInt128(const stream: TCore_Stream; const buff: Int128); // Writes an Int128.
-procedure StreamWriteUInt8(const stream: TCore_Stream; const buff: Byte); // Writes a UInt8.
-procedure StreamWriteUInt16(const stream: TCore_Stream; const buff: Word); // Writes a UInt16.
-procedure StreamWriteUInt32(const stream: TCore_Stream; const buff: Cardinal); // Writes a UInt32.
-procedure StreamWriteUInt64(const stream: TCore_Stream; const buff: UInt64); // Writes a UInt64.
-procedure StreamWriteUInt128(const stream: TCore_Stream; const buff: UInt128); // Writes a UInt128.
-procedure StreamWriteSingle(const stream: TCore_Stream; const buff: Single); // Writes a Single.
-procedure StreamWriteDouble(const stream: TCore_Stream; const buff: Double); // Writes a Double.
-procedure StreamWriteCurrency(const stream: TCore_Stream; const buff: Currency); // Writes a Currency.
-procedure StreamWriteString(const stream: TCore_Stream; const buff: TPascalString); // Writes a TPascalString as UTF‑8 with length prefix.
-function ComputeStreamWriteStringSize(buff: TPascalString): Integer; // Returns the total byte size needed to write a string (4 + UTF‑8 length).
-procedure StreamWriteMD5(const stream: TCore_Stream; const buff: TMD5); // Writes an MD5 digest.
+{ ****** Stream serialisation helpers (work on any TCore_Stream) ********** }
+procedure StreamWriteBool(const stream: TCore_Stream; const buff: Boolean);
+procedure StreamWriteInt8(const stream: TCore_Stream; const buff: ShortInt);
+procedure StreamWriteInt16(const stream: TCore_Stream; const buff: SmallInt);
+procedure StreamWriteInt32(const stream: TCore_Stream; const buff: Integer);
+procedure StreamWriteInt64(const stream: TCore_Stream; const buff: Int64);
+procedure StreamWriteInt128(const stream: TCore_Stream; const buff: Int128);
+procedure StreamWriteUInt8(const stream: TCore_Stream; const buff: Byte);
+procedure StreamWriteUInt16(const stream: TCore_Stream; const buff: Word);
+procedure StreamWriteUInt32(const stream: TCore_Stream; const buff: Cardinal);
+procedure StreamWriteUInt64(const stream: TCore_Stream; const buff: UInt64);
+procedure StreamWriteUInt128(const stream: TCore_Stream; const buff: UInt128);
+procedure StreamWriteSingle(const stream: TCore_Stream; const buff: Single);
+procedure StreamWriteDouble(const stream: TCore_Stream; const buff: Double);
+procedure StreamWriteCurrency(const stream: TCore_Stream; const buff: Currency);
+procedure StreamWriteString(const stream: TCore_Stream; const buff: TPascalString);
+function ComputeStreamWriteStringSize(buff: TPascalString): Integer;
+procedure StreamWriteMD5(const stream: TCore_Stream; const buff: TMD5);
 
-function StreamReadBool(const stream: TCore_Stream): Boolean; // Reads a Boolean.
-function StreamReadInt8(const stream: TCore_Stream): ShortInt; // Reads an Int8.
-function StreamReadInt16(const stream: TCore_Stream): SmallInt; // Reads an Int16.
-function StreamReadInt32(const stream: TCore_Stream): Integer; // Reads an Int32.
-function StreamReadInt64(const stream: TCore_Stream): Int64; // Reads an Int64.
-function StreamReadInt128(const stream: TCore_Stream): Int128; // Reads an Int128.
-function StreamReadUInt8(const stream: TCore_Stream): Byte; // Reads a UInt8.
-function StreamReadUInt16(const stream: TCore_Stream): Word; // Reads a UInt16.
-function StreamReadUInt32(const stream: TCore_Stream): Cardinal; // Reads a UInt32.
-function StreamReadUInt64(const stream: TCore_Stream): UInt64; // Reads a UInt64.
-function StreamReadUInt128(const stream: TCore_Stream): UInt128; // Reads a UInt128.
-function StreamReadSingle(const stream: TCore_Stream): Single; // Reads a Single.
-function StreamReadDouble(const stream: TCore_Stream): Double; // Reads a Double.
-function StreamReadCurrency(const stream: TCore_Stream): Currency; // Reads a Currency.
-function StreamReadString(const stream: TCore_Stream): TPascalString; // Reads a TPascalString (UTF‑8 with length prefix).
-function StreamReadStringAsBuff(const stream: TCore_Stream): TBytes; // Reads a string as raw bytes (UTF‑8 without decoding).
-procedure StreamIgnoreReadString(const stream: TCore_Stream); // Skips a string in the stream.
-function StreamReadMD5(const stream: TCore_Stream): TMD5; // Reads an MD5 digest.{ * Debug: prints the content of a TMS64 to the status console. }
+function StreamReadBool(const stream: TCore_Stream): Boolean;
+function StreamReadInt8(const stream: TCore_Stream): ShortInt;
+function StreamReadInt16(const stream: TCore_Stream): SmallInt;
+function StreamReadInt32(const stream: TCore_Stream): Integer;
+function StreamReadInt64(const stream: TCore_Stream): Int64;
+function StreamReadInt128(const stream: TCore_Stream): Int128;
+function StreamReadUInt8(const stream: TCore_Stream): Byte;
+function StreamReadUInt16(const stream: TCore_Stream): Word;
+function StreamReadUInt32(const stream: TCore_Stream): Cardinal;
+function StreamReadUInt64(const stream: TCore_Stream): UInt64;
+function StreamReadUInt128(const stream: TCore_Stream): UInt128;
+function StreamReadSingle(const stream: TCore_Stream): Single;
+function StreamReadDouble(const stream: TCore_Stream): Double;
+function StreamReadCurrency(const stream: TCore_Stream): Currency;
+function StreamReadString(const stream: TCore_Stream): TPascalString;
+function StreamReadStringAsBuff(const stream: TCore_Stream): TBytes;
+procedure StreamIgnoreReadString(const stream: TCore_Stream);
+function StreamReadMD5(const stream: TCore_Stream): TMD5;
 
+{ * DoStatus overloads for debugging: print stream content as hex bytes. }
 procedure DoStatus(const v: TMS64); overload;
-{ * Debug: prints the content of a TMem64 to the status console. }
 procedure DoStatus(const v: TMem64); overload;
 
 implementation
 
 uses Z.UnicodeMixedLib, Z.Status, Z.Compress, Z.Instance.Tool, Z.LZ4_Pas, Z.Snappy_Pas;
 
-{ *************** TMS64 implementation *************** }
+{ * TMS64 implementation }
 
 procedure TMS64.SetPointer(buffPtr: Pointer; const BuffSize: NativeUInt);
-{ * Simply stores the buffer pointer and size. Used internally after allocation. }
+{ *
+  * Assigns the internal buffer pointer and size without affecting capacity.
+  * Used internally by Mapping and when taking over external buffers.
+}
 begin
   FMemory := buffPtr;
   FSize := BuffSize;
 end;
 
 procedure TMS64.SetCapacity(NewCapacity: NativeUInt);
-{ * Changes the allocated capacity. No effect if in protected mode. }
+{ *
+  * Reallocates the buffer to NewCapacity bytes. If in protected mode, does nothing.
+  * The actual allocation is performed by Realloc, which may round up the size.
+}
 begin
   if FProtectedMode then
       Exit;
@@ -814,9 +896,13 @@ end;
 
 function TMS64.Realloc(var NewCapacity: NativeUInt): Pointer;
 { *
-  * Reallocates memory to NewCapacity, aligning it to the delta boundary.
-  * If NewCapacity = 0, frees the old memory.
-  * Returns the new pointer (nil if allocation fails).
+  * Low‑level memory allocation.
+  * If NewCapacity is > 0 and not equal to current size, it is rounded up to
+  * a multiple of FDelta (via DeltaStep). Then:
+  *   - If NewCapacity = 0, frees the current buffer and returns nil.
+  *   - If current Capacity = 0, gets new memory; else reallocates.
+  * Raises an exception on failure.
+  * Returns the new pointer (may be nil if NewCapacity = 0).
 }
 begin
   if FProtectedMode then
@@ -844,19 +930,19 @@ begin
 end;
 
 procedure TMS64.SetDelta(const Value: NativeInt);
-{ * Clamps the delta to [64, 1,048,576] bytes. }
+{ * Clamps the delta between 64 and 1MB (1024*1024). }
 begin
   FDelta := umlClamp(Value, 64, 1024 * 1024);
 end;
 
 constructor TMS64.Create;
-{ * Default delta = 256 bytes. }
+{ * Creates with default delta = 256. }
 begin
   CustomCreate(256);
 end;
 
 constructor TMS64.CustomCreate(const customDelta: NativeInt);
-{ * Initialises with custom delta; all pointers and sizes zero. }
+{ * Creates with specified delta. Initialises all fields to zero/nil. }
 begin
   inherited Create;
   Delta := customDelta;
@@ -869,7 +955,7 @@ begin
 end;
 
 destructor TMS64.Destroy;
-{ * Frees the associated TMem64 (if any) and clears the buffer. }
+{ * Frees the cached TMem64 (if any) and clears the buffer. }
 begin
   if FMem64 <> nil then
       DisposeObject(FMem64);
@@ -878,8 +964,11 @@ begin
 end;
 
 function TMS64.Mem64(Mapping_Begin_As_Position_: Boolean): TMem64;
-{ * Lazily creates a TMem64 that shares our buffer.
-  * If Mapping_Begin_As_Position_ is True, the view starts at current position.
+{ *
+  * Returns a TMem64 that maps to this stream.
+  * If Mapping_Begin_As_Position_ = True, the mapping starts at current position
+  * and covers the remaining data; otherwise the entire stream.
+  * The TMem64 is cached and reused on subsequent calls.
 }
 begin
   if FMem64 = nil then
@@ -892,14 +981,13 @@ begin
 end;
 
 function TMS64.Mem64: TMem64;
+{ * Maps the entire stream (calls Mem64(False)). }
 begin
   Result := Mem64(False);
 end;
 
 function TMS64.NewClone: TMS64;
-{ * Performs a deep copy: allocates a new stream and copies all data.
-  * The position of the clone is set to the same as the original.
-}
+{ * Creates a deep copy: allocates new buffer and copies all bytes. }
 begin
   Result := TMS64.CustomCreate(FDelta);
   Result.Size := Size;
@@ -908,33 +996,28 @@ begin
 end;
 
 function TMS64.Create_Mapping_Instance: TMS64;
-{ * Creates a read‑only view that points to the same buffer.
-  * The caller must free the returned instance separately.
-}
+{ * Returns a new TMS64 that shares the same buffer (zero‑copy, read‑only). }
 begin
   Result := TMS64.Create;
   Result.Mapping(self);
 end;
 
 function TMS64.Create_Mapping_Instance_Mem64: TMem64;
+{ * Same but returns a TMem64. }
 begin
   Result := TMem64.Create;
   Result.Mapping(self);
 end;
 
 function TMS64.Swap_To_New_Instance: TMS64;
-{ * Swaps our entire state into a new TMS64, leaving us empty.
-  * This is an O(1) operation.
-}
+{ * Creates a new empty TMS64 and swaps data with this one. }
 begin
   Result := TMS64.Create;
   SwapInstance(Result);
 end;
 
 procedure TMS64.DiscardMemory;
-{ * Releases the buffer pointer without freeing memory.
-  * Only valid for non‑protected streams.
-}
+{ * Releases the internal pointer without freeing memory. }
 begin
   if FProtectedMode then
       Exit;
@@ -945,7 +1028,7 @@ begin
 end;
 
 procedure TMS64.Clear;
-{ * Frees memory and resets size/position. Does nothing in protected mode. }
+{ * Frees the buffer and resets size/position. No‑op if protected. }
 begin
   if FProtectedMode then
       Exit;
@@ -955,9 +1038,7 @@ begin
 end;
 
 procedure TMS64.NewParam(source: TMS64);
-{ * Copies all parameters from source, but does NOT share memory.
-  * The current stream is cleared first.
-}
+{ * Copies the entire state from another TMS64, after clearing this one. }
 begin
   Clear;
   FDelta := source.FDelta;
@@ -969,6 +1050,7 @@ begin
 end;
 
 procedure TMS64.NewParam(source: TMem64);
+{ * Same, but from TMem64. }
 begin
   Clear;
   FDelta := source.FDelta;
@@ -980,7 +1062,7 @@ begin
 end;
 
 procedure TMS64.SwapInstance(source: TMS64);
-{ * Swaps all fields with another TMS64 instance. }
+{ * Swaps all internal fields with another TMS64 in O(1). }
 var
   FDelta_: NativeInt;
   FMemory_: Pointer;
@@ -1012,7 +1094,7 @@ begin
 end;
 
 procedure TMS64.SwapInstance(source: TMem64);
-{ * Swaps with a TMem64; the fields are compatible. }
+{ * Swaps with a TMem64 (fields are compatible). }
 var
   FDelta_: NativeInt;
   FMemory_: Pointer;
@@ -1044,7 +1126,7 @@ begin
 end;
 
 function TMS64.ToBytes: TBytes;
-{ * Copies the entire stream data into a newly allocated TBytes array. }
+{ * Copies all data into a new TBytes array. }
 begin
   SetLength(Result, Size);
   if Size > 0 then
@@ -1052,32 +1134,36 @@ begin
 end;
 
 function TMS64.ToMD5: TMD5;
-{ * Computes MD5 of the entire stream data. }
+{ * Computes MD5 over the entire buffer. }
 begin
   Result := umlMD5(Memory, Size);
 end;
 
+function TMS64.Same(source: TMem64): Boolean;
+{ * Compares size and content with a TMem64. }
+begin
+  Result := (Size = source.Size) and CompareMemory(Memory, source.Memory, Size);
+end;
+
 function TMS64.LZ4: TMS64;
-{ * LZ4 compression.
-  * Allocates a new stream, writes original size and compressed size,
-  * then the compressed data.
+{ *
+  * Compresses using LZ4.
+  * Output format: [OriginalSize: Int64][CompressedSize: Int64][CompressedData].
+  * The new stream is allocated with enough space for the worst‑case compressed size.
 }
 var
   comp_size: Int64;
 begin
   Result := TMS64.Create;
-  Result.Size := LZ4_compressBound64(Size) + 16; // room for headers + max compressed
-  PInt64(Result.PosAsPtr(0))^ := Size; // original size
+  Result.Size := LZ4_compressBound64(Size) + 16; // worst‑case + header
+  PInt64(Result.PosAsPtr(0))^ := Size; // store original size
   comp_size := LZ4_compress_default64(Memory^, Size, Result.PosAsPtr(16)^, LZ4_compressBound64(Size));
-  PInt64(Result.PosAsPtr(8))^ := comp_size; // compressed size
+  PInt64(Result.PosAsPtr(8))^ := comp_size; // store actual compressed size
   Result.Size := comp_size + 16; // trim to actual size
 end;
 
 function TMS64.UnLZ4: TMS64;
-{ * Decompresses LZ4 data.
-  * Reads original size and compressed size from the headers,
-  * then decompresses into a new stream.
-}
+{ * Decompresses LZ4 data (format from LZ4 method). }
 var
   comp_size: Int64;
 begin
@@ -1088,7 +1174,7 @@ begin
 end;
 
 function TMS64.Snappy_Pas: TMS64;
-{ * Snappy compression, same header format as LZ4. }
+{ * Compresses using Snappy (pure Pascal). Same header format as LZ4. }
 var
   comp_size: Int64;
 begin
@@ -1115,13 +1201,16 @@ begin
 end;
 
 procedure TMS64.SetPointerWithProtectedMode(buffPtr: Pointer; const BuffSize: Int64);
-{ * Sets the stream to protected mode using an external buffer. }
+{ * Convenience: calls Mapping. }
 begin
   Mapping(buffPtr, BuffSize);
 end;
 
 procedure TMS64.Mapping(buffPtr: Pointer; const BuffSize: Int64);
-{ * Maps an external buffer; the stream becomes read‑only. }
+{ *
+  * Makes the stream point to an external buffer and enters protected mode.
+  * The stream will not own the memory; any write attempt will fail.
+}
 begin
   Clear;
   FMemory := buffPtr;
@@ -1131,22 +1220,25 @@ begin
 end;
 
 procedure TMS64.Mapping(m64: TMS64);
+{ * Maps to another TMS64's buffer. }
 begin
   Mapping(m64.Memory, m64.Size);
 end;
 
 procedure TMS64.Mapping(m64: TMem64);
+{ * Maps to a TMem64's buffer. }
 begin
   Mapping(m64.Memory, m64.Size);
 end;
 
 function TMS64.PositionAsPtr(const Position_: Int64): Pointer;
-{ * Returns a pointer to the given offset (0‑based). }
+{ * Returns a pointer to the byte at the specified absolute position. }
 begin
   Result := GetOffset(FMemory, Position_);
 end;
 
 function TMS64.PositionAsPtr: Pointer;
+{ * Returns a pointer to the current position. }
 begin
   Result := GetOffset(FMemory, FPosition);
 end;
@@ -1162,7 +1254,7 @@ begin
 end;
 
 procedure TMS64.LoadFromStream(stream: TCore_Stream);
-{ * Replaces content with data from another stream. }
+{ * Replaces the stream content with the entire content of another stream. }
 begin
   if FProtectedMode then
       Exit;
@@ -1174,7 +1266,7 @@ begin
 end;
 
 procedure TMS64.LoadFromFile(FileName: SystemString);
-{ * Reads entire file into the stream. }
+{ * Loads binary data from a file. }
 var
   stream: TCore_Stream;
 begin
@@ -1187,11 +1279,13 @@ begin
 end;
 
 procedure TMS64.SaveToStream(stream: TCore_Stream);
-{ * Writes the entire stream to another stream, using chunked I/O
-  * to avoid large memory copies.
+{ *
+  * Writes the stream's data to another stream.
+  * If the destination is a TMS64, it uses zero‑copy (direct pointer copy).
+  * Otherwise, writes in 64MB chunks to avoid large allocations.
 }
 const
-  ChunkSize = 64 * 1024 * 1024; // 64 MiB
+  ChunkSize = 64 * 1024 * 1024;
 var
   p: Pointer;
   j: NativeInt;
@@ -1206,6 +1300,7 @@ begin
       TMS64(stream).Position := 0;
       Exit;
     end;
+
   if Size > 0 then
     begin
       p := FMemory;
@@ -1230,6 +1325,7 @@ begin
 end;
 
 procedure TMS64.SaveToFile(FileName: SystemString);
+{ * Saves data to a binary file. }
 var
   stream: TCore_Stream;
 begin
@@ -1242,8 +1338,9 @@ begin
 end;
 
 procedure TMS64.SetSize(const NewSize: Int64);
-{ * Changes the stream size; if larger, expands capacity.
-  * If position > new size, seeks to end.
+{ *
+  * Changes the stream's size. If increasing, the buffer is expanded.
+  * If the current position exceeds the new size, it is moved to the end.
 }
 var
   OldPosition: Int64;
@@ -1263,8 +1360,10 @@ begin
 end;
 
 function TMS64.Write64(const buffer; Count: Int64): Int64;
-{ * Core write routine: copies from buffer into internal memory,
-  * expanding the stream if necessary.
+{ *
+  * Writes Count bytes from buffer at the current position.
+  * Expands the stream if needed. Returns Count on success, 0 if protected mode
+  * or invalid parameters.
 }
 var
   p: Int64;
@@ -1296,24 +1395,28 @@ begin
 end;
 
 function TMS64.WritePtr(const p: Pointer; Count: Int64): Int64;
+{ * Writes from a pointer. }
 begin
   Result := Write64(p^, Count);
 end;
 
 function TMS64.write(const buffer; Count: longint): longint;
+{ * 32‑bit override of TStream.Write. }
 begin
   Result := Write64(buffer, Count);
 end;
 
 procedure TMS64.WriteBytes(const buff: TBytes);
+{ * Writes a dynamic byte array. }
 begin
   if Length(buff) > 0 then
       WritePtr(@buff[0], Length(buff));
 end;
 
 function TMS64.Read64(var buffer; Count: Int64): Int64;
-{ * Core read routine: copies from internal memory to buffer,
-  * reading at most available bytes.
+{ *
+  * Reads up to Count bytes into buffer at current position.
+  * Returns the actual number of bytes read (may be less if EOF).
 }
 begin
   if Count > 0 then
@@ -1332,21 +1435,22 @@ begin
 end;
 
 function TMS64.ReadPtr(const p: Pointer; Count: Int64): Int64;
+{ * Reads into a pointer. }
 begin
   Result := Read64(p^, Count);
 end;
 
 function TMS64.read(var buffer; Count: longint): longint;
+{ * 32‑bit override. }
 begin
   Result := Read64(buffer, Count);
 end;
 
 {$IFDEF DELPHI}
 
+
 function TMS64.write(const buffer: TBytes; Offset, Count: longint): longint;
-{ * Delphi‑specific overload for writing from a TBytes slice.
-  * Behaves like Write64 but with offset into the byte array.
-}
+{ * Delphi's TStream.Write overload for TBytes with offset. }
 var
   p: Int64;
 begin
@@ -1377,7 +1481,7 @@ begin
 end;
 
 function TMS64.read(buffer: TBytes; Offset, Count: longint): longint;
-{ * Delphi‑specific overload for reading into a TBytes slice. }
+{ * Delphi's TStream.Read overload for TBytes with offset. }
 var
   p: Int64;
 begin
@@ -1400,7 +1504,7 @@ end;
 
 
 function TMS64.Seek(const Offset: Int64; origin: TSeekOrigin): Int64;
-{ * Moves the position according to the origin. }
+{ * Changes the current position. Returns the new position. }
 begin
   case origin of
     TSeekOrigin.soBeginning: FPosition := Offset;
@@ -1411,9 +1515,7 @@ begin
 end;
 
 function TMS64.CopyMem64(const source: TMem64; Count: Int64): Int64;
-{ * Copies data from a TMem64 at its current position.
-  * Advances the source position.
-}
+{ * Copies from a TMem64's current position into this stream. }
 begin
   if FProtectedMode then
       RaiseInfo('protected mode');
@@ -1423,11 +1525,12 @@ begin
 end;
 
 function TMS64.CopyFrom(const source: TCore_Stream; Count: Int64): Int64;
-{ * Copies from any TCore_Stream. If Count < 0, copies all remaining.
-  * Uses chunked reading to handle large streams efficiently.
+{ *
+  * Copies Count bytes from source stream. If Count < 0, copies entire source.
+  * Uses chunked reading to handle large data.
 }
 const
-  MaxBufSize = $F000; // ~60 KB
+  MaxBufSize = $F000;
 var
   BufSize, n, p: Int64;
 begin
@@ -1440,6 +1543,7 @@ begin
       source.Position := 0;
       Count := source.Size;
     end;
+
   if source is TMS64 then
     begin
       WritePtr(TMS64(source).PositionAsPtr, Count);
@@ -1447,14 +1551,17 @@ begin
       Result := Count;
       Exit;
     end;
+
   Result := Count;
   if Count > MaxBufSize then
       BufSize := MaxBufSize
   else
       BufSize := Count;
+
   p := Position;
   if p + Count > Size then
       Size := p + Count;
+
   while Count <> 0 do
     begin
       if Count > BufSize then
@@ -1470,6 +1577,7 @@ begin
 end;
 
 function TMS64.CopyFrom(const source: TMem64; Count: Int64): Int64;
+{ * Copies from a TMem64. }
 begin
   if FProtectedMode then
       RaiseInfo('protected mode');
@@ -1478,7 +1586,7 @@ begin
   Result := Count;
 end;
 
-{ ----- Serialisation writers -------------------------------------------------- }
+{ ****** Typed write methods ********** }
 procedure TMS64.WriteBool(const buff: Boolean);
 begin
   WritePtr(@buff, 1);
@@ -1550,8 +1658,10 @@ begin
 end;
 
 procedure TMS64.WriteString(const buff: TPascalString);
-{ * Writes a TPascalString as UTF‑8 with a 32‑bit length prefix.
-  * Length is the number of UTF‑8 bytes, not characters.
+{ *
+  * Writes a TPascalString as UTF‑8 with a 4‑byte length prefix.
+  * Example:
+  *   ms.WriteString('Hello'); // writes length=5 then bytes.
 }
 var
   b: TBytes;
@@ -1566,9 +1676,7 @@ begin
 end;
 
 procedure TMS64.WriteANSI(const buff: TPascalString);
-{ * Writes the ANSI bytes of the string without a length prefix.
-  * The receiver must know the length in advance.
-}
+{ * Writes the ANSI bytes without length prefix. }
 var
   b: TBytes;
 begin
@@ -1581,10 +1689,7 @@ begin
 end;
 
 procedure TMS64.WriteANSI(const buff: TPascalString; const L: Integer);
-{ * Writes exactly L bytes of ANSI data.
-  * If buff is shorter than L, only buff length bytes are written.
-  * Caller must ensure L <= Length(buff.ANSI) for correct operation.
-}
+{ * Writes exactly L ANSI bytes (truncates or pads if necessary). }
 var
   b: TBytes;
 begin
@@ -1601,7 +1706,7 @@ begin
   WritePtr(@buff, 16);
 end;
 
-{ ----- Serialisation readers -------------------------------------------------- }
+{ ****** Typed read methods ********** }
 function TMS64.ReadBool: Boolean;
 begin
   ReadPtr(@Result, 1);
@@ -1673,13 +1778,18 @@ begin
 end;
 
 function TMS64.PrepareReadString: Boolean;
-{ * Checks if the stream contains a complete string (length + data). }
+{ *
+  * Checks if there is enough data to read a string: at least 4 bytes for
+  * the length and then the full string.
+}
 begin
   Result := (Position + 4 <= Size) and (Position + 4 + PCardinal(PositionAsPtr())^ <= Size);
 end;
 
 function TMS64.ReadString: TPascalString;
-{ * Reads a UTF‑8 string with a 32‑bit length prefix.
+{ *
+  * Reads a string written with WriteString: reads length, then UTF‑8 bytes,
+  * and returns the decoded TPascalString.
   * Returns empty string on error.
 }
 var
@@ -1701,7 +1811,7 @@ begin
 end;
 
 function TMS64.ReadStringAsBuff: TBytes;
-{ * Reads the raw UTF‑8 bytes of a string without decoding. }
+{ * Reads the string but returns raw UTF‑8 bytes. }
 var
   L: Cardinal;
 begin
@@ -1720,7 +1830,7 @@ begin
 end;
 
 procedure TMS64.IgnoreReadString;
-{ * Skips a string by reading and discarding its data. }
+{ * Skips over a string without reading its data. }
 var
   L: Cardinal;
   b: TBytes;
@@ -1738,7 +1848,7 @@ begin
 end;
 
 function TMS64.ReadANSI(L: Integer): TPascalString;
-{ * Reads L bytes as ANSI and converts to TPascalString. }
+{ * Reads L bytes as ANSI and returns a TPascalString. }
 var
   b: TBytes;
 begin
@@ -1756,10 +1866,10 @@ begin
   ReadPtr(@Result, 16);
 end;
 
-{ *************** TMemoryStream64List *************** }
+{ * TMemoryStream64List implementation }
 
 procedure TMemoryStream64List.Clean;
-{ * Frees all streams in the list and clears the list. }
+{ * Frees all streams in the list and clears it. }
 var
   i: Integer;
 begin
@@ -1769,6 +1879,7 @@ begin
 end;
 
 function TMemoryStream64List.To_Array: TMS64_Array;
+{ * Copies the list contents to a dynamic array. }
 var
   i: Integer;
 begin
@@ -1777,9 +1888,10 @@ begin
       Result[i] := Items[i];
 end;
 
-{ *************** TMemoryStream64ThreadList *************** }
+{ * TMemoryStream64ThreadList implementation }
 
 constructor TMemoryStream64ThreadList.Create;
+{ * Initialises the critical section. }
 begin
   inherited Create;
   FCritical := TCritical.Create;
@@ -1787,6 +1899,7 @@ begin
 end;
 
 destructor TMemoryStream64ThreadList.Destroy;
+{ * Frees the critical section and clears the list. }
 begin
   DisposeObject(FCritical);
   Clear;
@@ -1804,6 +1917,7 @@ begin
 end;
 
 procedure TMemoryStream64ThreadList.Remove(obj: TMS64);
+{ * Removes an object; if AutoFree_Stream, frees it. }
 begin
   if AutoFree_Stream then
       DisposeObject(obj);
@@ -1811,6 +1925,7 @@ begin
 end;
 
 procedure TMemoryStream64ThreadList.Delete(index: Integer);
+{ * Deletes at index, optionally freeing the object. }
 begin
   if (index >= 0) and (index < Count) then
     begin
@@ -1821,6 +1936,7 @@ begin
 end;
 
 procedure TMemoryStream64ThreadList.Clear;
+{ * Clears the list, freeing all streams if AutoFree_Stream is True. }
 var
   i: Integer;
 begin
@@ -1831,6 +1947,7 @@ begin
 end;
 
 procedure TMemoryStream64ThreadList.Clean;
+{ * Frees all streams regardless of AutoFree_Stream and clears. }
 var
   i: Integer;
 begin
@@ -1840,6 +1957,7 @@ begin
 end;
 
 function TMemoryStream64ThreadList.To_Array: TMS64_Array;
+{ * Returns a dynamic array of contained streams. }
 var
   i: Integer;
 begin
@@ -1848,7 +1966,7 @@ begin
       Result[i] := Items[i];
 end;
 
-{ *************** Triggered streams *************** }
+{ * Trigger‑based streams }
 
 constructor TMemoryStream64OfWriteTrigger.Create(ATrigger: IMemoryStream64WriteTrigger);
 begin
@@ -1857,6 +1975,7 @@ begin
 end;
 
 function TMemoryStream64OfWriteTrigger.Write64(const buffer; Count: Int64): Int64;
+{ * Overrides Write64 to call the trigger after writing. }
 begin
   Result := inherited Write64(buffer, Count);
   if Assigned(Trigger) then
@@ -1896,7 +2015,7 @@ begin
       Trigger.TriggerWrite64(Count);
 end;
 
-{ *************** TMem64 implementation *************** }
+{ * TMem64 implementation }
 
 procedure TMem64.SetPointer(buffPtr: Pointer; const BuffSize: Int64);
 begin
@@ -1913,6 +2032,7 @@ begin
 end;
 
 function TMem64.Realloc(var NewCapacity: Int64): Pointer;
+{ * Same as TMS64.Realloc but works with Int64 sizes. }
 begin
   if FProtectedMode then
       Exit(nil);
@@ -1964,6 +2084,7 @@ begin
 end;
 
 function TMem64.GetSize: Int64;
+{ * Computes size by seeking to end and back. }
 var
   Pos_: Int64;
 begin
@@ -1973,6 +2094,7 @@ begin
 end;
 
 procedure TMem64.SetSize(const NewSize: Int64);
+{ * Sets the size, expanding if needed and adjusting position. }
 var
   OldPosition: Int64;
 begin
@@ -2011,6 +2133,7 @@ begin
 end;
 
 function TMem64.Stream64(Mapping_Begin_As_Position_: Boolean): TMS64;
+{ * Returns a TMS64 that maps to this buffer. }
 begin
   if FStream64 = nil then
       FStream64 := TMS64.Create;
@@ -2027,6 +2150,7 @@ begin
 end;
 
 function TMem64.NewClone: TMem64;
+{ * Deep copy. }
 begin
   Result := TMem64.CustomCreate(FDelta);
   Result.Size := Size;
@@ -2054,8 +2178,7 @@ end;
 
 procedure TMem64.DiscardMemory;
 begin
-  if FProtectedMode then
-      Exit;
+  if FProtectedMode then Exit;
   FMemory := nil;
   FSize := 0;
   FPosition := 0;
@@ -2064,8 +2187,7 @@ end;
 
 procedure TMem64.Clear;
 begin
-  if FProtectedMode then
-      Exit;
+  if FProtectedMode then Exit;
   SetCapacity(0);
   FSize := 0;
   FPosition := 0;
@@ -2167,6 +2289,11 @@ begin
   Result := umlMD5(Memory, Size);
 end;
 
+function TMem64.Same(source: TMem64): Boolean;
+begin
+  Result := (Size = source.Size) and CompareMemory(Memory, source.Memory, Size);
+end;
+
 function TMem64.LZ4: TMem64;
 var
   comp_size: Int64;
@@ -2260,8 +2387,7 @@ end;
 
 procedure TMem64.LoadFromStream(stream: TCore_Stream);
 begin
-  if FProtectedMode then
-      Exit;
+  if FProtectedMode then Exit;
   Clear;
   stream.Position := 0;
   if CopyFrom(stream, stream.Size) <> stream.Size then
@@ -2463,7 +2589,7 @@ begin
   Result := Count;
 end;
 
-{ ----- Serialisation writers for TMem64 (identical to TMS64) ----------------- }
+{ ****** Typed write/read for TMem64 (identical to TMS64) ********** }
 procedure TMem64.WriteBool(const buff: Boolean);
 begin
   WritePtr(@buff, 1);
@@ -2576,7 +2702,6 @@ begin
   WritePtr(@buff, 16);
 end;
 
-{ ----- Serialisation readers for TMem64 -------------------------------------- }
 function TMem64.ReadBool: Boolean;
 begin
   ReadPtr(@Result, 1);
@@ -2724,8 +2849,6 @@ begin
   ReadPtr(@Result, 16);
 end;
 
-{ *************** TMem64List *************** }
-
 procedure TMem64List.Clean;
 var
   i: Integer;
@@ -2735,27 +2858,28 @@ begin
   Clear;
 end;
 
-{ *************** ZLIB wrappers (FPC) *************** }
-
 {$IFDEF FPC}
 
+
 constructor TCompressionStream.Create(stream: TCore_Stream);
+{ * FPC: Creates a compression stream with fastest level. }
 begin
   inherited Create(clFastest, stream);
 end;
 
 constructor TCompressionStream.Create(level: Tcompressionlevel; stream: TCore_Stream);
+{ * FPC: Creates with specified compression level. }
 begin
   inherited Create(level, stream);
 end;
 {$ENDIF}
 
-{ *************** Compression and Decompression Functions *************** }
+{ ****** Global compression functions ********** }
 
 function MaxCompressStream(sour, dest: TCore_Stream): Boolean;
 { *
-  * Compresses using maximum ZLIB compression (clMax).
-  * Writes original size (8 bytes) first.
+  * Compresses sour with ZLIB maximum compression.
+  * Writes 8‑byte original size then compressed data.
 }
 var
   cStream: TCompressionStream;
@@ -2777,9 +2901,7 @@ begin
 end;
 
 function FastCompressStream(sour, dest: TCore_Stream): Boolean;
-{ *
-  * Fast ZLIB compression (clFastest).
-}
+{ * Same but with fastest compression. }
 var
   cStream: TCompressionStream;
   siz_: Int64;
@@ -2800,9 +2922,7 @@ begin
 end;
 
 function CompressStream(sour, dest: TCore_Stream): Boolean;
-{ *
-  * Standard ZLIB compression (clDefault).
-}
+{ * Default ZLIB compression. }
 var
   cStream: TCompressionStream;
   siz_: Int64;
@@ -2823,9 +2943,7 @@ begin
 end;
 
 function DecompressStream(DataPtr: Pointer; siz: NativeInt; dest: TCore_Stream): Boolean;
-{ *
-  * Decompresses data from a memory pointer by wrapping it in a TMS64.
-}
+{ * Decompresses from a memory pointer using a temporary TMS64. }
 var
   m64: TMS64;
 begin
@@ -2837,7 +2955,8 @@ end;
 
 function DecompressStream(sour: TCore_Stream; dest: TCore_Stream): Boolean;
 { *
-  * Decompresses ZLIB data. Reads original size, then decompresses into dest.
+  * Decompresses ZLIB data (format: 8‑byte original size, then compressed data).
+  * Reads the size, expands dest, and decompresses.
 }
 var
   dcStream: TDecompressionStream;
@@ -2861,10 +2980,7 @@ begin
 end;
 
 function DecompressStreamToPtr(sour: TCore_Stream; var dest: Pointer): Boolean;
-{ *
-  * Decompresses data into a newly allocated memory block.
-  * The caller must free the returned pointer.
-}
+{ * Decompresses into a newly allocated pointer (caller must free). }
 var
   dcStream: TDecompressionStream;
   dSiz: Int64;
@@ -2884,9 +3000,6 @@ begin
 end;
 
 function CompressFile(sour, dest: SystemString): Boolean;
-{ *
-  * Compresses a file using standard ZLIB.
-}
 var
   s_fs, d_fs: TCore_FileStream;
 begin
@@ -2910,8 +3023,9 @@ end;
 
 function SelectCompressStream(const scm: TSelectCompressionMethod; const sour, dest: TCore_Stream): Boolean;
 { *
-  * Compresses using a selected method. Writes a single‑byte method identifier
-  * before the compressed data. For LZ4 and Snappy, uses the built‑in TMS64 methods.
+  * Compresses sour using the selected method.
+  * Writes a method ID byte first, then the compressed data in that method's format.
+  * For LZ4/Snappy, the stream is temporarily loaded into a TMS64 for compression.
 }
 var
   scm_b: Byte;
@@ -2968,6 +3082,7 @@ begin
 end;
 
 function SelectDecompressStream(const sour, dest: TCore_Stream): Boolean;
+{ * Auto‑detect and decompress (no method returned). }
 var
   scm: TSelectCompressionMethod;
 begin
@@ -2976,8 +3091,8 @@ end;
 
 function SelectDecompressStream(const sour, dest: TCore_Stream; var scm: TSelectCompressionMethod): Boolean;
 { *
-  * Auto‑detects compression method from the first byte and decompresses.
-  * For LZ4 and Snappy, uses TMS64 methods.
+  * Reads the method ID byte, then decompresses accordingly.
+  * Supports all methods in TSelectCompressionMethod.
 }
 var
   scm_: Byte;
@@ -3036,13 +3151,15 @@ begin
   end;
 end;
 
-{ *************** Parallel Compression/Decompression *************** }
+{ ****** Parallel compression/decompression ********** }
 
 procedure ParallelCompressMemory(const ThNum: Integer; const scm: TSelectCompressionMethod; const StripNum_: Integer; const sour: TMS64; const dest: TCore_Stream);
 { *
-  * Splits the source stream into strips, compresses each in parallel,
-  * and writes them to dest with a header:
-  *   [StripCount: Int32] [StripSize: Int64] [Data].
+  * Splits sour into StripNum_ strips and compresses each in parallel.
+  * Output format:
+  *   [StripCount: Integer]
+  *   for each strip: [StripSize: Int64][CompressedData]
+  * The number of threads is limited by ThNum.
 }
 var
   StripNum: Integer;
@@ -3151,24 +3268,28 @@ begin
 end;
 
 procedure ParallelCompressMemory(const scm: TSelectCompressionMethod; const StripNum_: Integer; const sour: TMS64; const dest: TCore_Stream);
+{ * Uses up to 4 threads (or ParallelGranularity). }
 begin
   ParallelCompressMemory(umlMin(4, Get_Parallel_Granularity), scm, StripNum_, sour, dest);
 end;
 
 procedure ParallelCompressMemory(const scm: TSelectCompressionMethod; const sour: TMS64; const dest: TCore_Stream);
+{ * Automatically chooses strip number based on size (16KB strips). }
 begin
   ParallelCompressMemory(scm, sour.Size div (16 * 1024), sour, dest);
 end;
 
 procedure ParallelCompressMemory(const sour: TMS64; const dest: TCore_Stream);
+{ * Default: uses ZLIB. }
 begin
   ParallelCompressMemory(scmZLIB, sour, dest);
 end;
 
 procedure ParallelDecompressStream(const ThNum: Integer; const sour_, dest_: TCore_Stream);
 { *
-  * Parallel decompression: reads strip headers, decompresses each strip in parallel,
-  * and writes the results sequentially.
+  * Decompresses a stream produced by ParallelCompressMemory.
+  * It reads the strip count and each strip's compressed data, decompresses
+  * each in parallel, and writes the results to dest_ in order.
 }
 type
   TPara_strip_ = record
@@ -3303,11 +3424,13 @@ begin
 end;
 
 procedure ParallelDecompressStream(const sour_, dest_: TCore_Stream);
+{ * Uses up to 4 threads. }
 begin
   ParallelDecompressStream(umlMin(4, Get_Parallel_Granularity), sour_, dest_);
 end;
 
 procedure ParallelCompressFile(const sour, dest: SystemString);
+{ * Parallel compress a file: loads entire file into TMS64, then parallel compress. }
 var
   s_fs: TMS64;
   d_fs: TCore_FileStream;
@@ -3321,6 +3444,7 @@ begin
 end;
 
 procedure ParallelDecompressFile(const sour, dest: SystemString);
+{ * Parallel decompress a file. }
 var
   s_fs: TMS64;
   d_fs: TCore_FileStream;
@@ -3335,8 +3459,9 @@ end;
 
 function CompressUTF8(const sour_: TBytes): TBytes;
 { *
-  * Compresses a UTF‑8 byte array. If compression saves space, adds a header
-  * [FF FF][OriginalSize: Int32][CompressedData]; otherwise returns original data.
+  * Compresses a TBytes using ZLIB max. If compression does not reduce size,
+  * returns the original. Output format: if compressed, header [0xFF,0xFF] +
+  * 4‑byte original size + compressed data.
 }
 var
   cStream: TCompressionStream;
@@ -3366,8 +3491,8 @@ end;
 
 function DecompressUTF8(const sour_: TBytes): TBytes;
 { *
-  * Decompresses data created by CompressUTF8. Checks for header [FF FF],
-  * reads original size, and decompresses.
+  * Decompresses data created by CompressUTF8. If it does not have the
+  * [0xFF,0xFF] header, returns the original data (not compressed).
 }
 var
   dcStream: TDecompressionStream;
@@ -3394,8 +3519,22 @@ begin
       Result := sour_;
 end;
 
-{ *************** Global Serialisation Functions *************** }
-
+{ ****** Stream serialisation helpers ********** }
+{ *
+  * These helpers provide typed read/write on any TCore_Stream, using its
+  * built‑in read/write methods. They are used by TMS64/TMem64 internally.
+  *
+  * @Example:
+  *   var
+  *     st: TMemoryStream;
+  *   begin
+  *     st := TMemoryStream.Create;
+  *     StreamWriteInt32(st, 123);
+  *     st.Position := 0;
+  *     WriteLn(StreamReadInt32(st)); // prints 123
+  *     st.Free;
+  *   end;
+  * }
 procedure StreamWriteBool(const stream: TCore_Stream; const buff: Boolean);
 begin
   stream.write(buff, 1);
@@ -3467,7 +3606,7 @@ begin
 end;
 
 procedure StreamWriteString(const stream: TCore_Stream; const buff: TPascalString);
-{ * Writes a string with length prefix (UInt32) and UTF‑8 bytes. }
+{ * Writes a TPascalString as UTF‑8 with 4‑byte length. }
 var
   b: TBytes;
 begin
@@ -3481,7 +3620,7 @@ begin
 end;
 
 function ComputeStreamWriteStringSize(buff: TPascalString): Integer;
-{ * Returns the total byte size needed to write the string (4 + UTF‑8 length). }
+{ * Computes the number of bytes that would be written by StreamWriteString. }
 var
   b: TBytes;
 begin
@@ -3566,6 +3705,7 @@ begin
 end;
 
 function StreamReadString(const stream: TCore_Stream): TPascalString;
+{ * Reads a string written by StreamWriteString. }
 var
   L: Cardinal;
   b: TBytes;
@@ -3585,6 +3725,7 @@ begin
 end;
 
 function StreamReadStringAsBuff(const stream: TCore_Stream): TBytes;
+{ * Reads raw UTF‑8 bytes. }
 var
   L: Cardinal;
 begin
@@ -3603,6 +3744,7 @@ begin
 end;
 
 procedure StreamIgnoreReadString(const stream: TCore_Stream);
+{ * Skips a string. }
 var
   L: Cardinal;
   b: TBytes;
@@ -3624,10 +3766,9 @@ begin
   stream.read(Result, 16);
 end;
 
-{ *************** Debug Helpers *************** }
-
+{ ****** Debug helpers ********** }
 procedure DoStatus(const v: TMS64);
-{ * Prints the content of a TMS64 as comma‑separated decimal values. }
+{ * Prints the stream's memory content as comma‑separated hex values. }
 var
   p: PByte;
   i: Integer;
@@ -3646,7 +3787,7 @@ begin
 end;
 
 procedure DoStatus(const v: TMem64);
-{ * Prints the content of a TMem64 as comma‑separated decimal values. }
+{ * Same but for TMem64. }
 var
   p: PByte;
   i: Integer;
@@ -3666,6 +3807,5 @@ end;
 
 initialization
 
-{ * No special initialisation required. * }
 end.
  
