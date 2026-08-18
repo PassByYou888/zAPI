@@ -84,26 +84,33 @@ begin
   Result := 0;
   if (TCore_Thread.CurrentThread <> Soft_Synchronize_Main_Thread) then
       exit;
-  if Check_Time_ > 0 then
-      tk := GetTimeTick;
-  repeat
-    while SyncQueue__.Num > 0 do
-      begin
-        sync_ := SyncQueue__.First^.Data; // anti dead loop
-        SyncQueue__.Next; // anti dead loop
-        try
-          if Assigned(sync_.Primary) then
-              sync_.Primary()
-          else if Assigned(sync_.Second) then
-              sync_.Second()
-          else if Assigned(sync_.Third) then
-              sync_.Third();
-        except
+
+  if Check_Time_ > 0 then tk := GetTimeTick
+  else tk := 0;
+
+  while True do
+    begin
+      while SyncQueue__.Num > 0 do
+        begin
+          sync_ := SyncQueue__.First^.Data; // anti dead loop
+          SyncQueue__.Next; // anti dead loop
+          try
+            if Assigned(sync_.Primary) then
+                sync_.Primary()
+            else if Assigned(sync_.Second) then
+                sync_.Second()
+            else if Assigned(sync_.Third) then
+                sync_.Third();
+          except
+          end;
+          sync_.Fourth^ := False;
+          inc(Result);
         end;
-        sync_.Fourth^ := False;
-        inc(Result);
-      end;
-  until (Check_Time_ = 0) or (GetTimeTick - tk >= Check_Time_);
+
+      if Check_Time_ = 0 then break;
+      if GetTimeTick - tk > Check_Time_ then break;
+      TCompute.Sleep(1);
+    end;
 end;
 
 procedure TSoft_Synchronize_Tool.Synchronize(OnSync: TOnSynchronize_P_NP);
