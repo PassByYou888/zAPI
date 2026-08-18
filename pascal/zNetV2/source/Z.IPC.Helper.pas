@@ -385,7 +385,16 @@ type
     property Handle: TIPCServerHandle read FHandle; { * Raw C handle (advanced use) }
   end;
 
+procedure IPC_echo_Handler(Trigger: Pointer; Data: Pointer; Size: TSize_t; out OutData: Pointer; out outSize: TSize_t); cdecl;
+
 implementation
+
+procedure IPC_echo_Handler(Trigger: Pointer; Data: Pointer; Size: TSize_t; out OutData: Pointer; out outSize: TSize_t);
+begin
+  outSize := Size;
+  OutData := ipc_alloc(outSize);
+  CopyPtr(Data, OutData, outSize);
+end;
 
 { ============================================================================== }
 { TIPCClient }
@@ -576,35 +585,93 @@ begin
   Result := StartEx(QueueName, 0, 1000, 1024); { * Use default config }
 end;
 
-function TIPCServer.StartEx(const QueueName: string; ThreadCount: Integer; MaxQueueLength, MaxMsgSize: TSize_t): Boolean;
+function TIPCServer.StartEx(const QueueName: string; ThreadCount: Integer;
+  MaxQueueLength, MaxMsgSize: TSize_t): Boolean;
 var
-  tmp: TIPCClient;
-  found_ipc_: Boolean;
+  tmpClient: TIPCClient;
+  queueExists, isActive: Boolean;
+  testReq, testResp: TMem64;
 begin
   Result := False;
+
+  // 1. Stop any existing server instance
   if FStarted then
-      Stop; { * Stop any existing server before starting a new one }
-  if FHandle = 0 then
-    begin
-      found_ipc_ := False;
-      tmp := TIPCClient.Create;
-      found_ipc_ := tmp.Connect(QueueName);
-      DisposeObject(tmp);
-      if found_ipc_ then
-        begin
-          DoStatus('failed:same ipc-service "%s"', [QueueName]);
-          Result := False;
-          Exit;
+      Stop;
+
+  // 2. If we already hold a valid handle, consider it already started
+  if FHandle <> 0 then
+      Exit(True);
+
+  // 3. Check whether the queue already exists (maybe left by a crashed process)
+  queueExists := False;
+  isActive := False;
+  tmpClient := TIPCClient.Create;
+  try
+    DoStatus('[IPC] Checking if queue "%s" is already occupied...', [QueueName]);
+    queueExists := tmpClient.Connect(QueueName);
+
+    if queueExists then
+      begin
+        DoStatus('[IPC] Found existing queue "%s" (possibly from a previous instance)', [QueueName]);
+
+        // 3a. Perform an echo test to determine if the queue is still alive
+        testReq := TMem64.Create;
+        testResp := TMem64.Create;
+        try
+          testReq.WriteString('ping');
+          tmpClient.SetTimeout(200); // quick fail‑safe
+          DoStatus('[IPC] Sending echo test to the existing queue...');
+
+          if tmpClient.CallBinary('echo', testReq, testResp) = IPC_OK then
+            begin
+              isActive := testReq.Same(testResp);
+              if isActive then
+                  DoStatus('[IPC] The queue is alive (echo reply matches) – another service is running')
+              else
+                  DoStatus('[IPC] Queue exists but echo reply is invalid – treating as zombie');
+            end
+          else
+              DoStatus('[IPC] Echo call timed out or failed – queue is considered dead');
+        finally
+          DisposeObject(testReq);
+          DisposeObject(testResp);
         end;
 
-      { * Call the C function to create and start the server }
-      FHandle := ipc_server_create_ex(PAnsiChar(AnsiString(QueueName)), ThreadCount, MaxQueueLength, MaxMsgSize);
-    end;
-  if FHandle <> 0 then
+        // 3b. If the queue is not active, force‑clean it (zombie removal)
+        if not isActive then
+          begin
+            DoStatus('[IPC] Cleaning up the zombie queue "%s" ...', [QueueName]);
+            ipc_cleanup(PAnsiChar(AnsiString(QueueName)));
+            TCompute.Sleep(200); // allow system to finalise removal
+            DoStatus('[IPC] Queue cleanup completed');
+          end
+        else
+          begin
+            // A live service is using the queue – we cannot start
+            DoStatus('[IPC] Cannot start – an active IPC service is already using queue "%s"', [QueueName]);
+            Exit;
+          end;
+      end
+    else
+        DoStatus('[IPC] Queue "%s" does not exist – ready to create a new service', [QueueName]);
+  finally
+      DisposeObject(tmpClient);
+  end;
+
+  // 4. Create the new server queue (it should now be absent)
+  DoStatus('[IPC] Creating new IPC service queue "%s" ...', [QueueName]);
+  FHandle := ipc_server_create_ex(PAnsiChar(AnsiString(QueueName)), ThreadCount, MaxQueueLength, MaxMsgSize);
+  if FHandle = 0 then
     begin
-      FStarted := True;
-      Result := True;
+      DoStatus('[IPC] Failed to create server – check system logs or queue permissions');
+      Exit;
     end;
+
+  // 5. Server started successfully – register default echo handler
+  FStarted := True;
+  Result := True;
+  RegisterBinaryHandler('echo', IPC_echo_Handler, nil);
+  DoStatus('[IPC] Server successfully started on queue "%s"', [QueueName]);
 end;
 
 procedure TIPCServer.Stop;
