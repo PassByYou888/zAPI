@@ -186,7 +186,7 @@ php client.php
 
 如果你需要从源码自行构建 zAPI 动态库（例如特殊平台、定制需求），请参阅完整的构建指南：
 
-> 📖 **[《CONTRIBUTING.md》—— zAPI 动态库构建指南](./Src/CONTRIBUTING.md)**
+> 📖 **[《CONTRIBUTING.md》—— zAPI 动态库构建指南](./src/CONTRIBUTING.md)**
 
 该指南涵盖：
 
@@ -200,7 +200,7 @@ php client.php
 
 ```bash
 git clone --recursive https://github.com/PassByYou888/zAPI.git
-cd zAPI/Src
+cd zAPI/src
 lazbuild z_api_hub.lpi
 ```
 
@@ -259,7 +259,7 @@ zAPI/
 ├── Binary/                # 动态库和可执行文件
 │   ├── z_api_hub64.dll    # 核心动态库
 │   └── z_ipc_64.dll       # IPC 支持库
-├── Src/                   # ⭐ 核心源码和构建脚本
+├── src/                   # ⭐ 核心源码和构建脚本
 │   ├── z_api_hub.lpi      # 主项目文件（构建动态库）
 │   ├── CONTRIBUTING.md    # 完整构建指南
 │   └── ...
@@ -413,7 +413,7 @@ static void __cdecl GoodCallback(void* trigger, void* input, void* output) {
 - 🔧 提交 Pull Request
 - 🌍 为更多语言编写绑定
 
-> **构建指南**：如果您需要从源码构建 zAPI 动态库，请参阅 [CONTRIBUTING.md](./Src/CONTRIBUTING.md)。
+> **构建指南**：如果您需要从源码构建 zAPI 动态库，请参阅 [CONTRIBUTING.md](./src/CONTRIBUTING.md)。
 
 ---
 
