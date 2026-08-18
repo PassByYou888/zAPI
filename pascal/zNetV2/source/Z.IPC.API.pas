@@ -467,6 +467,8 @@ function LoadIPCLibrary: Boolean;
 *)
 procedure UnloadIPCLibrary;
 
+
+
 implementation
 
 uses
@@ -554,11 +556,11 @@ var
 function GetDefaultLibraryName: string;
 begin
 {$IF Defined(MSWINDOWS)}
-{$IF Defined(CPU64)}
-  Result := 'z_ipc_64.dll';
-{$ELSE}
-  Result := 'z_ipc_32.dll';
-{$ENDIF}
+  {$IF Defined(CPU64)}
+    Result := 'z_ipc_64.dll';
+  {$ELSE}
+    Result := 'z_ipc_32.dll';
+  {$ENDIF}
 {$ELSEIF Defined(LINUX)}
   Result := 'libz_ipc.so';
 {$ELSEIF Defined(DARWIN)}
