@@ -305,19 +305,31 @@ function TZ_JsonObject.GetArray(const Name: string): TZ_JsonArray;
 var
   arry: TZ_Instance_JsonArray;
   j: Integer;
+  idx: Integer;
 begin
-  if FInstance.Find(Name, arry) then
+  idx := FInstance.IndexOfName(Name);
+  if idx <> -1 then
+  begin
+    if FInstance.Items[idx].JSONType = jtArray then
+      arry := TJSONArray(FInstance.Items[idx])
+    else
+      arry := nil;
+    if arry <> nil then
     begin
       for j := FList.Count - 1 downto 0 do
         if (FList[j] is TZ_JsonArray) and (TZ_JsonArray(FList[j]).FInstance = arry) then
-          begin
-            Result := TZ_JsonArray(FList[j]);
-            exit;
-          end;
+        begin
+          Result := TZ_JsonArray(FList[j]);
+          Exit;
+        end;
+      Result := TZ_JsonArray.Create(self);
+      Result.FInstance := arry;
+      Exit;
     end;
+  end;
 
   arry := TZ_Instance_JsonArray.Create();
-  FInstance.Arrays[Name] := arry;
+  FInstance.Add(Name, arry);
   Result := TZ_JsonArray.Create(self);
   Result.FInstance := arry;
 end;
@@ -326,19 +338,31 @@ function TZ_JsonObject.GetObject(const Name: string): TZ_JsonObject;
 var
   Obj_: TZ_Instance_JsonObject;
   j: Integer;
+  idx: Integer;
 begin
-  if FInstance.Find(Name, Obj_) then
+  idx := FInstance.IndexOfName(Name);
+  if idx <> -1 then
+  begin
+    if FInstance.Items[idx].JSONType = jtObject then
+      Obj_ := TJSONObject(FInstance.Items[idx])
+    else
+      Obj_ := nil;
+    if Obj_ <> nil then
     begin
       for j := FList.Count - 1 downto 0 do
         if (FList[j] is TZ_JsonObject) and (TZ_JsonObject(FList[j]).FInstance = Obj_) then
-          begin
-            Result := TZ_JsonObject(FList[j]);
-            exit;
-          end;
+        begin
+          Result := TZ_JsonObject(FList[j]);
+          Exit;
+        end;
+      Result := TZ_JsonObject.Create(self);
+      Result.FInstance := Obj_;
+      Exit;
     end;
+  end;
 
   Obj_ := TZ_Instance_JsonObject.Create();
-  FInstance.Objects[Name] := Obj_;
+  FInstance.Add(Name, Obj_);
   Result := TZ_JsonObject.Create(self);
   Result.FInstance := Obj_;
 end;
@@ -369,17 +393,21 @@ begin
 end;
 
 procedure TZ_JsonObject.LoadFromStream(stream: TCore_Stream);
-Var
-  P: TJSONParser;
+var
   j: TJSONData;
 begin
   DisposeObjectAndNil(FInstance);
-  P := TJSONParser.Create(stream, [joUTF8]);
-  try
-    j := P.Parse;
-    if j is TZ_Instance_JsonObject then
-        FInstance := TZ_Instance_JsonObject(j)
-  except
+  if (stream = nil) or (stream.Size - stream.Position <= 0) then
+  begin
+    FInstance := TZ_Instance_JsonObject.Create;
+    Exit;
   end;
-  FreeAndNil(P);
+  j := GetJSON(stream);
+  if Assigned(j) and (j is TZ_Instance_JsonObject) then
+    FInstance := TZ_Instance_JsonObject(j)
+  else
+    FInstance := nil;
+  if FInstance = nil then
+    FInstance := TZ_Instance_JsonObject.Create;
 end;
+
