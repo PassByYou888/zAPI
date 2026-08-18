@@ -6,7 +6,7 @@
 
 ```bash
 git clone --recursive https://github.com/PassByYou888/zAPI.git
-cd zAPI/Src
+cd zAPI/src
 lazbuild z_api_hub.lpi
 ```
 
@@ -28,7 +28,7 @@ lazbuild z_api_hub.lpi
 2. **将 Lazarus 安装目录（如 `C:\lazarus`）加入系统 `PATH` 环境变量**
    - 打开 **系统属性** → **高级** → **环境变量** → 编辑 `Path` → 添加 Lazarus 目录
 3. 验证：`lazbuild --version`
-4. 在 `Src/` 目录下执行：
+4. 在 `src/` 目录下执行：
 
 ```cmd
 lazbuild z_api_hub.lpi
@@ -48,7 +48,7 @@ sudo dnf install lazarus
 验证后执行：
 
 ```bash
-cd Src
+cd src
 lazbuild z_api_hub.lpi
 ```
 
@@ -79,7 +79,7 @@ yum install -y make gcc gcc-c++ binutils subversion zip unzip \
 # （详细步骤见 三步构建 lazbuild.md）
 
 # 4. 构建 zAPI
-cd zAPI/Src
+cd zAPI/src
 lazbuild z_api_hub.lpi
 ```
 
