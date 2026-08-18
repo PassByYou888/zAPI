@@ -226,17 +226,10 @@ uses
   Z.ListEngine, Z.HashList.Templet, Z.Expression, Z.OpCode, Z.Parsing, Z.DFE, Z.TextDataEngine,
   Z.Json, Z.Geometry2D, Z.Geometry3D, Z.Number,
   Z.MemoryStream,
-  Z.Net,
   Z.ZDB.ObjectData_LIB, Z.ZDB, Z.ZDB.Engine, Z.ZDB.LocalManager,
   Z.ZDB.FileIndexPackage_LIB, Z.ZDB.FilePackage_LIB, Z.ZDB.ItemStream_LIB, Z.ZDB.HashField_LIB, Z.ZDB.HashItem_LIB,
-  Z.ZDB2, Z.ZDB2.DFE, Z.ZDB2.HS, Z.ZDB2.HV, Z.ZDB2.Json, Z.ZDB2.MS64, Z.ZDB2.NM, Z.ZDB2.TE, Z.ZDB2.FileEncoder,
-  Z.Net.C4, Z.Net.C4_UserDB, Z.Net.C4_Var, Z.Net.C4_FS, Z.Net.C4_RandSeed, Z.Net.C4_Log_DB, Z.Net.C4_XNAT, Z.Net.C4_Alias,
-  Z.Net.C4_FS2,
-  Z.Net.C4_NetDisk_Admin_Tool,
-  Z.Net.C4_TEKeyValue,
-  Z.Net.PhysicsIO, Z.Net.C4_NetDisk_Client, Z.Net.C4_NetDisk_Directory,
-  Z.Net.C4_FS3,
-  Z.Net.C4_NetDisk_Service;
+  Z.ZDB2, Z.ZDB2.FileEncoder,
+  Z.Net, Z.Net.C4, Z.Net.PhysicsIO;
 
 var
   { Array of command-line parameters extracted from the system command line. }
