@@ -1,0 +1,58 @@
+object Form1: TForm1
+  Left = 0
+  Top = 0
+  Caption = 'Form1'
+  ClientHeight = 412
+  ClientWidth = 580
+  FormFactor.Width = 320
+  FormFactor.Height = 480
+  FormFactor.Devices = [Desktop]
+  OnDestroy = Button3Click
+  DesignerMasterStyle = 0
+  object Button1: TButton
+    Position.X = 8.000000000000000000
+    Position.Y = 8.000000000000000000
+    Size.Width = 265.000000000000000000
+    Size.Height = 22.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 3
+    Text = #36830#25509#21040#26381#21153#65288#32431#28040#36153#31471#65292#19981#26292#38706' API'#65289
+    OnClick = Button1Click
+  end
+  object Button2: TButton
+    Enabled = False
+    Position.X = 8.000000000000000000
+    Position.Y = 38.000000000000000000
+    Size.Width = 145.000000000000000000
+    Size.Height = 22.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 2
+    Text = #35775#38382#20855#20307#26381#21153
+    OnClick = Button2Click
+  end
+  object Memo1: TMemo
+    Touch.InteractiveGestures = [Pan, LongTap, DoubleTap]
+    DataDetectorTypes = []
+    Align = Bottom
+    Anchors = [akLeft, akTop, akRight, akBottom]
+    Position.Y = 68.000000000000000000
+    Size.Width = 580.000000000000000000
+    Size.Height = 344.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 4
+    Viewport.Width = 576.000000000000000000
+    Viewport.Height = 340.000000000000000000
+  end
+  object Button3: TButton
+    Anchors = [akTop, akRight]
+    Enabled = False
+    Position.X = 427.000000000000000000
+    Position.Y = 8.000000000000000000
+    Size.Width = 145.000000000000000000
+    Size.Height = 22.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 1
+    Text = #20851#38381#23458#25143#31471
+    OnClick = Button3Click
+  end
+end
