@@ -368,7 +368,8 @@ end;
   - Marks the system as active and creates a new dispatcher thread. }
 procedure Open_Core_Dispatch_Thread();
 begin
-  Close_Core_Dispatch_Thread();
+  if Core_Dispatch_Order_Activted__ then
+      exit;
 
   Core_Dispatch_Order_Activted__ := True;
   Core_Dispatch_Order_IsExit__ := False;
@@ -434,7 +435,7 @@ begin
         begin
           TCompute.Sleep(100);
           if GetTimeTick > tk then
-            Break;
+              Break;
         end;
 
       tk := GetTimeTick + 1000;
@@ -442,7 +443,7 @@ begin
         begin
           Check_Soft_Thread_Synchronize(100);
           if GetTimeTick > tk then
-            Break;
+              Break;
         end;
     end;
 
