@@ -199,7 +199,7 @@ php client.php
 
 If you need to build the zAPI dynamic library from source (e.g., for special platforms or custom builds), please refer to the complete build guide:
 
-> 📖 **[《CONTRIBUTING.md》—— zAPI Build Guide](./Src/CONTRIBUTING.md)**
+> 📖 **[《CONTRIBUTING.md》—— zAPI Build Guide](./src/CONTRIBUTING.md)**
 
 The guide covers:
 
@@ -213,7 +213,7 @@ The guide covers:
 
 ```bash
 git clone --recursive https://github.com/PassByYou888/zAPI.git
-cd zAPI/Src
+cd zAPI/src
 lazbuild z_api_hub.lpi
 ```
 
@@ -272,7 +272,7 @@ zAPI/
 ├── Binary/                # Dynamic libraries & executables
 │   ├── z_api_hub64.dll    # Core dynamic library
 │   └── z_ipc_64.dll       # IPC support library
-├── Src/                   # ⭐ Core source code & build scripts
+├── src/                   # ⭐ Core source code & build scripts
 │   ├── z_api_hub.lpi      # Main project file (build the dynamic library)
 │   ├── CONTRIBUTING.md    # Complete build guide
 │   └── ...
@@ -426,7 +426,7 @@ We welcome all forms of contribution:
 - 🔧 Submit Pull Requests
 - 🌍 Write bindings for more languages
 
-> **Build Guide**: If you need to build the zAPI dynamic library from source, please refer to [CONTRIBUTING.md](./Src/CONTRIBUTING.md).
+> **Build Guide**: If you need to build the zAPI dynamic library from source, please refer to [CONTRIBUTING.md](./src/CONTRIBUTING.md).
 
 ---
 
