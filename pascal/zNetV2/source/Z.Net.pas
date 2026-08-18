@@ -1878,12 +1878,17 @@ type
   TPeerIO = class(TCore_InterfacedObject_Intermediate)
   private
     FOwnerFramework: TZNet; { Parent framework. Set by constructor. }
+
     FIOInterface: TCore_Object; { External interface object. Set by constructor. }
+
     FDisable_Progress: Boolean; { disable progress }
+
     FID: Cardinal; { Unique IO identifier. Assigned by OwnerFramework. }
     FIO_Create_TimeTick: TTimeTick; { Creation timestamp. Set by constructor. }
+
     FHeadToken: Cardinal; { Protocol head token. Set by constructor. }
     FTailToken: Cardinal; { Protocol tail token. Set by constructor. }
+
     FConsoleToken: Byte; { Console command token. Set by constructor. }
     FStreamToken: Byte; { Stream command token. Set by constructor. }
     FConsoleNotifyToken: Byte; { Direct console token. Set by constructor. }
@@ -1892,22 +1897,26 @@ type
     FBigStreamReceiveFragmentSignal: Byte; { Fragment signal token. Set by constructor. }
     FBigStreamReceiveDoneSignal: Byte; { Done signal token. Set by constructor. }
     FCompleteBufferToken: Byte; { Complete-buffer token. Set by constructor. }
+
     FReceived_Physics_Critical: TCritical; { Lock for fragment pool. Created by constructor. }
     FReceived_Physics_Fragment_Pool: TPhysics_Fragment_Pool; { Incoming fragment pool. Created by constructor. }
     FLast_Process_Receive_Buffer_CPU_Is_Full: Boolean; { Whether last receive loop hit limit. Set by Internal_Process_Receive_Buffer. }
     FReceivedAbort: Boolean; { Abort flag. Set by Internal_Process_Receive_Buffer. }
     FReceivedBuffer: TMS64; { Primary receive buffer. Created by constructor. }
     FReceivedBuffer_Busy: TMS64; { Secondary buffer for busy state. Created by constructor. }
+
     FBigStreamReceiveProcessing: Boolean; { Whether a big-stream is being received. Set by protocol parser. }
     FBigStreamTotal: Int64; { Total size of receiving big-stream. Set by protocol parser. }
     FBigStreamCompleted: Int64; { Bytes completed for receiving big-stream. Set by protocol parser. }
     FBigStream_Current_Received: Int64; { Current received bytes. Set by protocol parser. }
+    FBigStreamFragmentSignal_SendedState: Boolean; { True if the "request next fragment" signal has already been sent for the current fragment, preventing duplicate requests while waiting for remaining data. }
     FBigStreamCmd: SystemString; { Command name of receiving big-stream. Set by protocol parser. }
     FSyncBigStreamReceive: TCore_Stream; { Stream being received synchronously. Set by protocol parser. }
     FBigStreamSending: TCore_Stream; { Stream currently being sent. Set by Internal_Send_BigStream_Cmd. }
     FBigStreamSendCurrentPos: Int64; { Current send position. Set by Internal_Send_BigStream_Cmd. }
     FBigStreamSendDoneTimeFree: Boolean; { Whether to free stream after send. Set by Internal_Send_BigStream_Cmd. }
     FWaitBigStreamReceiveDoneSignal: Boolean; { Waiting for done signal. Set by Internal_Send_BigStream_Cmd. }
+
     FCompleteBufferReceiveProcessing: Boolean; { Whether a complete-buffer is being received. Set by protocol parser. }
     FCompleteBufferTotal: Cardinal; { Total size of receiving buffer. Set by protocol parser. }
     FCompleteBufferCompressedSize: Cardinal; { Compressed size (0 if not compressed). Set by protocol parser. }
@@ -1915,6 +1924,7 @@ type
     FCompleteBufferCmd: SystemString; { Command name. Set by protocol parser. }
     FCompleteBufferReceivedStream: TMS64; { Stream being assembled. Created by constructor. }
     FCompleteBuffer_Current_Trigger: TMS64; { Current trigger buffer. Set by Internal_Execute_CompleteBuffer. }
+
     FCurrentQueueData: PQueueData; { Currently processed queue item. Set by Internal_Process_Send_Buffer. }
     FWaitOnResult: Boolean; { Waiting for a result. Set by Internal_Process_Send_Buffer. }
     FCurrentPauseResultSend_CommDataType: Byte; { Data type of paused result. Set by ExecuteDataFrame. }
@@ -1950,15 +1960,15 @@ type
     FLast_IO_Is_IDLE: Boolean; { Last idle state. Set by IOBusy. }
     FLast_IO_IDLE_Time: TTimeTick; { Last idle timestamp. Set by IOBusy. }
   public
-    function Connected: Boolean; virtual; { Basic IO operations. }
-    procedure Disconnect; virtual;
-    procedure Write_IO_Buffer(const buff: PByte; const Size: NativeInt); virtual;
-    procedure WriteBufferOpen; virtual;
-    procedure WriteBufferFlush; virtual;
-    procedure WriteBufferClose; virtual;
-    function GetPeerIP: SystemString; virtual;
-    function WriteBuffer_is_NULL: Boolean; virtual;
-    function WriteBuffer_State(var WriteBuffer_Queue_Num, WriteBuffer_Size: Int64): Boolean; virtual;
+    function Connected: Boolean; virtual; // Returns True if the connection is established and active.
+    procedure Disconnect; virtual; // Closes the connection and releases associated resources.
+    procedure Write_IO_Buffer(const buff: PByte; const Size: NativeInt); virtual; // Writes raw data to the underlying transport; must be thread-safe.
+    procedure WriteBufferOpen; virtual; // Called before a batch of writes; starts a write transaction.
+    procedure WriteBufferFlush; virtual; // Flushes any buffered writes to the transport.
+    procedure WriteBufferClose; virtual; // Called after a batch of writes; ends the write transaction.
+    function GetPeerIP: SystemString; virtual; // Returns the remote peer's IP address as a string, or 'offline' if not connected.
+    function WriteBuffer_is_NULL: Boolean; virtual; // Returns True if the write buffer is empty and no data is pending for transmission.
+    function WriteBuffer_State(var WriteBuffer_Queue_Num, WriteBuffer_Size: Int64): Boolean; virtual; // Returns buffer state (queue count and total size); True if pending writes exist.
   protected
     { Sequence Packet Model }
     FSequencePacketActivted, FSequencePacketSignal: Boolean;
@@ -1971,27 +1981,27 @@ type
     FSequencePacketLimitPhysicsMemory: Int64;
     SequencePacketCloseDone: Boolean;
     SequencePacketVerifyTick: TTimeTick;
-    procedure InitSequencePacketModel(const hashSize, MemoryDelta: Integer);
-    procedure FreeSequencePacketModel;
-    procedure ResetSequencePacketBuffer;
-    procedure ProcessSequencePacketModel;
-    function GetSequencePacketState: SystemString;
-    function GetSequencePacketUsagePhysicsMemory: Int64;
-    function ComputeSequencePacketHash(const p: PByte; const Count: nativeUInt): TMD5;
-    function IsSequencePacketModel: Boolean;
-    procedure FlushIOSendBuffer;
-    procedure SendSequencePacketBegin;
-    procedure SendSequencePacket(const buff: PByte; siz: NativeInt);
-    procedure SendSequencePacketEnd;
-    procedure SendSequencePacketKeepAlive(p: Pointer; siz: Word);
-    procedure DoSequencePacketEchoKeepAlive(p: Pointer; siz: Word); virtual;
-    procedure WriteSequencePacket(p: PSequencePacket);
-    procedure ResendSequencePacket(SequenceNumber: Cardinal);
-    function FillSequencePacketTo(const buff: Pointer; siz: Int64; ExtractDest: TMS64): Boolean;
-    procedure Send_Free_OnPtr(var Sequence_ID_: Cardinal; var p: PSequencePacket);
-    procedure Send_Add_OnPtr(var Sequence_ID_: Cardinal; var p: PSequencePacket);
-    procedure Received_Free_OnPtr(var Sequence_ID_: Cardinal; var p: PSequencePacket);
-    procedure Received_Add_OnPtr(var Sequence_ID_: Cardinal; var p: PSequencePacket);
+    procedure InitSequencePacketModel(const hashSize, MemoryDelta: Integer); // Initialises the reliable sequence-packet engine with hash pool and buffers.
+    procedure FreeSequencePacketModel; // Releases all sequence-packet resources and clears history pools.
+    procedure ResetSequencePacketBuffer; // Clears all sequence-packet send/receive buffers without freeing the model.
+    procedure ProcessSequencePacketModel; // Drives sequence-packet retransmission and acknowledgment processing.
+    function GetSequencePacketState: SystemString; // Returns a string describing current sequence-packet stats (history, pool, memory).
+    function GetSequencePacketUsagePhysicsMemory: Int64; // Returns total memory used by all sequence-packet buffers.
+    function ComputeSequencePacketHash(const p: PByte; const Count: nativeUInt): TMD5; // Calculates MD5 hash for a packet payload.
+    function IsSequencePacketModel: Boolean; // Returns True if sequence-packet mode is active and protocol is ZServer.
+    procedure FlushIOSendBuffer; // Sends all accumulated data in the internal IO send buffer.
+    procedure SendSequencePacketBegin; // Starts a new sequence-packet assembly session.
+    procedure SendSequencePacket(const buff: PByte; siz: NativeInt); // Appends data to the current sequence-packet assembly.
+    procedure SendSequencePacketEnd; // Finalises and sends the assembled sequence packets (fragments if needed).
+    procedure SendSequencePacketKeepAlive(p: Pointer; siz: Word); // Sends a keep-alive packet with optional user data.
+    procedure DoSequencePacketEchoKeepAlive(p: Pointer; siz: Word); virtual; // Called when a keep-alive echo is received; override for custom handling.
+    procedure WriteSequencePacket(p: PSequencePacket); // Writes a single sequence packet (header + data) to the send buffer.
+    procedure ResendSequencePacket(SequenceNumber: Cardinal); // Forces retransmission of a specific packet by sequence number.
+    function FillSequencePacketTo(const buff: Pointer; siz: Int64; ExtractDest: TMS64): Boolean; // Processes raw incoming data through sequence‑packet reassembly.
+    procedure Send_Free_OnPtr(var Sequence_ID_: Cardinal; var p: PSequencePacket); // Callback to free a sending-history packet when acknowledged.
+    procedure Send_Add_OnPtr(var Sequence_ID_: Cardinal; var p: PSequencePacket); // Callback to track a newly added sending-history packet.
+    procedure Received_Free_OnPtr(var Sequence_ID_: Cardinal; var p: PSequencePacket); // Callback to free a received-pool packet when delivered.
+    procedure Received_Add_OnPtr(var Sequence_ID_: Cardinal; var p: PSequencePacket); // Callback to track a newly added received-pool packet.
   protected
     { P2P Virtual Machine (P2PVM) support }
     FP2PVMTunnel: TZNet_P2PVM; { P2PVM tunnel instance. Created by OpenP2PVMTunnel. }
@@ -2036,53 +2046,53 @@ type
     function GetUserAutoFreeObjects: THashObjectList;
   protected
     BeginSendState: Boolean; { Send state guard. Set by BeginSend/EndSend. }
-    procedure BeginSend;
-    procedure Send(const buff: PByte; siz: NativeInt);
-    procedure EndSend;
-    procedure SendInteger(v: Integer);
-    procedure SendCardinal(v: Cardinal);
-    procedure SendInt64(v: Int64);
-    procedure SendByte(v: Byte);
-    procedure SendWord(v: Word);
-    procedure SendVerifyCode(buff: Pointer; siz: NativeInt);
-    procedure SendEncryptBuffer(buff: PByte; siz: NativeInt; CS: TCipherSecurity);
-    procedure SendEncryptMemoryStream(Stream: TMS64; CS: TCipherSecurity);
-    procedure Internal_Send_Console_Buff(buff: TMS64; CS: TCipherSecurity);
-    procedure Internal_Send_Stream_Buff(buff: TMS64; CS: TCipherSecurity);
-    procedure Internal_Send_ConsoleNotify_Buff(buff: TMS64; CS: TCipherSecurity);
-    procedure Internal_Send_StreamNotify_Buff(buff: TMS64; CS: TCipherSecurity);
-    procedure Internal_Send_Big_Stream_Header(const Cmd: SystemString; streamSiz: Int64);
-    procedure Internal_Send_BigStream_Buff(var Queue: TQueueData);
-    procedure Internal_Send_Complete_Buffer_Header(const Cmd: SystemString; BuffSiz, compSiz: Cardinal);
-    procedure Internal_Send_CompleteBuffer_Buff(var Queue: TQueueData);
-    procedure Internal_Send_BigStream_Fragment_Signal;
-    procedure Internal_Send_BigStream_Done_Signal;
-    procedure SendBigStreamMiniPacket(buff: PByte; Size: NativeInt);
-    procedure Internal_Send_Result_Data;
-    procedure Internal_Send_Console_Cmd;
-    procedure Internal_Send_Stream_Cmd;
-    procedure Internal_Send_ConsoleNotify_Cmd;
-    procedure Internal_Send_StreamNotify_Cmd;
-    procedure Internal_Send_BigStream_Cmd;
-    procedure Internal_Send_CompleteBuffer_Cmd;
-    procedure Internal_Execute_Console;
-    procedure Internal_Execute_Stream;
-    procedure Internal_Execute_ConsoleNotify;
-    procedure Internal_Execute_StreamNotify;
-    procedure SendConsoleResult;
-    procedure SendStreamResult;
-    procedure ExecuteDataFrame(CommDataType: Byte; DFE_: TDFE);
-    procedure Internal_Execute_BigStream;
-    function ReceivedBigStreamFragment(Source_: TMS64): Int64;
-    procedure Internal_Execute_CompleteBuffer;
-    function FillCompleteBufferBuffer(Source_: TMS64): Int64;
-    procedure Internal_ExecuteResult;
-    function FillWaitOnResultBuffer(Source_: TMS64): Int64;
-    procedure Internal_Save_Receive_Buffer(const buff: Pointer; siz: Int64);
-    function Internal_Process_Receive_Buffer(): Integer;
-    procedure Internal_Process_Send_Buffer();
-    procedure CheckAndTriggerFailedWaitResult;
-    procedure Internal_Close_P2PVMTunnel;
+    procedure BeginSend; // Begins a new send sequence; call before sending raw data.
+    procedure Send(const buff: PByte; siz: NativeInt); // Appends raw binary data to the current send buffer.
+    procedure EndSend; // Flushes the send buffer and transmits all queued data.
+    procedure SendInteger(v: Integer); // Sends a 32‑bit signed integer.
+    procedure SendCardinal(v: Cardinal); // Sends a 32‑bit unsigned integer.
+    procedure SendInt64(v: Int64); // Sends a 64‑bit signed integer.
+    procedure SendByte(v: Byte); // Sends a single unsigned byte.
+    procedure SendWord(v: Word); // Sends a 16‑bit unsigned word.
+    procedure SendVerifyCode(buff: Pointer; siz: NativeInt); // Sends a hash/checksum of the buffer for integrity verification.
+    procedure SendEncryptBuffer(buff: PByte; siz: NativeInt; CS: TCipherSecurity); // Encrypts and sends the buffer using the specified cipher.
+    procedure SendEncryptMemoryStream(Stream: TMS64; CS: TCipherSecurity); // Encrypts and sends the entire TMS64 stream.
+    procedure Internal_Send_Console_Buff(buff: TMS64; CS: TCipherSecurity); // Sends a complete console‑command packet (header + encrypted payload).
+    procedure Internal_Send_Stream_Buff(buff: TMS64; CS: TCipherSecurity); // Sends a complete stream‑command packet.
+    procedure Internal_Send_ConsoleNotify_Buff(buff: TMS64; CS: TCipherSecurity); // Sends a fire‑and‑forget console notification packet.
+    procedure Internal_Send_StreamNotify_Buff(buff: TMS64; CS: TCipherSecurity); // Sends a fire‑and‑forget stream notification packet.
+    procedure Internal_Send_Big_Stream_Header(const Cmd: SystemString; streamSiz: Int64); // Sends the header for a big‑stream transfer.
+    procedure Internal_Send_BigStream_Buff(var Queue: TQueueData); // Sends big‑stream data in chunks, with flow‑control signalling.
+    procedure Internal_Send_Complete_Buffer_Header(const Cmd: SystemString; BuffSiz, compSiz: Cardinal); // Sends the header for a complete‑buffer command.
+    procedure Internal_Send_CompleteBuffer_Buff(var Queue: TQueueData); // Sends the complete‑buffer payload, optionally compressed.
+    procedure Internal_Send_BigStream_Fragment_Signal; // Sends a signal to request the next big‑stream fragment.
+    procedure Internal_Send_BigStream_Done_Signal; // Sends a signal indicating the big‑stream transfer is complete.
+    procedure SendBigStreamMiniPacket(buff: PByte; Size: NativeInt); // Sends a single fragment of a big‑stream, with compression header.
+    procedure Internal_Send_Result_Data; // Flushes the pending result buffer (response after a pause).
+    procedure Internal_Send_Console_Cmd; // Serialises and sends a console command from the queue.
+    procedure Internal_Send_Stream_Cmd; // Serialises and sends a stream command from the queue.
+    procedure Internal_Send_ConsoleNotify_Cmd; // Sends a console notification command (no reply expected).
+    procedure Internal_Send_StreamNotify_Cmd; // Sends a stream notification command (no reply expected).
+    procedure Internal_Send_BigStream_Cmd; // Sends a big‑stream command from the queue.
+    procedure Internal_Send_CompleteBuffer_Cmd; // Sends a complete‑buffer command from the queue.
+    procedure Internal_Execute_Console; // Executes a console command and populates the result string.
+    procedure Internal_Execute_Stream; // Executes a stream command and populates the result DFE.
+    procedure Internal_Execute_ConsoleNotify; // Executes a console notification (no result sent).
+    procedure Internal_Execute_StreamNotify; // Executes a stream notification (no result sent).
+    procedure SendConsoleResult; // Sends the result of a console command back to the caller.
+    procedure SendStreamResult; // Sends the result of a stream command back to the caller.
+    procedure ExecuteDataFrame(CommDataType: Byte; DFE_: TDFE); // Dispatches a parsed DFE command to the appropriate handler.
+    procedure Internal_Execute_BigStream; // Executes a big‑stream command and triggers progress callbacks.
+    function ReceivedBigStreamFragment(Source_: TMS64): Int64; // Processes an incoming big‑stream fragment; returns bytes consumed.
+    procedure Internal_Execute_CompleteBuffer; // Executes a complete‑buffer command (sync or async).
+    function FillCompleteBufferBuffer(Source_: TMS64): Int64; // Reassembles a complete‑buffer from fragments; returns bytes consumed.
+    procedure Internal_ExecuteResult; // Triggers the result callback for a pending request.
+    function FillWaitOnResultBuffer(Source_: TMS64): Int64; // Parses an incoming response packet and delivers the result.
+    procedure Internal_Save_Receive_Buffer(const buff: Pointer; siz: Int64); // Appends raw received data to the receive buffer.
+    function Internal_Process_Receive_Buffer(): Integer; // Parses all complete packets from the receive buffer.
+    procedure Internal_Process_Send_Buffer(); // Drains the send queue and sends queued commands.
+    procedure CheckAndTriggerFailedWaitResult; // Notifies failure for a pending request and cleans up.
+    procedure Internal_Close_P2PVMTunnel; // Closes and frees the P2P virtual machine tunnel.
   public
     constructor Create(OwnerFramework_: TZNet; IOInterface_: TCore_Object);
     procedure CreateAfter; virtual;
@@ -10159,62 +10169,77 @@ var
   buff, destBuff: TMS64;
   leftSize: Int64;
 begin
-  Result := -1;
+  Result := -1; // Default return: incomplete fragment
   if (Source_.Size - Source_.Position < SizeOf(head)) then
-      exit;
-  Source_.ReadPtr(@head, SizeOf(head));
+      exit; // Not enough data to read fragment header
+  Source_.ReadPtr(@head, SizeOf(head)); // Read fragment header (size + compression flag)
 
   if (Source_.Size - Source_.Position < head.Size) then
     begin
-      FBigStream_Current_Received := FBigStreamCompleted + (Source_.Size - Source_.Position);
+      FBigStream_Current_Received := FBigStreamCompleted + (Source_.Size - Source_.Position); // Partial fragment received, update progress
+
+      if (not head.Compressed) and (FBigStreamCompleted + head.Size < FBigStreamTotal) then
+        if (Source_.Size - Source_.Position > head.Size div 2) then
+          if not FBigStreamFragmentSignal_SendedState then
+            begin
+              Internal_Send_BigStream_Fragment_Signal; // Request next fragment from sender
+              FBigStreamFragmentSignal_SendedState := True;
+            end;
       exit;
     end;
 
-  np := Source_.Position + head.Size;
+  np := Source_.Position + head.Size; // Calculate new position after consuming this fragment
   { change stripped state }
-  Result := np;
+  Result := np; // Return bytes consumed from input buffer
 
-  buff := TMS64.Create;
-  buff.Mapping(Source_.PositionAsPtr, head.Size);
+  buff := TMS64.Create; // Create temporary stream to hold fragment payload
+  buff.Mapping(Source_.PositionAsPtr, head.Size); // Zero-copy map fragment data
   buff.Position := 0;
 
-  if head.Compressed then
+  if head.Compressed then // If fragment was compressed on sender side
     begin
-      destBuff := TMS64.CustomCreate(8192);
-      ParallelDecompressStream(buff, destBuff);
-      DisposeObject(buff);
-      buff := destBuff;
+      destBuff := TMS64.CustomCreate(8192); // Target buffer for decompressed data
+      ParallelDecompressStream(buff, destBuff); // Decompress using parallel engine
+      DisposeObject(buff); // Free compressed buffer
+      buff := destBuff; // Switch to decompressed data
       buff.Position := 0;
     end;
 
-  leftSize := FBigStreamTotal - FBigStreamCompleted;
-  if leftSize > buff.Size then
+  leftSize := FBigStreamTotal - FBigStreamCompleted; // Remaining bytes to complete the full stream
+
+  if leftSize > buff.Size then // Fragment does not complete the stream
     begin
       { fragment }
-      Internal_Send_BigStream_Fragment_Signal;
+      if not FBigStreamFragmentSignal_SendedState then
+        begin
+          Internal_Send_BigStream_Fragment_Signal; // Request next fragment from sender
+          FBigStreamFragmentSignal_SendedState := True;
+        end;
 
-      FBigStreamCompleted := FBigStreamCompleted + buff.Size;
-      FBigStream_Current_Received := FBigStreamCompleted;
-      FSyncBigStreamReceive := buff;
+      FBigStreamCompleted := FBigStreamCompleted + buff.Size; // Accumulate received bytes
+      FBigStream_Current_Received := FBigStreamCompleted; // Update progress
+      FSyncBigStreamReceive := buff; // Pass buffer to execution handler
 
-      Internal_Execute_BigStream();
+      Internal_Execute_BigStream(); // Invoke user callback with current progress
+      FBigStreamFragmentSignal_SendedState := False;
     end
-  else
+  else // This fragment completes the entire stream
     begin
       { done }
-      FBigStreamCompleted := FBigStreamTotal;
+      FBigStreamCompleted := FBigStreamTotal; // Mark as fully received
       FBigStream_Current_Received := FBigStreamCompleted;
-      FSyncBigStreamReceive := buff;
-      Internal_Execute_BigStream();
-      FBigStreamTotal := 0;
+      FSyncBigStreamReceive := buff; // Pass final buffer
+      Internal_Execute_BigStream(); // Call user callback for completion
+      FBigStreamTotal := 0; // Reset stream state
       FBigStreamCompleted := 0;
       FBigStream_Current_Received := 0;
+      FBigStreamFragmentSignal_SendedState := False;
       FBigStreamCmd := '';
-      FBigStreamReceiveProcessing := False;
+      FBigStreamReceiveProcessing := False; // No longer receiving a big stream
     end;
 
-  FSyncBigStreamReceive := nil;
-  DisposeObject(buff);
+  FSyncBigStreamReceive := nil; // Clear reference to avoid double-free
+  DisposeObject(buff); // Free the fragment buffer (now consumed)
 end;
 
 procedure TPeerIO.Internal_Execute_CompleteBuffer;
@@ -10511,7 +10536,7 @@ begin
     begin
       DelayClose;
       exit;
-    end;
+    end; // Abort flag set: close connection and exit.
   if FAllSendProcessing or
     FReceiveProcessing or
     FPause_Result_Send or
@@ -10519,9 +10544,9 @@ begin
     FReceiveTriggerRuning then
     begin
       exit;
-    end;
+    end; // Prevent re‑entry while other operations are in progress.
 
-  FReceiveProcessing := True;
+  FReceiveProcessing := True; // Mark receive processing as active.
 
   BreakAndDisconnect := False;
   Mapped_Received_Buffer := TMS64.Create;
@@ -10534,15 +10559,14 @@ begin
           FReceivedBuffer.WritePtr(FReceivedBuffer_Busy.Memory, FReceivedBuffer_Busy.Size);
           FReceivedBuffer_Busy.Clear;
         end;
-    end;
+    end; // Merge busy buffer into main receive buffer.
   Mapped_Position := 0;
-  Mapped_Received_Buffer.Mapping(FReceivedBuffer.PositionAsPtr(Mapped_Position), FReceivedBuffer.Size - Mapped_Position);
+  Mapped_Received_Buffer.Mapping(FReceivedBuffer.PositionAsPtr(Mapped_Position), FReceivedBuffer.Size - Mapped_Position); // Zero‑copy map of current receive buffer.
 
   try
-    while ((OwnerFramework.FPer_Progress_Loop_Limit <= 0) or (Result < OwnerFramework.FPer_Progress_Loop_Limit))
-      and (Mapped_Received_Buffer.Size > 0) and Connected do
+    while ((OwnerFramework.FPer_Progress_Loop_Limit <= 0) or (Result < OwnerFramework.FPer_Progress_Loop_Limit)) and (Mapped_Received_Buffer.Size > 0) and Connected do
       begin
-        inc(Result);
+        inc(Result); // Count commands processed in this cycle.
 
         Mapped_Received_Buffer.Position := 0;
 
@@ -10559,7 +10583,7 @@ begin
               end
             else
                 Break;
-          end;
+          end; // Handle pending result response first.
 
         if FBigStreamReceiveProcessing then
           begin
@@ -10574,7 +10598,7 @@ begin
               end
             else
                 Break;
-          end;
+          end; // Process big‑stream fragments if active.
 
         if FCompleteBufferReceiveProcessing then
           begin
@@ -10589,19 +10613,19 @@ begin
               end
             else
                 Break;
-          end;
+          end; // Assemble complete‑buffer if active.
 
         { 0: head token }
         if (Mapped_Received_Buffer.Size - Mapped_Received_Buffer.Position < C_Cardinal_Size + C_Byte_Size) then
-            Break;
+            Break; // Not enough data for header.
         Mapped_Received_Buffer.read(dHead, C_Cardinal_Size);
         if dHead <> FHeadToken then
           begin
             BreakAndDisconnect := True;
             Break;
-          end;
+          end; // Invalid header: disconnect.
         { 1: data type }
-        Mapped_Received_Buffer.read(dID, C_Byte_Size);
+        Mapped_Received_Buffer.read(dID, C_Byte_Size); // Read command type token.
 
         { done signal }
         if dID = FBigStreamReceiveDoneSignal then
@@ -10613,14 +10637,14 @@ begin
                 PrintError('tail error!');
                 BreakAndDisconnect := True;
                 Break;
-              end;
+              end; // Verify tail token.
 
             { stripped stream }
             inc(Mapped_Position, Mapped_Received_Buffer.Position);
             Mapped_Received_Buffer.Mapping(FReceivedBuffer.PositionAsPtr(Mapped_Position), FReceivedBuffer.Size - Mapped_Position);
 
             { done }
-            FWaitBigStreamReceiveDoneSignal := False;
+            FWaitBigStreamReceiveDoneSignal := False; // Big‑stream send done flag cleared.
           end
         else if dID = FBigStreamReceiveFragmentSignal then
           begin
@@ -10631,14 +10655,14 @@ begin
                 PrintError('tail error!');
                 BreakAndDisconnect := True;
                 Break;
-              end;
+              end; // Verify tail.
 
             { stripped stream }
             inc(Mapped_Position, Mapped_Received_Buffer.Position);
             Mapped_Received_Buffer.Mapping(FReceivedBuffer.PositionAsPtr(Mapped_Position), FReceivedBuffer.Size - Mapped_Position);
 
             { save }
-            if (FBigStreamSending <> nil) then
+            if (FBigStreamSending <> nil) then // If we are actively sending a big‑stream, send next chunk.
               begin
                 BigStream_RealChunkSize := ZNet_Def_BigStream_ChunkSize;
 
@@ -10657,7 +10681,7 @@ begin
                   PrintError('BigStream IO read error!');
                   BreakAndDisconnect := True;
                   Break;
-                end;
+                end; // Read next chunk from source stream.
 
                 try
                   SendBigStreamMiniPacket(BigStream_Chunk, BigStream_RealChunkSize);
@@ -10667,7 +10691,7 @@ begin
                   PrintError('BigStream send error!');
                   BreakAndDisconnect := True;
                   Break;
-                end;
+                end; // Send the chunk and advance position.
 
                 if BigStream_SendDone then
                   begin
@@ -10679,12 +10703,12 @@ begin
                     FBigStreamSending := nil;
                     FBigStreamSendCurrentPos := -1;
                     FBigStreamSendDoneTimeFree := False;
-                  end
+                  end // Transfer complete: cleanup.
                 else
                   begin
                     if Assigned(OwnerFramework.FOnBigStreamInterface) then
                         OwnerFramework.FOnBigStreamInterface.Process(self, FBigStreamSending.Size, FBigStreamSendCurrentPos);
-                  end;
+                  end; // Notify progress.
               end;
           end
         else if FWaitBigStreamReceiveDoneSignal then
@@ -10692,25 +10716,25 @@ begin
             PrintError('BigStream error: FWaitBigStreamReceiveDoneSignal is True');
             BreakAndDisconnect := True;
             Break;
-          end
-        else if dID = FBigStreamToken then
+          end // Unexpected state: disconnect.
+        else if dID = FBigStreamToken then // New big‑stream header received.
           begin
             { 2:stream size }
             if (Mapped_Received_Buffer.Size - Mapped_Received_Buffer.Position < C_Int64_Size) then
                 Break;
-            Mapped_Received_Buffer.read(Total, C_Int64_Size);
+            Mapped_Received_Buffer.read(Total, C_Int64_Size); // Total stream size.
 
             { 3:command len }
             if (Mapped_Received_Buffer.Size - Mapped_Received_Buffer.Position < C_Cardinal_Size) then
                 Break;
-            Mapped_Received_Buffer.read(dSize, C_Cardinal_Size);
+            Mapped_Received_Buffer.read(dSize, C_Cardinal_Size); // Command name length.
 
             { 4:command and tial token }
             if (Mapped_Received_Buffer.Size - Mapped_Received_Buffer.Position < dSize + C_Cardinal_Size) then
                 Break;
             SetLength(buff, dSize);
             if dSize > 0 then
-                Mapped_Received_Buffer.read(buff[0], dSize);
+                Mapped_Received_Buffer.read(buff[0], dSize); // Read command name.
 
             { 5: process tail token }
             Mapped_Received_Buffer.read(dTail, C_Cardinal_Size);
@@ -10719,13 +10743,14 @@ begin
                 PrintError('tail error!');
                 BreakAndDisconnect := True;
                 Break;
-              end;
+              end; // Verify tail.
 
             FBigStreamTotal := Total;
             FBigStreamCompleted := 0;
             FBigStream_Current_Received := 0;
+            FBigStreamFragmentSignal_SendedState := False;
             FBigStreamCmd := umlStringOf(buff).Text;
-            FBigStreamReceiveProcessing := True;
+            FBigStreamReceiveProcessing := True; // Start receiving big‑stream.
             SetLength(buff, 0);
 
             { stripped stream }
@@ -10738,21 +10763,21 @@ begin
 
             AtomInc(OwnerFramework.Statistics[TStatisticsType.stReceiveBigStream]);
           end
-        else if dID = FCompleteBufferToken then
+        else if dID = FCompleteBufferToken then // Complete‑buffer header.
           begin
             { 2:complete buff size }
             if (Mapped_Received_Buffer.Size - Mapped_Received_Buffer.Position < C_Cardinal_Size * 3) then
                 Break;
-            Mapped_Received_Buffer.read(sourSiz, C_Cardinal_Size);
-            Mapped_Received_Buffer.read(compSiz, C_Cardinal_Size);
-            Mapped_Received_Buffer.read(dSize, C_Cardinal_Size);
+            Mapped_Received_Buffer.read(sourSiz, C_Cardinal_Size); // Original size.
+            Mapped_Received_Buffer.read(compSiz, C_Cardinal_Size); // Compressed size (0 if none).
+            Mapped_Received_Buffer.read(dSize, C_Cardinal_Size); // Command name length.
 
             { 3:command and tial token }
             if (Mapped_Received_Buffer.Size - Mapped_Received_Buffer.Position < dSize + C_Cardinal_Size) then
                 Break;
             SetLength(buff, dSize);
             if Length(buff) > 0 then
-                Mapped_Received_Buffer.read(buff[0], dSize);
+                Mapped_Received_Buffer.read(buff[0], dSize); // Read command name.
 
             { 4: process tail token }
             Mapped_Received_Buffer.read(dTail, C_Cardinal_Size);
@@ -10761,23 +10786,23 @@ begin
                 PrintError('tail error!');
                 BreakAndDisconnect := True;
                 Break;
-              end;
+              end; // Verify tail.
 
             if (OwnerFramework.FMaxCompleteBufferSize > 0) and (sourSiz > OwnerFramework.FMaxCompleteBufferSize) then
               begin
                 PrintError('Oversize of CompleteBuffer cmd: ' + umlStringOf(buff).Text);
                 BreakAndDisconnect := True;
                 Break;
-              end;
+              end; // Security check: reject oversized buffers.
 
             if compSiz > 0 then
                 FCompleteBufferTotal := compSiz
             else
-                FCompleteBufferTotal := sourSiz;
+                FCompleteBufferTotal := sourSiz; // Total data to receive.
             FCompleteBufferCompressedSize := compSiz;
             FCompleteBufferCompleted := 0;
             FCompleteBufferCmd := umlStringOf(buff).Text;
-            FCompleteBufferReceiveProcessing := True;
+            FCompleteBufferReceiveProcessing := True; // Start complete‑buffer assembly.
             FCompleteBufferReceivedStream.Clear;
             FCompleteBufferReceivedStream.Delta := umlMax(FCompleteBufferTotal, 1024 * 64);
             SetLength(buff, 0);
@@ -10788,36 +10813,36 @@ begin
 
             AtomInc(OwnerFramework.Statistics[TStatisticsType.stReceiveCompleteBuffer]);
           end
-        else if dID in [FConsoleToken, FStreamToken, FConsoleNotifyToken, FStreamNotifyToken] then
+        else if dID in [FConsoleToken, FStreamToken, FConsoleNotifyToken, FStreamNotifyToken] then // Regular command.
           begin
             { 2: size }
             if (Mapped_Received_Buffer.Size - Mapped_Received_Buffer.Position < C_Cardinal_Size) then
                 Break;
-            Mapped_Received_Buffer.read(dSize, C_Cardinal_Size);
+            Mapped_Received_Buffer.read(dSize, C_Cardinal_Size); // Payload size.
 
             { 3:verify code header }
             if (Mapped_Received_Buffer.Size - Mapped_Received_Buffer.Position < 3) then
                 Break;
-            Mapped_Received_Buffer.read(dHashSecurity, C_Byte_Size);
-            Mapped_Received_Buffer.read(dHashSiz, C_Word_Size);
+            Mapped_Received_Buffer.read(dHashSecurity, C_Byte_Size); // Hash algorithm.
+            Mapped_Received_Buffer.read(dHashSiz, C_Word_Size); // Hash length.
 
             { 4:verify code body }
             if (Mapped_Received_Buffer.Size - Mapped_Received_Buffer.Position < dHashSiz) then
                 Break;
             SetLength(dHash, dHashSiz);
             if Length(dHash) > 0 then
-                Mapped_Received_Buffer.read(dHash[0], dHashSiz);
+                Mapped_Received_Buffer.read(dHash[0], dHashSiz); // Hash data.
 
             { 5: Encrypt style }
             if (Mapped_Received_Buffer.Size - Mapped_Received_Buffer.Position < C_Byte_Size) then
                 Break;
-            Mapped_Received_Buffer.read(dCipherSecurity, C_Byte_Size);
+            Mapped_Received_Buffer.read(dCipherSecurity, C_Byte_Size); // Cipher used.
 
             { 6: process stream }
             if (Mapped_Received_Buffer.Size - Mapped_Received_Buffer.Position < dSize + C_Cardinal_Size) then
                 Break;
             tmpStream := TMS64.Create;
-            tmpStream.SetPointerWithProtectedMode(Mapped_Received_Buffer.PositionAsPtr, dSize);
+            tmpStream.SetPointerWithProtectedMode(Mapped_Received_Buffer.PositionAsPtr, dSize); // Zero‑copy map payload.
             Mapped_Received_Buffer.Position := Mapped_Received_Buffer.Position + dSize;
 
             { 7: process tail token }
@@ -10827,7 +10852,7 @@ begin
                 PrintError('tail error!');
                 BreakAndDisconnect := True;
                 Break;
-              end;
+              end; // Verify tail.
 
             FReceiveDataCipherSecurity := TCipherSecurity(dCipherSecurity);
 
@@ -10838,7 +10863,7 @@ begin
               DisposeObject(tmpStream);
               BreakAndDisconnect := True;
               Break;
-            end;
+            end; // Decrypt payload.
 
             if not VerifyHashCode(THashSecurity(dHashSecurity), tmpStream.Memory, tmpStream.Size, dHash) then
               begin
@@ -10846,7 +10871,7 @@ begin
                 DisposeObject(tmpStream);
                 BreakAndDisconnect := True;
                 Break;
-              end;
+              end; // Verify integrity.
 
             d := TDFE.Create;
             tmpStream.Position := 0;
@@ -10865,7 +10890,7 @@ begin
               DisposeObject(d);
               BreakAndDisconnect := True;
               Break;
-            end;
+            end; // Deserialise DFE.
             DisposeObject(tmpStream);
 
             { stripped stream }
@@ -10873,7 +10898,7 @@ begin
             Mapped_Received_Buffer.Mapping(FReceivedBuffer.PositionAsPtr(Mapped_Position), FReceivedBuffer.Size - Mapped_Position);
 
             try
-                ExecuteDataFrame(dID, d);
+                ExecuteDataFrame(dID, d); // Dispatch to command handler.
             except
               PrintError('Execute error!');
               DisposeObject(d);
@@ -10882,13 +10907,13 @@ begin
             end;
             DisposeObject(d);
 
-            AtomInc(OwnerFramework.Statistics[TStatisticsType.stRequest]);
+            AtomInc(OwnerFramework.Statistics[TStatisticsType.stRequest]); // Count request.
           end
         else
           begin
             BreakAndDisconnect := True;
             Break;
-          end;
+          end; // Unknown token: disconnect.
       end;
   finally
     { rebuild stream }
@@ -10900,19 +10925,19 @@ begin
             tmpStream.WritePtr(FReceivedBuffer.PositionAsPtr(Mapped_Position), FReceivedBuffer.Size - Mapped_Position);
         DisposeObject(FReceivedBuffer);
         FReceivedBuffer := tmpStream;
-      end;
+      end; // Trim consumed data from receive buffer.
 
     FReceivedBuffer.Position := FReceivedBuffer.Size;
-    FReceiveProcessing := False;
+    FReceiveProcessing := False; // Clear processing flag.
 
     FLast_Process_Receive_Buffer_CPU_Is_Full := (OwnerFramework.FPer_Progress_Loop_Limit > 0) and (Result >= OwnerFramework.FPer_Progress_Loop_Limit);
 
     if not BreakAndDisconnect then
       begin
-        Process_Send_Buffer();
+        Process_Send_Buffer(); // After receive, attempt to send queued data.
       end
     else
-        DelayClose()
+        DelayClose() // On error, close connection.
   end;
 end;
 
@@ -11103,6 +11128,7 @@ begin
   FBigStreamTotal := 0;
   FBigStreamCompleted := 0;
   FBigStream_Current_Received := 0;
+  FBigStreamFragmentSignal_SendedState := False;
   FBigStreamCmd := '';
   FSyncBigStreamReceive := nil;
   FBigStreamSending := nil;
