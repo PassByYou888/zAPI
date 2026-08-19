@@ -77,7 +77,7 @@ type
     ovtSingle, ovtDouble, ovtCurrency,
     ovtString, ovtProc,
     ovtUnknow
-  );
+    );
 
   { Forward declarations }
   TOpCode = class;
@@ -108,15 +108,14 @@ type
   TOn_RT_Op_P = reference to function(Sender: TOpCustomRunTime; OP_RT_Data: POpRTData; var OP_Param: TOpParam): Variant;
   TOn_Code_Op_P = reference to function(Sender: TOpCustomRunTime; OP_RT_Data: POpRTData; OP_Code: TOpCode; var OP_Param: TOpParam): Variant;
 {$ENDIF FPC}
-
   {
     TOpRT_Mode defines how a registered function is invoked in relation to
     threads.
     - rtmDirect: Executes immediately on the calling thread.
     - rtmSync:   Synchronously marshals execution to the main thread
-                 (using TCompute.Sync). Safe for UI updates.
+    (using TCompute.Sync). Safe for UI updates.
     - rtmPost:   Asynchronously posts the call to the main thread's message
-                 queue (non-blocking for the caller).
+    queue (non-blocking for the caller).
   }
   TOpRT_Mode = (rtmDirect, rtmSync, rtmPost);
 
@@ -126,9 +125,9 @@ type
   }
   TOpRTData = record
   public
-    Name: SystemString;           { Function identifier (e.g., "Sin", "Print") }
-    Description: SystemString;    { Human-readable description for documentation }
-    Category: SystemString;       { Grouping category (e.g., "Base Math", "String") }
+    Name: SystemString; { Function identifier (e.g., "Sin", "Print") }
+    Description: SystemString; { Human-readable description for documentation }
+    Category: SystemString; { Grouping category (e.g., "Base Math", "String") }
 
     { Callbacks receiving only the evaluated parameter array }
     On_Param_Op_C: TOn_Param_Op_C;
@@ -145,7 +144,7 @@ type
     On_Code_Op_M: TOn_Code_Op_M;
     On_Code_Op_P: TOn_Code_Op_P;
 
-    Mode: TOpRT_Mode;             { Threading/execution behavior }
+    Mode: TOpRT_Mode; { Threading/execution behavior }
     procedure Init;
   end;
 
@@ -173,80 +172,80 @@ type
   }
   TOpSystemAPI = class(TCore_Object_Intermediate)
   private
-    function DoNop(var OP_Param: TOpParam): Variant;
-    function DoInt(var OP_Param: TOpParam): Variant;
-    function DoFrac(var OP_Param: TOpParam): Variant;
-    function DoExp(var OP_Param: TOpParam): Variant;
-    function DoCos(var OP_Param: TOpParam): Variant;
-    function DoSin(var OP_Param: TOpParam): Variant;
-    function DoLn(var OP_Param: TOpParam): Variant;
-    function DoArcTan(var OP_Param: TOpParam): Variant;
-    function DoSqrt(var OP_Param: TOpParam): Variant;
-    function DoSqr(var OP_Param: TOpParam): Variant;
-    function DoTan(var OP_Param: TOpParam): Variant;
-    function DoRound(var OP_Param: TOpParam): Variant;
-    function DoTrunc(var OP_Param: TOpParam): Variant;
-    function DoDeg(var OP_Param: TOpParam): Variant;
-    function DoPower(var OP_Param: TOpParam): Variant;
-    function DoSingle(var OP_Param: TOpParam): Variant;
-    function DoDouble(var OP_Param: TOpParam): Variant;
-    function DoExtended(var OP_Param: TOpParam): Variant;
-    function DoByte(var OP_Param: TOpParam): Variant;
-    function DoWord(var OP_Param: TOpParam): Variant;
-    function DoCardinal(var OP_Param: TOpParam): Variant;
-    function DoUInt64(var OP_Param: TOpParam): Variant;
-    function DoShortInt(var OP_Param: TOpParam): Variant;
-    function DoSmallInt(var OP_Param: TOpParam): Variant;
-    function DoInteger(var OP_Param: TOpParam): Variant;
-    function DoInt64(var OP_Param: TOpParam): Variant;
-    function DoROL8(var OP_Param: TOpParam): Variant;
-    function DoROL16(var OP_Param: TOpParam): Variant;
-    function DoROL32(var OP_Param: TOpParam): Variant;
-    function DoROL64(var OP_Param: TOpParam): Variant;
-    function DoROR8(var OP_Param: TOpParam): Variant;
-    function DoROR16(var OP_Param: TOpParam): Variant;
-    function DoROR32(var OP_Param: TOpParam): Variant;
-    function DoROR64(var OP_Param: TOpParam): Variant;
-    function DoEndian16(var OP_Param: TOpParam): Variant;
-    function DoEndian32(var OP_Param: TOpParam): Variant;
-    function DoEndian64(var OP_Param: TOpParam): Variant;
-    function DoEndianU16(var OP_Param: TOpParam): Variant;
-    function DoEndianU32(var OP_Param: TOpParam): Variant;
-    function DoEndianU64(var OP_Param: TOpParam): Variant;
-    function DoSAR16(var OP_Param: TOpParam): Variant;
-    function DoSAR32(var OP_Param: TOpParam): Variant;
-    function DoSAR64(var OP_Param: TOpParam): Variant;
-    function DoNot(var OP_Param: TOpParam): Variant;
-    function DoPI(var OP_Param: TOpParam): Variant;
-    function DoBool(var OP_Param: TOpParam): Variant;
-    function DoTrue(var OP_Param: TOpParam): Variant;
-    function DoFalse(var OP_Param: TOpParam): Variant;
-    function DoRColor(var OP_Param: TOpParam): Variant;
-    function DoVec2(var OP_Param: TOpParam): Variant;
-    function DoVec3(var OP_Param: TOpParam): Variant;
-    function DoVec4(var OP_Param: TOpParam): Variant;
-    function DoRandom(var OP_Param: TOpParam): Variant;
-    function DoRandomFloat(var OP_Param: TOpParam): Variant;
-    function DoMax(var OP_Param: TOpParam): Variant;
-    function DoMin(var OP_Param: TOpParam): Variant;
-    function DoClamp(var OP_Param: TOpParam): Variant;
-    function DoIfThen(var OP_Param: TOpParam): Variant;
-    function FitXY(var OP_Param: TOpParam): Variant;
-    function DoStr(var OP_Param: TOpParam): Variant;
-    function DoMultiple(var OP_Param: TOpParam): Variant;
-    function DoSearchStr(var OP_Param: TOpParam): Variant;
-    function DoReplaceStr(var OP_Param: TOpParam): Variant;
-    function DoPrint(var OP_Param: TOpParam): Variant;
-    function ToHex(var OP_Param: TOpParam): Variant;
-    function Hex8(var OP_Param: TOpParam): Variant;
-    function Hex16(var OP_Param: TOpParam): Variant;
-    function Hex32(var OP_Param: TOpParam): Variant;
-    function Hex64(var OP_Param: TOpParam): Variant;
-    function ToBin(var OP_Param: TOpParam): Variant;
-    function Bin8(var OP_Param: TOpParam): Variant;
-    function Bin16(var OP_Param: TOpParam): Variant;
-    function Bin32(var OP_Param: TOpParam): Variant;
-    function Bin64(var OP_Param: TOpParam): Variant;
+    function DoNop(var OP_Param: TOpParam): Variant; // Returns 0 (no operation).
+    function DoInt(var OP_Param: TOpParam): Variant; // Sums all parameters and returns the integer part (truncates toward zero).
+    function DoFrac(var OP_Param: TOpParam): Variant; // Sums all parameters and returns the fractional part.
+    function DoExp(var OP_Param: TOpParam): Variant; // Sums all parameters and returns e^value.
+    function DoCos(var OP_Param: TOpParam): Variant; // Sums all parameters and returns the cosine (radians).
+    function DoSin(var OP_Param: TOpParam): Variant; // Sums all parameters and returns the sine (radians).
+    function DoLn(var OP_Param: TOpParam): Variant; // Sums all parameters and returns the natural logarithm.
+    function DoArcTan(var OP_Param: TOpParam): Variant; // Sums all parameters and returns the arctangent (radians).
+    function DoSqrt(var OP_Param: TOpParam): Variant; // Sums all parameters and returns the square root.
+    function DoSqr(var OP_Param: TOpParam): Variant; // Sums all parameters and returns the square.
+    function DoTan(var OP_Param: TOpParam): Variant; // Sums all parameters and returns the tangent (radians).
+    function DoRound(var OP_Param: TOpParam): Variant; // Sums all parameters and rounds to the nearest integer (banker¡¯s rounding).
+    function DoTrunc(var OP_Param: TOpParam): Variant; // Sums all parameters and truncates toward zero.
+    function DoDeg(var OP_Param: TOpParam): Variant; // Sums all parameters and normalizes angle to [-180, 180] degrees.
+    function DoPower(var OP_Param: TOpParam): Variant; // Raises first parameter to the power of second parameter (requires exactly 2 params).
+    function DoSingle(var OP_Param: TOpParam): Variant; // Converts the first parameter to Single (float).
+    function DoDouble(var OP_Param: TOpParam): Variant; // Converts the first parameter to Double.
+    function DoExtended(var OP_Param: TOpParam): Variant; // Converts the first parameter to Extended.
+    function DoByte(var OP_Param: TOpParam): Variant; // Converts the first parameter to Byte (unsigned 8-bit).
+    function DoWord(var OP_Param: TOpParam): Variant; // Converts the first parameter to Word (unsigned 16-bit).
+    function DoCardinal(var OP_Param: TOpParam): Variant; // Converts the first parameter to Cardinal (unsigned 32-bit).
+    function DoUInt64(var OP_Param: TOpParam): Variant; // Converts the first parameter to UInt64 (unsigned 64-bit).
+    function DoShortInt(var OP_Param: TOpParam): Variant; // Converts the first parameter to ShortInt (signed 8-bit).
+    function DoSmallInt(var OP_Param: TOpParam): Variant; // Converts the first parameter to SmallInt (signed 16-bit).
+    function DoInteger(var OP_Param: TOpParam): Variant; // Converts the first parameter to Integer (signed 32-bit).
+    function DoInt64(var OP_Param: TOpParam): Variant; // Converts the first parameter to Int64 (signed 64-bit).
+    function DoROL8(var OP_Param: TOpParam): Variant; // Rotates left an 8-bit value by the given shift (param0: byte, param1: shift).
+    function DoROL16(var OP_Param: TOpParam): Variant; // Rotates left a 16-bit value.
+    function DoROL32(var OP_Param: TOpParam): Variant; // Rotates left a 32-bit value.
+    function DoROL64(var OP_Param: TOpParam): Variant; // Rotates left a 64-bit value.
+    function DoROR8(var OP_Param: TOpParam): Variant; // Rotates right an 8-bit value.
+    function DoROR16(var OP_Param: TOpParam): Variant; // Rotates right a 16-bit value.
+    function DoROR32(var OP_Param: TOpParam): Variant; // Rotates right a 32-bit value.
+    function DoROR64(var OP_Param: TOpParam): Variant; // Rotates right a 64-bit value.
+    function DoEndian16(var OP_Param: TOpParam): Variant; // Byte-swaps a signed 16-bit value (endian conversion).
+    function DoEndian32(var OP_Param: TOpParam): Variant; // Byte-swaps a signed 32-bit value.
+    function DoEndian64(var OP_Param: TOpParam): Variant; // Byte-swaps a signed 64-bit value.
+    function DoEndianU16(var OP_Param: TOpParam): Variant; // Byte-swaps an unsigned 16-bit value.
+    function DoEndianU32(var OP_Param: TOpParam): Variant; // Byte-swaps an unsigned 32-bit value.
+    function DoEndianU64(var OP_Param: TOpParam): Variant; // Byte-swaps an unsigned 64-bit value.
+    function DoSAR16(var OP_Param: TOpParam): Variant; // Arithmetic right shift of a 16-bit value (signed).
+    function DoSAR32(var OP_Param: TOpParam): Variant; // Arithmetic right shift of a 32-bit value.
+    function DoSAR64(var OP_Param: TOpParam): Variant; // Arithmetic right shift of a 64-bit value.
+    function DoNot(var OP_Param: TOpParam): Variant; // Bitwise NOT of the first parameter (type-dependent).
+    function DoPI(var OP_Param: TOpParam): Variant; // Returns the constant PI (3.14159...).
+    function DoBool(var OP_Param: TOpParam): Variant; // Converts all parameters to Boolean (logical AND across all).
+    function DoTrue(var OP_Param: TOpParam): Variant; // Returns True.
+    function DoFalse(var OP_Param: TOpParam): Variant; // Returns False.
+    function DoRColor(var OP_Param: TOpParam): Variant; // Builds a color string from R,G,B,A values (defaults 0,0,0,1).
+    function DoVec2(var OP_Param: TOpParam): Variant; // Builds a 2D vector string from X,Y (defaults 0.0).
+    function DoVec3(var OP_Param: TOpParam): Variant; // Builds a 3D vector string from X,Y,Z (defaults 0.0).
+    function DoVec4(var OP_Param: TOpParam): Variant; // Builds a 4D vector string from X,Y,Z,W (defaults 0.0,0.0,0.0,1.0).
+    function DoRandom(var OP_Param: TOpParam): Variant; // Returns a random integer in [0, param-1] if param>0, else in [0, MaxInt].
+    function DoRandomFloat(var OP_Param: TOpParam): Variant; // Returns a random float in [0, 1).
+    function DoMax(var OP_Param: TOpParam): Variant; // Returns the maximum value among all parameters.
+    function DoMin(var OP_Param: TOpParam): Variant; // Returns the minimum value among all parameters.
+    function DoClamp(var OP_Param: TOpParam): Variant; // Clamps the first parameter between min and max (params: value, min, max).
+    function DoIfThen(var OP_Param: TOpParam): Variant; // If first param is True, returns second; else returns third (requires 3 params).
+    function FitXY(var OP_Param: TOpParam): Variant; // Fits a rectangle of given width/height into a target size (returns new size string).
+    function DoStr(var OP_Param: TOpParam): Variant; // Concatenates all parameters as strings.
+    function DoMultiple(var OP_Param: TOpParam): Variant; // Checks if the first string matches all subsequent patterns (wildcard matching).
+    function DoSearchStr(var OP_Param: TOpParam): Variant; // Checks if the first string contains any of the subsequent search patterns.
+    function DoReplaceStr(var OP_Param: TOpParam): Variant; // Replaces substrings (params: source, old, new, onlyWord, ignoreCase).
+    function DoPrint(var OP_Param: TOpParam): Variant; // Prints all parameters as a comma-separated string via DoStatus and returns the text.
+    function ToHex(var OP_Param: TOpParam): Variant; // Converts all parameters to hexadecimal strings (comma-separated).
+    function Hex8(var OP_Param: TOpParam): Variant; // Parses a hex string into an 8-bit unsigned integer.
+    function Hex16(var OP_Param: TOpParam): Variant; // Parses a hex string into a 16-bit unsigned integer.
+    function Hex32(var OP_Param: TOpParam): Variant; // Parses a hex string into a 32-bit unsigned integer.
+    function Hex64(var OP_Param: TOpParam): Variant; // Parses a hex string into a 64-bit unsigned integer.
+    function ToBin(var OP_Param: TOpParam): Variant; // Converts all parameters to binary strings (comma-separated).
+    function Bin8(var OP_Param: TOpParam): Variant; // Parses a binary string into an 8-bit unsigned integer.
+    function Bin16(var OP_Param: TOpParam): Variant; // Parses a binary string into a 16-bit unsigned integer.
+    function Bin32(var OP_Param: TOpParam): Variant; // Parses a binary string into a 32-bit unsigned integer.
+    function Bin64(var OP_Param: TOpParam): Variant; // Parses a binary string into a 64-bit unsigned integer.
   public
     procedure RegistationSystemAPI(RunTime: TOpCustomRunTime);
   end;
@@ -261,9 +260,9 @@ type
   protected
     procedure FreeNotifyProc(p: Pointer);
   public
-    ProcList: THashList;              { Hash table mapping function names to POpRTData }
-    UserObject: TCore_Object;         { Custom user data (object) }
-    UserData: Pointer;                { Custom user data (pointer) }
+    ProcList: THashList; { Hash table mapping function names to POpRTData }
+    UserObject: TCore_Object; { Custom user data (object) }
+    UserData: Pointer; { Custom user data (pointer) }
 
     constructor Create;
     constructor CustomCreate(maxHashSiz_: Integer); virtual;
@@ -373,9 +372,10 @@ type
 
   { Internal structure representing a parameter in an OpCode }
   POpData__ = ^TOpData__;
+
   TOpData__ = record
-    Op: TOpCode;          { Child OpCode node (if this parameter is a sub-expression) }
-    Value: Variant;       { Concrete value (if this parameter is a literal) }
+    Op: TOpCode; { Child OpCode node (if this parameter is a sub-expression) }
+    Value: Variant; { Concrete value (if this parameter is a literal) }
     ValueType: TOpValueType; { Cached type of the value }
   end;
 
@@ -387,20 +387,20 @@ type
     child parameters (either literals or other OpCodes).
 
     Execution Flow:
-      1. Evaluate all child parameters recursively (OpCode_EvaluateParam).
-      2. Invoke the abstract DoExecute method to compute the result.
-      3. Return the computed Variant.
+    1. Evaluate all child parameters recursively (OpCode_EvaluateParam).
+    2. Invoke the abstract DoExecute method to compute the result.
+    3. Return the computed Variant.
 
     Features:
-      - Clone: Deep-copy the entire OpCode tree.
-      - Serialization: Save/Load to/from a binary stream (using DFE).
-      - AutoFreeLink: Controls whether child nodes are automatically freed.
+    - Clone: Deep-copy the entire OpCode tree.
+    - Serialization: Save/Load to/from a binary stream (using DFE).
+    - AutoFreeLink: Controls whether child nodes are automatically freed.
   }
   TOpCode = class(TCore_Object_Intermediate)
   protected
-    FOwner: TOpCode;                { Parent OpCode in the tree }
-    FParam: TOpData_List;           { List of parameters (children) }
-    FAutoFreeLink: Boolean;         { If True, destructor frees child OpCodes }
+    FOwner: TOpCode; { Parent OpCode in the tree }
+    FParam: TOpData_List; { List of parameters (children) }
+    FAutoFreeLink: Boolean; { If True, destructor frees child OpCodes }
 
     { Core virtual method to be overridden by specific operations.
       This method is called after all parameters have been evaluated. }
@@ -410,9 +410,9 @@ type
     procedure OpCode_EvaluateParam(opRT: TOpCustomRunTime); overload;
     procedure OpCode_EvaluateParam(printLog: Boolean; opRT: TOpCustomRunTime); overload;
   public
-    NonLinear: TOpCode_NonLinear;    { Link to the non-linear controller if this OpCode is part of an async execution }
-    Parsed_Info: SystemString;      { Source info (e.g., file/line) for debugging }
-    Parsed_Line_Num: Integer;       { Line number in source }
+    NonLinear: TOpCode_NonLinear; { Link to the non-linear controller if this OpCode is part of an async execution }
+    Parsed_Info: SystemString; { Source info (e.g., file/line) for debugging }
+    Parsed_Line_Num: Integer; { Line number in source }
 
     constructor Create(FreeLink_: Boolean);
     destructor Destroy; override;
@@ -499,14 +499,15 @@ type
       On_Done_M: TOn_OpCode_NonLinear_Done_M;
       On_Done_P: TOn_OpCode_NonLinear_Done_P;
     end;
+
     PPost_Data___ = ^TPost_Data___;
   private
-    FPost___: TThreadPost;   { Thread post dispatcher }
+    FPost___: TThreadPost; { Thread post dispatcher }
     procedure Do_Post_Execute(Data1: Pointer);
   public
     constructor Create;
     destructor Destroy; override;
-    property Post___: TThreadPost read FPost___;   { Thread post dispatcher }
+    property Post___: TThreadPost read FPost___; { Thread post dispatcher }
 
     { Frees the NonLinear instance and removes it from the pool }
     procedure DoFree(var Data: TOpCode_NonLinear); override;
@@ -551,25 +552,25 @@ type
     network requests within the expression engine without spawning threads.
 
     Workflow:
-      1. Create via Create_From_Expression (parses and compiles the expression).
-      2. Call Execute() to start the linearized execution.
-      3. During execution, a custom OpCode can call Do_Begin() to pause.
-      4. The external main loop calls Process() periodically.
-      5. Once the async condition is met, the OpCode calls Do_End(Result).
-      6. Process() resumes execution from the paused point.
-      7. When the stack is fully consumed, On_Done callbacks are fired.
+    1. Create via Create_From_Expression (parses and compiles the expression).
+    2. Call Execute() to start the linearized execution.
+    3. During execution, a custom OpCode can call Do_Begin() to pause.
+    4. The external main loop calls Process() periodically.
+    5. Once the async condition is met, the OpCode calls Do_End(Result).
+    6. Process() resumes execution from the paused point.
+    7. When the stack is fully consumed, On_Done callbacks are fired.
   }
   TOpCode_NonLinear = class(TCore_Object_Intermediate)
   private
-    FAuto_Free_OpCode: Boolean;           { If True, destroys the root OpCode on destruction }
-    FRoot_OpCode: TOpCode;                { The top-level OpCode tree being executed }
-    FOpCode_RunTime: TOpCustomRunTime;    { Runtime context for execution }
+    FAuto_Free_OpCode: Boolean; { If True, destroys the root OpCode on destruction }
+    FRoot_OpCode: TOpCode; { The top-level OpCode tree being executed }
+    FOpCode_RunTime: TOpCustomRunTime; { Runtime context for execution }
     FOwner_Pool_Ptr: TOpCode_NonLinear_Pool_.PQueueStruct; { Back-reference to pool owner for auto-removal }
-    FStack___: TOpCode_NonLinear_Stack;   { Linearized execution stack }
-    FFirst_Execute_Done: Boolean;         { True after the first Execute call }
-    FIs_Running: Boolean;                 { True while actively executing steps }
-    FIs_Wait_End: Boolean;                { True when paused waiting for Do_End }
-    FEnd_Result: Variant;                 { The final result of the execution }
+    FStack___: TOpCode_NonLinear_Stack; { Linearized execution stack }
+    FFirst_Execute_Done: Boolean; { True after the first Execute call }
+    FIs_Running: Boolean; { True while actively executing steps }
+    FIs_Wait_End: Boolean; { True when paused waiting for Do_End }
+    FEnd_Result: Variant; { The final result of the execution }
 
     { Event callbacks }
     FOn_Done_C: TOn_OpCode_NonLinear_Done_C;
@@ -649,78 +650,77 @@ type
 
 {$ENDREGION 'OpCode_NonLinear'}
 {$REGION 'OpCode_Operation'}
-
   { Concrete OpCode classes for arithmetic, logic, and control operations.
     Each class implements the specific operation in DoExecute.
     The naming convention follows: op_<Operation> for binary operations,
     op_<Operation>_Prefix for unary operations (e.g., op_Add_Prefix for +x).
   }
 
-  op_Value = class sealed(TOpCode)   { Returns its single parameter value }
+  op_Value = class sealed(TOpCode) { Returns its single parameter value }
     function DoExecute(opRT: TOpCustomRunTime): Variant; override;
   end;
 
-  op_Proc = class sealed(TOpCode)    { Calls a registered function by name }
+  op_Proc = class sealed(TOpCode) { Calls a registered function by name }
     function DoExecute(opRT: TOpCustomRunTime): Variant; override;
   end;
 
-  op_Add_Prefix = class sealed(TOpCode)  { Unary plus (returns evaluated value) }
+  op_Add_Prefix = class sealed(TOpCode) { Unary plus (returns evaluated value) }
     function DoExecute(opRT: TOpCustomRunTime): Variant; override;
   end;
 
-  op_Sub_Prefix = class sealed(TOpCode)  { Unary negation (-value) }
+  op_Sub_Prefix = class sealed(TOpCode) { Unary negation (-value) }
     function DoExecute(opRT: TOpCustomRunTime): Variant; override;
   end;
 
-  op_Add = class sealed(TOpCode)     { Addition (a + b + ...) }
+  op_Add = class sealed(TOpCode) { Addition (a + b + ...) }
     function DoExecute(opRT: TOpCustomRunTime): Variant; override;
   end;
 
-  op_Sub = class sealed(TOpCode)     { Subtraction (a - b - ...) }
+  op_Sub = class sealed(TOpCode) { Subtraction (a - b - ...) }
     function DoExecute(opRT: TOpCustomRunTime): Variant; override;
   end;
 
-  op_Mul = class sealed(TOpCode)     { Multiplication (a * b * ...) }
+  op_Mul = class sealed(TOpCode) { Multiplication (a * b * ...) }
     function DoExecute(opRT: TOpCustomRunTime): Variant; override;
   end;
 
-  op_Div = class sealed(TOpCode)     { Floating-point division (a / b / ...) }
+  op_Div = class sealed(TOpCode) { Floating-point division (a / b / ...) }
     function DoExecute(opRT: TOpCustomRunTime): Variant; override;
   end;
 
-  op_IntDiv = class sealed(TOpCode)  { Integer division (a div b) }
+  op_IntDiv = class sealed(TOpCode) { Integer division (a div b) }
     function DoExecute(opRT: TOpCustomRunTime): Variant; override;
   end;
 
-  op_Pow = class sealed(TOpCode)     { Power (a ^ b) }
+  op_Pow = class sealed(TOpCode) { Power (a ^ b) }
     function DoExecute(opRT: TOpCustomRunTime): Variant; override;
   end;
 
-  op_Mod = class sealed(TOpCode)     { Modulo (a mod b) }
+  op_Mod = class sealed(TOpCode) { Modulo (a mod b) }
     function DoExecute(opRT: TOpCustomRunTime): Variant; override;
   end;
 
-  op_Or = class sealed(TOpCode)      { Bitwise OR (a or b) }
+  op_Or = class sealed(TOpCode) { Bitwise OR (a or b) }
     function DoExecute(opRT: TOpCustomRunTime): Variant; override;
   end;
 
-  op_And = class sealed(TOpCode)     { Bitwise AND (a and b) }
+  op_And = class sealed(TOpCode) { Bitwise AND (a and b) }
     function DoExecute(opRT: TOpCustomRunTime): Variant; override;
   end;
 
-  op_Xor = class sealed(TOpCode)     { Bitwise XOR (a xor b) }
+  op_Xor = class sealed(TOpCode) { Bitwise XOR (a xor b) }
     function DoExecute(opRT: TOpCustomRunTime): Variant; override;
   end;
 
-  op_Shl = class sealed(TOpCode)     { Shift left (a shl b) }
+  op_Shl = class sealed(TOpCode) { Shift left (a shl b) }
     function DoExecute(opRT: TOpCustomRunTime): Variant; override;
   end;
 
-  op_Shr = class sealed(TOpCode)     { Shift right (a shr b) }
+  op_Shr = class sealed(TOpCode) { Shift right (a shr b) }
     function DoExecute(opRT: TOpCustomRunTime): Variant; override;
   end;
 
-  op_Equal = class sealed(TOpCode)   { Equality test (a == b) }
+  op_Equal = class sealed(TOpCode) { Equality test (a == b) }
     function DoExecute(opRT: TOpCustomRunTime): Variant; override;
   end;
 
@@ -745,11 +745,11 @@ type
   end;
 
   { Additional unary operators (registered but not directly used by parser logic) }
-  op_Symbol_Sub = class sealed(TOpCode)  { Symbolic unary minus }
+  op_Symbol_Sub = class sealed(TOpCode) { Symbolic unary minus }
     function DoExecute(opRT: TOpCustomRunTime): Variant; override;
   end;
 
-  op_Symbol_Add = class sealed(TOpCode)  { Symbolic unary plus }
+  op_Symbol_Add = class sealed(TOpCode) { Symbolic unary plus }
     function DoExecute(opRT: TOpCustomRunTime): Variant; override;
   end;
 {$ENDREGION 'OpCode_Operation'}
@@ -761,18 +761,19 @@ type
     OpName: TPascalString;
     hash: Cardinal;
   end;
+
   POpRegData = ^TOpRegData;
   TOpReg_Tool = TGenericsList<POpRegData>;
 {$ENDREGION 'OpCode_Reg'}
 
-{ Helper function to load an OpCode from a stream (external alias for TOpCode.LoadFromStream) }
+  { Helper function to load an OpCode from a stream (external alias for TOpCode.LoadFromStream) }
 function LoadOpFromStream(stream: TCore_Stream; out LoadedOp: TOpCode): Boolean;
 
 { Global variables provided by the unit }
 var
-  OpRegTool: TOpReg_Tool;             { Registry of all OpCode classes for dynamic creation }
-  OpSystemAPI: TOpSystemAPI;          { Singleton containing system API implementations }
-  SystemOpRunTime: TOpCustomRunTime;  { The global runtime context with all built-in functions }
+  OpRegTool: TOpReg_Tool; { Registry of all OpCode classes for dynamic creation }
+  OpSystemAPI: TOpSystemAPI; { Singleton containing system API implementations }
+  SystemOpRunTime: TOpCustomRunTime; { The global runtime context with all built-in functions }
   System_NonLinear_Pool: TOpCode_NonLinear_Pool; { The global pool for non-linear execution }
 
 implementation
