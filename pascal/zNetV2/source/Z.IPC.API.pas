@@ -677,6 +677,7 @@ procedure UnloadIPCLibrary;
 begin
   if LibHandle <> 0 then
   begin
+    ipc_Set_Status_handler(nil);
     ipc_shutdown(); // Stop all servers and clients
     FreeLibrary(LibHandle);
     LibHandle := 0;
