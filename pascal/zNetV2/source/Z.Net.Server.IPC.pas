@@ -562,8 +562,13 @@ end;
 initialization
 
 TZNet_Server_IPC.IPC_Serv_ThreadCount := 4;
+{$IFDEF CPU64}
 TZNet_Server_IPC.IPC_Serv_MaxQueueLength := 4096;
 TZNet_Server_IPC.IPC_Serv_MaxMsgSize := 32 * 1024;
+{$ELSE CPU64}
+TZNet_Server_IPC.IPC_Serv_MaxQueueLength := 1024;
+TZNet_Server_IPC.IPC_Serv_MaxMsgSize := 1024;
+{$ENDIF CPU64}
 
 finalization
 
