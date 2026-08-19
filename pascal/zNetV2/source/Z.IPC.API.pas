@@ -468,6 +468,7 @@ function LoadIPCLibrary: Boolean;
 procedure UnloadIPCLibrary;
 
 
+function GetDefaultLibraryName: string;
 
 implementation
 
