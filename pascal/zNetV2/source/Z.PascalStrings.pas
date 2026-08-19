@@ -468,6 +468,7 @@ type
       * The caller is responsible for freeing it with FreeAnsiChar.
       * @return pointer to the allocated buffer.
     }
+    function BuildAnsiChar(var siz: Integer): Pointer; overload;
     function BuildAnsiChar: Pointer; overload;
     function BuildAnsiChar(autofree: Boolean): Pointer; overload;
 
@@ -496,6 +497,7 @@ type
       * The caller must free it with FreeWideChar.
       * @return pointer to the allocated buffer.
     }
+    function BuildWideChar(var siz: Integer): Pointer; overload;
     function BuildWideChar: Pointer; overload;
     function BuildWideChar(autofree: Boolean): Pointer; overload;
 
@@ -518,6 +520,7 @@ type
 
     class procedure FreeWideChar(p: Pointer); static; // Frees memory allocated by AllocWideChar.
 
+    function BuildUTF8AnsiChar(var siz: Integer): Pointer; overload;
     function BuildUTF8AnsiChar: Pointer; overload;
     function BuildUTF8AnsiChar(autofree: Boolean): Pointer; overload;
     procedure ReadUTF8AnsiChar(p: Pointer);
@@ -2486,8 +2489,7 @@ end;
 
 {$IFDEF RangeCheck}{$R-}{$ENDIF}
 
-
-function TPascalString.BuildAnsiChar: Pointer;
+function TPascalString.BuildAnsiChar(var siz: Integer): Pointer;
 // Allocate null‑terminated ANSI buffer; caller must free.
 type
   TAnsiChar_Buff = array [0 .. 0] of Byte;
@@ -2495,12 +2497,20 @@ type
 var swap_buff: TBytes; buff_P: PAnsiChar_Buff;
 begin
   swap_buff := ANSI;
-  buff_P := GetMemory(DeltaStep(length(swap_buff) + 1, 16));
+  siz := DeltaStep(length(swap_buff) + 1, 16);
+  buff_P := GetMemory(siz);
   if length(swap_buff) > 0 then
       CopyPtr(@swap_buff[0], buff_P, length(swap_buff));
   buff_P^[length(swap_buff)] := 0;
   SetLength(swap_buff, 0);
   Result := buff_P;
+end;
+
+function TPascalString.BuildAnsiChar: Pointer;
+var
+  siz: Integer;
+begin
+  Result := BuildAnsiChar(siz);
 end;
 
 function TPascalString.BuildAnsiChar(autofree: Boolean): Pointer;
@@ -2541,17 +2551,25 @@ begin
       FreeMemory(p);
 end;
 
-function TPascalString.BuildWideChar: Pointer;
+function TPascalString.BuildWideChar(var siz: Integer): Pointer;
 // Allocate null‑terminated WideChar buffer.
 type
   PWord_ = ^Word;
 var p_: PWord_;
 begin
-  p_ := GetMemory(DeltaStep(length(buff) + 1, 16) * 2);
+  siz := DeltaStep(length(buff) + 1, 16) * 2;
+  p_ := GetMemory(siz);
   if length(buff) > 0 then
       CopyPtr(@buff[0], p_, length(buff) shl 1);
   PWord_(GetPtr(p_, length(buff) shl 1))^ := 0;
   Result := p_;
+end;
+
+function TPascalString.BuildWideChar: Pointer;
+var
+  siz: Integer;
+begin
+  Result := BuildWideChar(siz);
 end;
 
 function TPascalString.BuildWideChar(autofree: Boolean): Pointer;
@@ -2590,19 +2608,27 @@ begin
       FreeMemory(p);
 end;
 
-function TPascalString.BuildUTF8AnsiChar: Pointer;
+function TPascalString.BuildUTF8AnsiChar(var siz: Integer): Pointer;
 type
   TAnsiChar_Buff = array [0 .. 0] of Byte;
   PAnsiChar_Buff = ^TAnsiChar_Buff;
 var swap_buff: TBytes; buff_P: PAnsiChar_Buff;
 begin
   swap_buff := UTF8;
-  buff_P := GetMemory(DeltaStep(length(swap_buff) + 1, 16));
+  siz := DeltaStep(length(swap_buff) + 1, 16);
+  buff_P := GetMemory(siz);
   if length(swap_buff) > 0 then
       CopyPtr(@swap_buff[0], buff_P, length(swap_buff));
   buff_P^[length(swap_buff)] := 0;
   SetLength(swap_buff, 0);
   Result := buff_P;
+end;
+
+function TPascalString.BuildUTF8AnsiChar: Pointer;
+var
+  siz: Integer;
+begin
+  Result := BuildUTF8AnsiChar(siz);
 end;
 
 function TPascalString.BuildUTF8AnsiChar(autofree: Boolean): Pointer;

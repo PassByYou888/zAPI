@@ -22,54 +22,54 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *)
 { ******************************************************************************
-  * Z.UPascalStrings – Unicode String Type with Extended Utilities            
-  *                                                                            
-  * This unit defines TUPascalString, a custom Unicode string record that      
-  * provides a high‑performance alternative to native string types while       
-  * remaining fully compatible with Delphi and Free Pascal. It stores data     
-  * as a dynamic array of USystemChar (UTF‑16 code units) and offers a rich    
-  * set of operations including concatenation, slicing, searching, case        
-  * conversion, encoding conversion (UTF‑8, ANSI, platform default), character 
-  * classification, Smith‑Waterman sequence alignment, random generation, and  
-  * C‑style pointer handling.                                                 
-  *                                                                            
+  * Z.UPascalStrings – Unicode String Type with Extended Utilities
+  *
+  * This unit defines TUPascalString, a custom Unicode string record that
+  * provides a high‑performance alternative to native string types while
+  * remaining fully compatible with Delphi and Free Pascal. It stores data
+  * as a dynamic array of USystemChar (UTF‑16 code units) and offers a rich
+  * set of operations including concatenation, slicing, searching, case
+  * conversion, encoding conversion (UTF‑8, ANSI, platform default), character
+  * classification, Smith‑Waterman sequence alignment, random generation, and
+  * C‑style pointer handling.
+  *
   * ===========================================================================*
-  * Key design principles                                                     
+  * Key design principles
   * ===========================================================================*
-  *   – Value type (record) – no reference counting overhead, stack‑allocated. 
-  *   – Direct memory access – internal buffer is a dynamic array, enabling    
-  *     fast block operations.                                                
+  *   – Value type (record) – no reference counting overhead, stack‑allocated.
+  *   – Direct memory access – internal buffer is a dynamic array, enabling
+  *     fast block operations.
   *   – Operator overloading – behaves like a native string (+, =, <, >, etc.)*
-  *     but with extra features.                                              
-  *   – Cross‑compiler – abstracts Delphi and FPC Unicode types.              
-  *   – Unicode‑aware – fully supports UTF‑16, including surrogate pairs.     
-  *                                                                            
+  *     but with extra features.
+  *   – Cross‑compiler – abstracts Delphi and FPC Unicode types.
+  *   – Unicode‑aware – fully supports UTF‑16, including surrogate pairs.
+  *
   * ===========================================================================*
-  * Typical usage                                                             
+  * Typical usage
   * ===========================================================================*
-  *   var                                                                      
-  *     s, t: TUPascalString;                                                 
-  *     i: Integer;                                                           
-  *   begin                                                                   
-  *     s := 'Hello, 世界';                   // Implicit conversion from native 
-  *     t := s.Copy(1, 5);                    // 'Hello'                      
-  *     if s.Same('HELLO') then ...           // Case‑insensitive compare     
-  *     i := s.GetPos('世');                  // Find character position      
-  *     s.Append('!');                        // In‑place append              
-  *     s.Bytes := UTF8Bytes;                 // Decode from UTF‑8            
-  *   end;                                                                    
-  *                                                                            
+  *   var
+  *     s, t: TUPascalString;
+  *     i: Integer;
+  *   begin
+  *     s := 'Hello, 世界';                   // Implicit conversion from native
+  *     t := s.Copy(1, 5);                    // 'Hello'
+  *     if s.Same('HELLO') then ...           // Case‑insensitive compare
+  *     i := s.GetPos('世');                  // Find character position
+  *     s.Append('!');                        // In‑place append
+  *     s.Bytes := UTF8Bytes;                 // Decode from UTF‑8
+  *   end;
+  *
   * ===========================================================================*
-  * Smith‑Waterman alignment example                                          
+  * Smith‑Waterman alignment example
   * ===========================================================================*
-  *   var                                                                      
-  *     a, b, diff1, diff2: TUPascalString;                                   
-  *     score: Double;                                                        
-  *   begin                                                                   
-  *     a := 'kitten'; b := 'sitting';                                        
-  *     score := USmithWatermanCompare(a, b, diff1, diff2, False, '-');       
-  *     // diff1 and diff2 show the alignment with '-' for gaps.              
-  *   end;                                                                    
+  *   var
+  *     a, b, diff1, diff2: TUPascalString;
+  *     score: Double;
+  *   begin
+  *     a := 'kitten'; b := 'sitting';
+  *     score := USmithWatermanCompare(a, b, diff1, diff2, False, '-');
+  *     // diff1 and diff2 show the alignment with '-' for gaps.
+  *   end;
   ****************************************************************************** }
 unit Z.UPascalStrings;
 
@@ -409,6 +409,7 @@ type
       * The caller must free it with FreeAnsiChar.
       * @return pointer to the allocated buffer.
     }
+    function BuildAnsiChar(var siz: Integer): Pointer; overload;
     function BuildAnsiChar: Pointer; overload;
     function BuildAnsiChar(autofree: Boolean): Pointer; overload;
 
@@ -437,6 +438,7 @@ type
       * The caller must free it with FreeWideChar.
       * @return pointer to the allocated buffer.
     }
+    function BuildWideChar(var siz: Integer): Pointer; overload;
     function BuildWideChar: Pointer; overload;
     function BuildWideChar(autofree: Boolean): Pointer; overload;
 
@@ -459,6 +461,7 @@ type
 
     class procedure FreeWideChar(p: Pointer); static; // Frees memory allocated by AllocWideChar.
 
+    function BuildUTF8AnsiChar(var siz: Integer): Pointer; overload;
     function BuildUTF8AnsiChar: Pointer; overload;
     function BuildUTF8AnsiChar(autofree: Boolean): Pointer; overload;
     procedure ReadUTF8AnsiChar(p: Pointer);
@@ -2464,7 +2467,7 @@ end;
 {$IFDEF RangeCheck}{$R-}{$ENDIF}
 
 
-function TUPascalString.BuildAnsiChar: Pointer;
+function TUPascalString.BuildAnsiChar(var siz: Integer): Pointer;
 // Allocate null‑terminated ANSI buffer; caller must free.
 type
   TAnsiChar_Buff = array [0 .. 0] of Byte;
@@ -2472,12 +2475,20 @@ type
 var swap_buff: TBytes; buff_P: PAnsiChar_Buff;
 begin
   swap_buff := ANSI;
-  buff_P := GetMemory(DeltaStep(length(swap_buff) + 1, 16));
+  siz := DeltaStep(length(swap_buff) + 1, 16);
+  buff_P := GetMemory(siz);
   if length(swap_buff) > 0 then
       CopyPtr(@swap_buff[0], buff_P, length(swap_buff));
   buff_P^[length(swap_buff)] := 0;
   SetLength(swap_buff, 0);
   Result := buff_P;
+end;
+
+function TUPascalString.BuildAnsiChar: Pointer;
+var
+  siz: Integer;
+begin
+  Result := BuildAnsiChar(siz);
 end;
 
 function TUPascalString.BuildAnsiChar(autofree: Boolean): Pointer;
@@ -2518,17 +2529,25 @@ begin
       FreeMemory(p);
 end;
 
-function TUPascalString.BuildWideChar: Pointer;
+function TUPascalString.BuildWideChar(var siz: Integer): Pointer;
 // Allocate null‑terminated WideChar (UTF‑16) buffer.
 type
   PWord_ = ^Word;
 var p_: PWord_;
 begin
-  p_ := GetMemory(DeltaStep(length(buff) + 1, 16) * 2);
+  siz := DeltaStep(length(buff) + 1, 16) * 2;
+  p_ := GetMemory(siz);
   if length(buff) > 0 then
       CopyPtr(@buff[0], p_, length(buff) shl 1);
   PWord_(GetPtr(p_, length(buff) shl 1))^ := 0;
   Result := p_;
+end;
+
+function TUPascalString.BuildWideChar: Pointer;
+var
+  siz: Integer;
+begin
+  Result := BuildWideChar(siz);
 end;
 
 function TUPascalString.BuildWideChar(autofree: Boolean): Pointer;
@@ -2567,19 +2586,27 @@ begin
       FreeMemory(p);
 end;
 
-function TUPascalString.BuildUTF8AnsiChar: Pointer;
+function TUPascalString.BuildUTF8AnsiChar(var siz: Integer): Pointer;
 type
   TAnsiChar_Buff = array [0 .. 0] of Byte;
   PAnsiChar_Buff = ^TAnsiChar_Buff;
 var swap_buff: TBytes; buff_P: PAnsiChar_Buff;
 begin
   swap_buff := UTF8;
-  buff_P := GetMemory(DeltaStep(length(swap_buff) + 1, 16));
+  siz := DeltaStep(length(swap_buff) + 1, 16);
+  buff_P := GetMemory(siz);
   if length(swap_buff) > 0 then
       CopyPtr(@swap_buff[0], buff_P, length(swap_buff));
   buff_P^[length(swap_buff)] := 0;
   SetLength(swap_buff, 0);
   Result := buff_P;
+end;
+
+function TUPascalString.BuildUTF8AnsiChar: Pointer;
+var
+  siz: Integer;
+begin
+  Result := BuildUTF8AnsiChar(siz);
 end;
 
 function TUPascalString.BuildUTF8AnsiChar(autofree: Boolean): Pointer;
