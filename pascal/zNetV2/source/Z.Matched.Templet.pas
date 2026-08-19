@@ -22,7 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 *)
 { ****************************************************************************** }
-{ * Matched Algorithm - Bidirectional Matching Engine                         * }
+{ * Matched Algorithm - Bidirectional Matching Engine                          * }
 { ****************************************************************************** }
 unit Z.Matched.Templet;
 
