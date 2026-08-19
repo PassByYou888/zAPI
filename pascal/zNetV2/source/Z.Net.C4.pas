@@ -414,6 +414,7 @@ type
     procedure Progress; virtual; { Main progress method for connection management and reconnection. }
     function IPC_Mode: Boolean; { IPC Mode }
     function IsLocalNetwork: Boolean; { is local network }
+    function IsLoopbackNetwork: Boolean; { is internal loopback network }
     {
       Resets the dependency array.
       Depend_ - Array of dependency info records.
@@ -1476,7 +1477,7 @@ var
 {$ENDREGION 'Var'}
   { API: Global C4 framework functions. }
 {$REGION 'API'}
-procedure C40Progress(sleep_: Integer); overload; { Main C4 progress loop with sleep interval. sleep_ - Milliseconds to sleep per iteration. }
+procedure C40Progress(sleep_: TTimeTick); overload; { Main C4 progress loop with sleep interval. sleep_ - Milliseconds to sleep per iteration. }
 procedure C40Progress; overload; { Main C4 progress loop with 1ms sleep. }
 function C40_Online_DP: TC40_Dispatch_Client; { Gets the system's online dispatch client instance. Returns the dispatch client if connected, otherwise nil. }
 procedure C40SetQuietMode(QuietMode_: Boolean); { Sets the quiet mode for the entire C4 framework. QuietMode_ - If True, suppresses most log output. }
@@ -1547,7 +1548,7 @@ begin
   C40Progress();
 end;
 
-procedure C40Progress(sleep_: Integer);
+procedure C40Progress(sleep_: TTimeTick);
 var
   state_: Boolean;
 begin
@@ -2857,6 +2858,14 @@ begin
   if IPC_Mode then
       exit;
   Result := Z.Net.IsLocalNetworkIPV4(PhysicsAddr);
+end;
+
+function TC40_PhysicsTunnel.IsLoopbackNetwork: Boolean;
+begin
+  Result := False;
+  if IPC_Mode then
+      exit;
+  Result := Z.Net.IsLoopbackIPV4(PhysicsAddr) or Z.Net.IsLoopbackIPV6(PhysicsAddr);
 end;
 
 function TC40_PhysicsTunnel.ResetDepend(const Depend_: TC40_DependNetworkInfoArray): Boolean;
@@ -5178,7 +5187,7 @@ end;
 
 function TC40_Custom_Client.IsLocal: Boolean;
 begin
-  Result := C40PhysicsTunnel.IPC_Mode or C40PhysicsTunnel.IsLocalNetwork();
+  Result := C40PhysicsTunnel.IPC_Mode() or C40PhysicsTunnel.IsLoopbackNetwork() or C40PhysicsTunnel.IsLocalNetwork();
 end;
 
 procedure TC40_Custom_Client.DoNetworkOnline;
