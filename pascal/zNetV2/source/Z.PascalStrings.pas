@@ -475,13 +475,15 @@ type
     { * Fills the string from a null‑terminated ANSI buffer.
       * @param p pointer to the buffer.
     }
-    procedure ReadAnsiChar(p: Pointer);
+    procedure ReadAnsiChar(p: Pointer; MaxSiz: NativeInt); overload;
+    procedure ReadAnsiChar(p: Pointer); overload;
 
     { * Class method that creates a TPascalString from an ANSI buffer.
       * @param p pointer to the buffer.
       * @return TPascalString instance.
     }
-    class function ReadAnsiCharTo(p: Pointer): TPascalString; static;
+    class function ReadAnsiCharTo(p: Pointer; MaxSiz: NativeInt): TPascalString; overload; static;
+    class function ReadAnsiCharTo(p: Pointer): TPascalString; overload; static;
 
     { * Allocates a zero‑filled ANSI buffer of the given size.
       * @param size_ number of bytes.
@@ -504,30 +506,32 @@ type
     { * Fills the string from a null‑terminated WideChar buffer.
       * @param p pointer to the buffer.
     }
-    procedure ReadWideChar(p: Pointer);
+    procedure ReadWideChar(p: Pointer; MaxSiz: NativeInt); overload;
+    procedure ReadWideChar(p: Pointer); overload;
 
     { * Class method that creates a TPascalString from a WideChar buffer.
       * @param p pointer to the buffer.
       * @return TPascalString instance.
     }
-    class function ReadWideCharTo(p: Pointer): TPascalString; static;
+    class function ReadWideCharTo(p: Pointer; MaxSiz: NativeInt): TPascalString; overload; static;
+    class function ReadWideCharTo(p: Pointer): TPascalString; overload; static;
 
     { * Allocates a zero‑filled WideChar buffer of the given size (in characters).
       * @param size_ number of characters.
       * @return pointer to allocated memory.
     }
     class function AllocWideChar(size_: NativeInt): Pointer; static;
-
     class procedure FreeWideChar(p: Pointer); static; // Frees memory allocated by AllocWideChar.
 
-    function BuildUTF8AnsiChar(var siz: Integer): Pointer; overload;
-    function BuildUTF8AnsiChar: Pointer; overload;
-    function BuildUTF8AnsiChar(autofree: Boolean): Pointer; overload;
-    procedure ReadUTF8AnsiChar(p: Pointer);
-    class function ReadUTF8AnsiCharTo(p: Pointer): TPascalString; static;
-    class function AllocUTF8AnsiChar(size_: NativeInt): Pointer; static;
-    class procedure FreeUTF8AnsiChar(p: Pointer); static;
-
+    function BuildUTF8AnsiChar(var siz: Integer): Pointer; overload; // Allocates a null-terminated UTF‑8 buffer; returns pointer and sets siz to allocated size (caller must free unless autofree used).
+    function BuildUTF8AnsiChar: Pointer; overload; // Allocates a null-terminated UTF‑8 buffer; returns pointer (caller must free unless autofree used).
+    function BuildUTF8AnsiChar(autofree: Boolean): Pointer; overload; // Allocates a null-terminated UTF‑8 buffer; if autofree=True, the buffer is automatically freed after 60 seconds via Z.Notify.
+    procedure ReadUTF8AnsiChar(p: Pointer; MaxSiz: NativeInt); overload; // Reads a null-terminated UTF‑8 buffer up to MaxSiz bytes into the string; stops at null terminator or MaxSiz.
+    procedure ReadUTF8AnsiChar(p: Pointer); overload; // Reads a null-terminated UTF‑8 buffer into the string; stops at null terminator.
+    class function ReadUTF8AnsiCharTo(p: Pointer; MaxSiz: NativeInt): TPascalString; overload; static; // Creates a TPascalString from a null-terminated UTF‑8 buffer up to MaxSiz bytes.
+    class function ReadUTF8AnsiCharTo(p: Pointer): TPascalString; overload; static; // Creates a TPascalString from a null-terminated UTF‑8 buffer.
+    class function AllocUTF8AnsiChar(size_: NativeInt): Pointer; static; // Allocates a zero-filled memory block of size_ bytes for a UTF‑8 buffer.
+    class procedure FreeUTF8AnsiChar(p: Pointer); static; // Frees memory allocated by AllocUTF8AnsiChar or BuildUTF8AnsiChar (when manually managed).
 
     // ----- Random string generation ---------------------------------------
 
@@ -2489,6 +2493,7 @@ end;
 
 {$IFDEF RangeCheck}{$R-}{$ENDIF}
 
+
 function TPascalString.BuildAnsiChar(var siz: Integer): Pointer;
 // Allocate null‑terminated ANSI buffer; caller must free.
 type
@@ -2519,6 +2524,19 @@ begin
   Z.Notify.DelayFreeMemory(60.0, Result);
 end;
 
+procedure TPascalString.ReadAnsiChar(p: Pointer; MaxSiz: NativeInt);
+// Read null‑terminated ANSI buffer into string.
+var n: NativeInt; buff_: TBytes;
+begin
+  n := 0;
+  while (PByte(GetPtr(p, n))^ <> 0) and (n < MaxSiz) do
+      inc(n);
+  SetLength(buff_, n);
+  CopyPtr(p, @buff_[0], n);
+  ANSI := buff_;
+  SetLength(buff_, 0);
+end;
+
 procedure TPascalString.ReadAnsiChar(p: Pointer);
 // Read null‑terminated ANSI buffer into string.
 var n: NativeInt; buff_: TBytes;
@@ -2532,6 +2550,11 @@ begin
   CopyPtr(p, @buff_[0], n);
   ANSI := buff_;
   SetLength(buff_, 0);
+end;
+
+class function TPascalString.ReadAnsiCharTo(p: Pointer; MaxSiz: NativeInt): TPascalString;
+begin
+  Result.ReadAnsiChar(p, MaxSiz);
 end;
 
 class function TPascalString.ReadAnsiCharTo(p: Pointer): TPascalString;
@@ -2578,6 +2601,21 @@ begin
   Z.Notify.DelayFreeMemory(60.0, Result);
 end;
 
+procedure TPascalString.ReadWideChar(p: Pointer; MaxSiz: NativeInt);
+// Read null‑terminated WideChar buffer.
+var n: NativeInt;
+begin
+  n := 0;
+  while (PWord(GetPtr(p, n))^ <> 0) and (n < MaxSiz) do
+      inc(n, 2);
+
+  if n > MaxSiz then
+      n := MaxSiz;
+
+  SetLength(buff, n shr 1);
+  CopyPtr(p, @buff[0], n);
+end;
+
 procedure TPascalString.ReadWideChar(p: Pointer);
 // Read null‑terminated WideChar buffer.
 var n: NativeInt;
@@ -2589,6 +2627,11 @@ begin
     end;
   SetLength(buff, n shr 1);
   CopyPtr(p, @buff[0], n);
+end;
+
+class function TPascalString.ReadWideCharTo(p: Pointer; MaxSiz: NativeInt): TPascalString;
+begin
+  Result.ReadWideChar(p, MaxSiz);
 end;
 
 class function TPascalString.ReadWideCharTo(p: Pointer): TPascalString;
@@ -2637,18 +2680,33 @@ begin
   Z.Notify.DelayFreeMemory(60.0, Result);
 end;
 
+procedure TPascalString.ReadUTF8AnsiChar(p: Pointer; MaxSiz: NativeInt);
+var n: NativeInt; buff_: TBytes;
+begin
+  n := 0;
+  while (PByte(GetPtr(p, n))^ <> 0) and (n < MaxSiz) do
+      inc(n);
+  SetLength(buff_, n);
+  CopyPtr(p, @buff_[0], n);
+  UTF8 := buff_;
+  SetLength(buff_, 0);
+end;
+
 procedure TPascalString.ReadUTF8AnsiChar(p: Pointer);
 var n: NativeInt; buff_: TBytes;
 begin
   n := 0;
   while PByte(GetPtr(p, n))^ <> 0 do
-    begin
       inc(n);
-    end;
   SetLength(buff_, n);
   CopyPtr(p, @buff_[0], n);
   UTF8 := buff_;
   SetLength(buff_, 0);
+end;
+
+class function TPascalString.ReadUTF8AnsiCharTo(p: Pointer; MaxSiz: NativeInt): TPascalString;
+begin
+  Result.ReadUTF8AnsiChar(p, MaxSiz);
 end;
 
 class function TPascalString.ReadUTF8AnsiCharTo(p: Pointer): TPascalString;
