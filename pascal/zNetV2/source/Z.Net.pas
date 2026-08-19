@@ -4836,6 +4836,8 @@ function IsIPv4(const S: U_String): Boolean;
 function IsIPV6(const S: U_String): Boolean;
 function MakeRandomIPV6(): TIPV6;
 function IsLocalNetworkIPV4(const S: U_String): Boolean;
+function IsLoopbackIPV4(const S: U_String): Boolean;
+function IsLoopbackIPV6(const S: U_String): Boolean;
 function CompareIPV4(const IP1, IP2: TIPV4): Boolean;
 function CompareIPV6(const IP1, IP2: TIPV6): Boolean;
 function TranslateBindAddr(addr: SystemString): SystemString; { Host address parsing. }
@@ -5891,6 +5893,24 @@ begin
       exit;
   Result := umlMultipleMatch(['192.168.*.*', '10.*.*.*',
       '172.16.*.*', '172.17.*.*', '172.18.*.*', '172.19.*.*', '172.2?.*.*', '172.30.*.*', '172.31.*.*'], n);
+end;
+
+function IsLoopbackIPV4(const S: U_String): Boolean;
+var
+  n: U_String;
+begin
+  Result := False;
+  n := S.DeleteChar(#32#0#9#13#10);
+  Result := umlMultipleMatch(['127.0.0.1', 'localhost'], n);
+end;
+
+function IsLoopbackIPV6(const S: U_String): Boolean;
+var
+  n: U_String;
+begin
+  Result := False;
+  n := S.DeleteChar(#32#0#9#13#10);
+  Result := umlMultipleMatch(['::1', '::1/*'], n);
 end;
 
 function CompareIPV4(const IP1, IP2: TIPV4): Boolean;
@@ -13702,7 +13722,13 @@ begin
     end;
   if not cmd_instance_.InheritsFrom(TCommandConsole) then
     begin
-      ErrorParam('Illegal interface in cmd: %s', Cmd);
+      if cmd_instance_.InheritsFrom(TCommandConsoleNotify) then // compatible fixed, by.qq600585
+        begin
+          Result := TCommandConsoleNotify(cmd_instance_).Execute(Sender, InData);
+          if not Result then
+              ErrorParam('exception from cmd: %s', Cmd);
+        end
+      else ErrorParam('Illegal interface in cmd: %s', Cmd);
       exit;
     end;
   Result := TCommandConsole(cmd_instance_).Execute(Sender, InData, OutData);
@@ -13761,6 +13787,7 @@ end;
 function TZNet.ExecuteConsoleNotify(Sender: TPeerIO; const Cmd: SystemString; const InData: SystemString): Boolean;
 var
   cmd_instance_: TCommand_base;
+  tmp: SystemString;
 begin
   Result := False;
   if not CanExecuteCommand(Sender, Cmd) then
@@ -13773,7 +13800,14 @@ begin
     end;
   if not cmd_instance_.InheritsFrom(TCommandConsoleNotify) then
     begin
-      ErrorParam('Illegal interface in cmd: %s', Cmd);
+      if cmd_instance_.InheritsFrom(TCommandConsole) then // compatible fixed, by.qq600585
+        begin
+          tmp := '';
+          Result := TCommandConsole(cmd_instance_).Execute(Sender, InData, tmp);
+          if not Result then
+              ErrorParam('exception from cmd: %s', Cmd);
+        end
+      else ErrorParam('Illegal interface in cmd: %s', Cmd);
       exit;
     end;
   Result := TCommandConsoleNotify(cmd_instance_).Execute(Sender, InData);
