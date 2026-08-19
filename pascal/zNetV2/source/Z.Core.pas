@@ -1559,46 +1559,52 @@ type
     function Progress(): Integer; overload;
 
     // post thread
-    procedure PostC_NP(OnSync: TThreadPost_C1);
-    procedure PostM_NP(OnSync: TThreadPost_M1);
-    procedure PostP_NP(OnSync: TThreadPost_P1);
-    procedure PostC1(OnSync: TThreadPost_C1); overload;
-    procedure PostC1(OnSync: TThreadPost_C1; IsRuning_, IsExit_: PBoolean); overload;
-    procedure PostC2(Data1: Pointer; OnSync: TThreadPost_C2); overload;
-    procedure PostC2(Data1: Pointer; OnSync: TThreadPost_C2; IsRuning_, IsExit_: PBoolean); overload;
-    procedure PostC3(Data1: Pointer; Data2: TCore_Object; Data3: Variant; OnSync: TThreadPost_C3); overload;
-    procedure PostC3(Data1: Pointer; Data2: TCore_Object; Data3: Variant; OnSync: TThreadPost_C3; IsRuning_, IsExit_: PBoolean); overload;
-    procedure PostC4(Data1: Pointer; Data2: TCore_Object; OnSync: TThreadPost_C4); overload;
-    procedure PostC4(Data1: Pointer; Data2: TCore_Object; OnSync: TThreadPost_C4; IsRuning_, IsExit_: PBoolean); overload;
-    procedure PostM1(OnSync: TThreadPost_M1); overload;
-    procedure PostM1(OnSync: TThreadPost_M1; IsRuning_, IsExit_: PBoolean); overload;
-    procedure PostM2(Data1: Pointer; OnSync: TThreadPost_M2); overload;
-    procedure PostM2(Data1: Pointer; OnSync: TThreadPost_M2; IsRuning_, IsExit_: PBoolean); overload;
-    procedure PostM3(Data1: Pointer; Data2: TCore_Object; Data3: Variant; OnSync: TThreadPost_M3); overload;
-    procedure PostM3(Data1: Pointer; Data2: TCore_Object; Data3: Variant; OnSync: TThreadPost_M3; IsRuning_, IsExit_: PBoolean); overload;
-    procedure PostM4(Data1: Pointer; Data2: TCore_Object; OnSync: TThreadPost_M4); overload;
-    procedure PostM4(Data1: Pointer; Data2: TCore_Object; OnSync: TThreadPost_M4; IsRuning_, IsExit_: PBoolean); overload;
-    procedure PostP1(OnSync: TThreadPost_P1); overload;
-    procedure PostP1(OnSync: TThreadPost_P1; IsRuning_, IsExit_: PBoolean); overload;
-    procedure PostP2(Data1: Pointer; OnSync: TThreadPost_P2); overload;
-    procedure PostP2(Data1: Pointer; OnSync: TThreadPost_P2; IsRuning_, IsExit_: PBoolean); overload;
-    procedure PostP3(Data1: Pointer; Data2: TCore_Object; Data3: Variant; OnSync: TThreadPost_P3); overload;
-    procedure PostP3(Data1: Pointer; Data2: TCore_Object; Data3: Variant; OnSync: TThreadPost_P3; IsRuning_, IsExit_: PBoolean); overload;
-    procedure PostP4(Data1: Pointer; Data2: TCore_Object; OnSync: TThreadPost_P4); overload;
-    procedure PostP4(Data1: Pointer; Data2: TCore_Object; OnSync: TThreadPost_P4; IsRuning_, IsExit_: PBoolean); overload;
+    procedure PostC_NP(OnSync: TThreadPost_C1); // Posts a C‑style procedure to the thread queue (non‑blocking, no status tracking).
+    procedure PostM_NP(OnSync: TThreadPost_M1); // Posts an M‑style method to the thread queue (non‑blocking, no status tracking).
+    procedure PostP_NP(OnSync: TThreadPost_P1); // Posts a P‑style procedure to the thread queue (non‑blocking, no status tracking).
+
+    procedure PostC1(OnSync: TThreadPost_C1); overload; // Posts a C‑style procedure without extra data.
+    procedure PostC1(OnSync: TThreadPost_C1; IsRuning_, IsExit_: PBoolean); overload; // Posts a C‑style procedure; sets IsRuning_=True while running, IsExit_=True when done.
+    procedure PostC2(Data1: Pointer; OnSync: TThreadPost_C2); overload; // Posts a C‑style procedure with one pointer argument.
+    procedure PostC2(Data1: Pointer; OnSync: TThreadPost_C2; IsRuning_, IsExit_: PBoolean); overload; // Posts a C‑style procedure with pointer; tracks execution status via IsRuning_ and IsExit_.
+    procedure PostC3(Data1: Pointer; Data2: TCore_Object; Data3: Variant; OnSync: TThreadPost_C3); overload; // Posts a C‑style procedure with pointer, object, and Variant arguments.
+    procedure PostC3(Data1: Pointer; Data2: TCore_Object; Data3: Variant; OnSync: TThreadPost_C3; IsRuning_, IsExit_: PBoolean); overload; // Posts C‑style with three arguments; tracks status via IsRuning_/IsExit_.
+    procedure PostC4(Data1: Pointer; Data2: TCore_Object; OnSync: TThreadPost_C4); overload; // Posts a C‑style procedure with pointer and object arguments.
+    procedure PostC4(Data1: Pointer; Data2: TCore_Object; OnSync: TThreadPost_C4; IsRuning_, IsExit_: PBoolean); overload; // Posts C‑style with pointer and object; tracks execution status.
+
+    procedure PostM1(OnSync: TThreadPost_M1); overload; // Posts an M‑style method (object method) without extra data.
+    procedure PostM1(OnSync: TThreadPost_M1; IsRuning_, IsExit_: PBoolean); overload; // Posts an M‑style method; tracks status via IsRuning_/IsExit_.
+    procedure PostM2(Data1: Pointer; OnSync: TThreadPost_M2); overload; // Posts an M‑style method with one pointer argument.
+    procedure PostM2(Data1: Pointer; OnSync: TThreadPost_M2; IsRuning_, IsExit_: PBoolean); overload; // Posts an M‑style method with pointer; tracks status.
+    procedure PostM3(Data1: Pointer; Data2: TCore_Object; Data3: Variant; OnSync: TThreadPost_M3); overload; // Posts an M‑style method with pointer, object, and Variant.
+    procedure PostM3(Data1: Pointer; Data2: TCore_Object; Data3: Variant; OnSync: TThreadPost_M3; IsRuning_, IsExit_: PBoolean); overload; // Posts M‑style with three args; tracks status.
+    procedure PostM4(Data1: Pointer; Data2: TCore_Object; OnSync: TThreadPost_M4); overload; // Posts an M‑style method with pointer and object.
+    procedure PostM4(Data1: Pointer; Data2: TCore_Object; OnSync: TThreadPost_M4; IsRuning_, IsExit_: PBoolean); overload; // Posts M‑style with pointer/object; tracks status.
+
+    procedure PostP1(OnSync: TThreadPost_P1); overload; // Posts a P‑style procedure (nested/anonymous) without extra data.
+    procedure PostP1(OnSync: TThreadPost_P1; IsRuning_, IsExit_: PBoolean); overload; // Posts a P‑style procedure; tracks status.
+    procedure PostP2(Data1: Pointer; OnSync: TThreadPost_P2); overload; // Posts a P‑style procedure with one pointer argument.
+    procedure PostP2(Data1: Pointer; OnSync: TThreadPost_P2; IsRuning_, IsExit_: PBoolean); overload; // Posts P‑style with pointer; tracks status.
+    procedure PostP3(Data1: Pointer; Data2: TCore_Object; Data3: Variant; OnSync: TThreadPost_P3); overload; // Posts a P‑style procedure with pointer, object, and Variant.
+    procedure PostP3(Data1: Pointer; Data2: TCore_Object; Data3: Variant; OnSync: TThreadPost_P3; IsRuning_, IsExit_: PBoolean); overload; // Posts P‑style with three args; tracks status.
+    procedure PostP4(Data1: Pointer; Data2: TCore_Object; OnSync: TThreadPost_P4); overload; // Posts a P‑style procedure with pointer and object.
+    procedure PostP4(Data1: Pointer; Data2: TCore_Object; OnSync: TThreadPost_P4; IsRuning_, IsExit_: PBoolean); overload; // Posts P‑style with pointer/object; tracks status.
+
     // post thread and wait sync
-    procedure Sync_Wait_PostC1(OnSync: TThreadPost_C1);
-    procedure Sync_Wait_PostC2(Data1: Pointer; OnSync: TThreadPost_C2);
-    procedure Sync_Wait_PostC3(Data1: Pointer; Data2: TCore_Object; Data3: Variant; OnSync: TThreadPost_C3);
-    procedure Sync_Wait_PostC4(Data1: Pointer; Data2: TCore_Object; OnSync: TThreadPost_C4);
-    procedure Sync_Wait_PostM1(OnSync: TThreadPost_M1);
-    procedure Sync_Wait_PostM2(Data1: Pointer; OnSync: TThreadPost_M2);
-    procedure Sync_Wait_PostM3(Data1: Pointer; Data2: TCore_Object; Data3: Variant; OnSync: TThreadPost_M3);
-    procedure Sync_Wait_PostM4(Data1: Pointer; Data2: TCore_Object; OnSync: TThreadPost_M4);
-    procedure Sync_Wait_PostP1(OnSync: TThreadPost_P1);
-    procedure Sync_Wait_PostP2(Data1: Pointer; OnSync: TThreadPost_P2);
-    procedure Sync_Wait_PostP3(Data1: Pointer; Data2: TCore_Object; Data3: Variant; OnSync: TThreadPost_P3);
-    procedure Sync_Wait_PostP4(Data1: Pointer; Data2: TCore_Object; OnSync: TThreadPost_P4);
+    procedure Sync_Wait_PostC1(OnSync: TThreadPost_C1); // Posts a C‑style procedure and blocks the caller until it executes on the target thread.
+    procedure Sync_Wait_PostC2(Data1: Pointer; OnSync: TThreadPost_C2); // Posts a C‑style procedure with one pointer argument and waits for completion.
+    procedure Sync_Wait_PostC3(Data1: Pointer; Data2: TCore_Object; Data3: Variant; OnSync: TThreadPost_C3); // Posts a C‑style procedure with pointer, object, and Variant; blocks until done.
+    procedure Sync_Wait_PostC4(Data1: Pointer; Data2: TCore_Object; OnSync: TThreadPost_C4); // Posts a C‑style procedure with pointer and object; blocks until done.
+
+    procedure Sync_Wait_PostM1(OnSync: TThreadPost_M1); // Posts an M‑style method and blocks the caller until it executes.
+    procedure Sync_Wait_PostM2(Data1: Pointer; OnSync: TThreadPost_M2); // Posts an M‑style method with one pointer argument and waits for completion.
+    procedure Sync_Wait_PostM3(Data1: Pointer; Data2: TCore_Object; Data3: Variant; OnSync: TThreadPost_M3); // Posts an M‑style method with pointer, object, and Variant; blocks until done.
+    procedure Sync_Wait_PostM4(Data1: Pointer; Data2: TCore_Object; OnSync: TThreadPost_M4); // Posts an M‑style method with pointer and object; blocks until done.
+
+    procedure Sync_Wait_PostP1(OnSync: TThreadPost_P1); // Posts a P‑style procedure (nested/anonymous) and blocks the caller until it executes.
+    procedure Sync_Wait_PostP2(Data1: Pointer; OnSync: TThreadPost_P2); // Posts a P‑style procedure with one pointer argument and waits for completion.
+    procedure Sync_Wait_PostP3(Data1: Pointer; Data2: TCore_Object; Data3: Variant; OnSync: TThreadPost_P3); // Posts a P‑style procedure with pointer, object, and Variant; blocks until done.
+    procedure Sync_Wait_PostP4(Data1: Pointer; Data2: TCore_Object; OnSync: TThreadPost_P4); // Posts a P‑style procedure with pointer and object; blocks until done.
   end;
 
   TThread_Post = TThreadPost;
@@ -1721,6 +1727,7 @@ type
     class procedure RunC(const OnRun: TRun_Thread_C; IsRuning_, IsExit_: PBoolean); overload;
     class procedure RunC_NP(const OnRun: TRun_Thread_C_NP); overload;
     class procedure RunC_NP(const OnRun: TRun_Thread_C_NP; IsRuning_, IsExit_: PBoolean); overload;
+
     class procedure RunM(const Data: Pointer; const Obj: TCore_Object; const OnRun, OnDone: TRun_Thread_M); overload;
     class procedure RunM(const Data: Pointer; const Obj: TCore_Object; const OnRun, OnDone: TRun_Thread_M; IsRuning_, IsExit_: PBoolean); overload;
     class procedure RunM(const Data: Pointer; const Obj: TCore_Object; const OnRun: TRun_Thread_M); overload;
@@ -1729,6 +1736,7 @@ type
     class procedure RunM(const OnRun: TRun_Thread_M; IsRuning_, IsExit_: PBoolean); overload;
     class procedure RunM_NP(const OnRun: TRun_Thread_M_NP); overload;
     class procedure RunM_NP(const OnRun: TRun_Thread_M_NP; IsRuning_, IsExit_: PBoolean); overload;
+
     class procedure RunP(const Data: Pointer; const Obj: TCore_Object; const OnRun, OnDone: TRun_Thread_P); overload;
     class procedure RunP(const Data: Pointer; const Obj: TCore_Object; const OnRun, OnDone: TRun_Thread_P; IsRuning_, IsExit_: PBoolean); overload;
     class procedure RunP(const Data: Pointer; const Obj: TCore_Object; const OnRun: TRun_Thread_P); overload;
@@ -1754,6 +1762,7 @@ type
     class procedure PostC3(Data1: Pointer; Data2: TCore_Object; Data3: Variant; OnSync: TThreadPost_C3; IsRuning_, IsExit_: PBoolean); overload;
     class procedure PostC4(Data1: Pointer; Data2: TCore_Object; OnSync: TThreadPost_C4); overload;
     class procedure PostC4(Data1: Pointer; Data2: TCore_Object; OnSync: TThreadPost_C4; IsRuning_, IsExit_: PBoolean); overload;
+
     class procedure PostM1(OnSync: TThreadPost_M1); overload;
     class procedure PostM1(OnSync: TThreadPost_M1; IsRuning_, IsExit_: PBoolean); overload;
     class procedure PostM2(Data1: Pointer; OnSync: TThreadPost_M2); overload;
@@ -1762,6 +1771,7 @@ type
     class procedure PostM3(Data1: Pointer; Data2: TCore_Object; Data3: Variant; OnSync: TThreadPost_M3; IsRuning_, IsExit_: PBoolean); overload;
     class procedure PostM4(Data1: Pointer; Data2: TCore_Object; OnSync: TThreadPost_M4); overload;
     class procedure PostM4(Data1: Pointer; Data2: TCore_Object; OnSync: TThreadPost_M4; IsRuning_, IsExit_: PBoolean); overload;
+
     class procedure PostP1(OnSync: TThreadPost_P1); overload;
     class procedure PostP1(OnSync: TThreadPost_P1; IsRuning_, IsExit_: PBoolean); overload;
     class procedure PostP2(Data1: Pointer; OnSync: TThreadPost_P2); overload;
@@ -1770,6 +1780,7 @@ type
     class procedure PostP3(Data1: Pointer; Data2: TCore_Object; Data3: Variant; OnSync: TThreadPost_P3; IsRuning_, IsExit_: PBoolean); overload;
     class procedure PostP4(Data1: Pointer; Data2: TCore_Object; OnSync: TThreadPost_P4); overload;
     class procedure PostP4(Data1: Pointer; Data2: TCore_Object; OnSync: TThreadPost_P4; IsRuning_, IsExit_: PBoolean); overload;
+
     // post main thread and wait synchronization
     class procedure Sync_Wait_PostC1(OnSync: TThreadPost_C1);
     class procedure Sync_Wait_PostC2(Data1: Pointer; OnSync: TThreadPost_C2);
