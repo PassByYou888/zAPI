@@ -171,7 +171,7 @@ begin
   if (Th is TCompute) and (TCompute(Th).FRndInstance <> nil) then
     begin
       Result := TCompute(Th).FRndInstance;
-      Result^.LastActivtedTime := GetTimeTick;
+      Result^.LastActivtedTime := GetTimeTick();
       exit;
     end;
 
@@ -363,7 +363,7 @@ begin
             inc(dest);
           end;
       finally
-        LastActivtedTime := GetTimeTick;
+        LastActivtedTime := GetTimeTick();
         Busy := False;
       end;
     end;
@@ -402,7 +402,7 @@ begin
             inc(dest);
           end;
       finally
-        LastActivtedTime := GetTimeTick;
+        LastActivtedTime := GetTimeTick();
         Busy := False;
       end;
     end;
@@ -430,7 +430,7 @@ begin
             inc(dest);
           end;
       finally
-        LastActivtedTime := GetTimeTick;
+        LastActivtedTime := GetTimeTick();
         Busy := False;
       end;
     end;
@@ -458,7 +458,7 @@ begin
             inc(dest);
           end;
       finally
-        LastActivtedTime := GetTimeTick;
+        LastActivtedTime := GetTimeTick();
         Busy := False;
       end;
     end;
@@ -486,7 +486,7 @@ begin
             inc(dest);
           end;
       finally
-        LastActivtedTime := GetTimeTick;
+        LastActivtedTime := GetTimeTick();
         Busy := False;
       end;
     end;
@@ -540,7 +540,7 @@ procedure TMT19937Random.Rndmize;
 begin
   FInternalCritical.Acquire;
   with PMD19937Core(FRndInstance)^ do
-      InternalRndSeed := GetTimeTick;
+      InternalRndSeed := GetTimeTick();
   FInternalCritical.Release;
 end;
 
