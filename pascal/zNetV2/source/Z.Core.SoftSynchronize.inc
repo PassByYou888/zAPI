@@ -220,10 +220,7 @@ begin
           MainThreadProgress.Progress(Main_Thread_ID);
           Timer_Event_Pool__.Progress();
 
-          try
-              Main_Thread_Sync_Tool.Check_Synchronize(Timeout);
-          except
-          end;
+          Main_Thread_Sync_Tool.Check_Synchronize(Timeout);
 
           if Run_Hook_Event_ then
             begin
@@ -280,10 +277,7 @@ begin
 
           if Main_Thread_Soft_Synchronize and (Main_Thread_Sync_Tool.Soft_Synchronize_Main_Thread = Main_Thread) then
             begin
-              try
-                  Result := (Main_Thread_Sync_Tool.Check_Synchronize(if_(Timeout > 0, 1, 0)) > 0) or Result;
-              except
-              end;
+              Result := (Main_Thread_Sync_Tool.Check_Synchronize(if_(Timeout > 0, 1, 0)) > 0) or Result;
             end;
 
           if Run_Hook_Event_ then
