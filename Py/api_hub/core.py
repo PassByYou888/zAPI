@@ -15,17 +15,29 @@ Thread‑safety notes from the Pascal unit:
       invoked in background thread‑pool threads. They must not block,
       must not call API_Call/API_Notify, and must not access UI without
       synchronisation.
+
+NEW (2026-08-20): Atomic type support and null‑terminated string methods
+    - All atomic write methods return bool (success if full bytes written).
+    - All atomic read methods return the value; raise BufferError if
+      insufficient bytes are available.
+    - write_string_null_terminated() writes UTF‑8 bytes followed by a NUL.
+    - read_string_null_terminated() reads until NUL or end of buffer,
+      returns decoded string, and moves position to the NUL if found,
+      or leaves position unchanged if not found.
+    These mirror the Pascal functions API_WriteInt8, API_ReadString, etc.
 """
 import ctypes
+import struct
 from typing import Any, Optional, Callable
 from ._native import (
     DataHnd, AppHnd,
     API_Create_DataHnd, API_Free_DataHnd,
     API_WriteBuffer, API_ReadBuffer,
     API_GetSize, API_SetPos,
+    API_GetBuffer, API_GetPos,
     API_Create_APPHnd, API_Free_APPHnd,
     API_Reg_Call, API_Reg_Notify,
-    API_UnReg,  # NEW
+    API_UnReg,
     API_Local_APP_Call, API_Local_APP_Notify,
     APICallFunc, APINotifyFunc,
 )
@@ -151,6 +163,183 @@ class DataHandle:
     def size(self) -> int:
         """Current buffer size in bytes."""
         return API_GetSize(self._hnd)
+
+    # ========================================================================
+    # NEW: Atomic types and null‑terminated string support (Pascal‑compatible)
+    # Added 2026-08-20, matching z_api_hubtool_import.pas exactly.
+    # All writes return True if the full number of bytes was written.
+    # All reads return the value; if insufficient bytes, raises BufferError.
+    # ========================================================================
+
+    # ---------- Write helpers (little‑endian) ----------
+
+    def write_int8(self, value: int) -> bool:
+        """Write a signed 8‑bit integer (1 byte)."""
+        return self._write_pack('<b', value) == 1
+
+    def write_uint8(self, value: int) -> bool:
+        """Write an unsigned 8‑bit integer (1 byte)."""
+        return self._write_pack('<B', value) == 1
+
+    def write_int16(self, value: int) -> bool:
+        """Write a signed 16‑bit integer (2 bytes, little‑endian)."""
+        return self._write_pack('<h', value) == 2
+
+    def write_uint16(self, value: int) -> bool:
+        """Write an unsigned 16‑bit integer (2 bytes, little‑endian)."""
+        return self._write_pack('<H', value) == 2
+
+    def write_int32(self, value: int) -> bool:
+        """Write a signed 32‑bit integer (4 bytes, little‑endian)."""
+        return self._write_pack('<i', value) == 4
+
+    def write_uint32(self, value: int) -> bool:
+        """Write an unsigned 32‑bit integer (4 bytes, little‑endian)."""
+        return self._write_pack('<I', value) == 4
+
+    def write_int64(self, value: int) -> bool:
+        """Write a signed 64‑bit integer (8 bytes, little‑endian)."""
+        return self._write_pack('<q', value) == 8
+
+    def write_uint64(self, value: int) -> bool:
+        """Write an unsigned 64‑bit integer (8 bytes, little‑endian)."""
+        return self._write_pack('<Q', value) == 8
+
+    def write_single(self, value: float) -> bool:
+        """Write a 32‑bit IEEE 754 single‑precision float (4 bytes, little‑endian)."""
+        return self._write_pack('<f', value) == 4
+
+    def write_double(self, value: float) -> bool:
+        """Write a 64‑bit IEEE 754 double‑precision float (8 bytes, little‑endian)."""
+        return self._write_pack('<d', value) == 8
+
+    def write_string_null_terminated(self, value: str) -> bool:
+        """
+        Write a UTF‑8 encoded string followed by a null terminator (#0).
+
+        This matches Pascal's API_WriteString. The position is advanced by
+        len(UTF‑8 bytes) + 1.
+
+        Returns:
+            True if the entire string and the terminating null were written.
+        """
+        utf8 = value.encode('utf-8')
+        written = self._write_bytes(utf8)
+        if written != len(utf8):
+            return False
+        # append NUL
+        return self._write_pack('<B', 0) == 1
+
+    def _write_pack(self, fmt: str, value) -> int:
+        """Pack a value using struct.pack and write it."""
+        data = struct.pack(fmt, value)
+        return self._write_bytes(data)
+
+    def _write_bytes(self, data: bytes) -> int:
+        """Write raw bytes, return number of bytes actually written."""
+        if not data:
+            return 0
+        return API_WriteBuffer(self._hnd, data, len(data))
+
+    # ---------- Read helpers (little‑endian) ----------
+
+    def read_int8(self) -> int:
+        """Read a signed 8‑bit integer (1 byte)."""
+        return self._read_unpack('<b')
+
+    def read_uint8(self) -> int:
+        """Read an unsigned 8‑bit integer (1 byte)."""
+        return self._read_unpack('<B')
+
+    def read_int16(self) -> int:
+        """Read a signed 16‑bit integer (2 bytes, little‑endian)."""
+        return self._read_unpack('<h')
+
+    def read_uint16(self) -> int:
+        """Read an unsigned 16‑bit integer (2 bytes, little‑endian)."""
+        return self._read_unpack('<H')
+
+    def read_int32(self) -> int:
+        """Read a signed 32‑bit integer (4 bytes, little‑endian)."""
+        return self._read_unpack('<i')
+
+    def read_uint32(self) -> int:
+        """Read an unsigned 32‑bit integer (4 bytes, little‑endian)."""
+        return self._read_unpack('<I')
+
+    def read_int64(self) -> int:
+        """Read a signed 64‑bit integer (8 bytes, little‑endian)."""
+        return self._read_unpack('<q')
+
+    def read_uint64(self) -> int:
+        """Read an unsigned 64‑bit integer (8 bytes, little‑endian)."""
+        return self._read_unpack('<Q')
+
+    def read_single(self) -> float:
+        """Read a 32‑bit IEEE 754 single‑precision float (4 bytes, little‑endian)."""
+        return self._read_unpack('<f')
+
+    def read_double(self) -> float:
+        """Read a 64‑bit IEEE 754 double‑precision float (8 bytes, little‑endian)."""
+        return self._read_unpack('<d')
+
+    def read_string_null_terminated(self) -> str:
+        """
+        Read a UTF‑8 string terminated by a null byte (#0) from the current position.
+
+        The position is advanced to the byte **after** the null terminator,
+        matching Pascal's API_ReadString behavior.
+
+        If no null is found before the end of the buffer, the position remains
+        unchanged and an empty string is returned.
+
+        Returns:
+            The decoded string (may be empty if the first byte is 0 or at end).
+        """
+        pos = API_GetPos(self._hnd)
+        size = API_GetSize(self._hnd)
+        if pos >= size:
+            return ""   # position already at end, no data
+
+        ptr = API_GetBuffer(self._hnd)
+        if not ptr:
+            raise BufferError("DataHandle buffer is invalid")
+
+        # Scan for null
+        end = pos
+        cptr = ctypes.cast(ptr, ctypes.POINTER(ctypes.c_byte))
+        while end < size and cptr[end] != 0:
+            end += 1
+
+        if end == size:
+            # No null terminator found: position unchanged, return empty.
+            return ""
+
+        # Read bytes from pos to end-1 (excluding null)
+        raw = bytes(cptr[pos:end])
+        # Advance position to after the null
+        API_SetPos(self._hnd, end + 1)
+        return raw.decode('utf-8')
+
+    def _read_unpack(self, fmt: str):
+        """Read the required number of bytes and unpack with struct."""
+        size = struct.calcsize(fmt)
+        data = self._read_bytes(size)
+        if len(data) != size:
+            raise BufferError(f"Not enough data to read {fmt} (needed {size} bytes, got {len(data)})")
+        return struct.unpack(fmt, data)[0]
+
+    def _read_bytes(self, n: int) -> bytes:
+        """Read exactly n bytes from current position, advancing position."""
+        if n <= 0:
+            return b''
+        buf = (ctypes.c_byte * n)()
+        read = API_ReadBuffer(self._hnd, buf, n)
+        if read != n:
+            # Not enough data; we still return what we read, but caller must handle
+            # For atomic reads we raise an error, but this helper just returns bytes.
+            return bytes(buf)[:read]
+        return bytes(buf)
 
 
 class App:
