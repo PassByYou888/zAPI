@@ -130,7 +130,7 @@ cd Py/bridge
 pip install -r requirements.txt
 ```
 
-> 详细依赖清单见 [ZAPI Bridge Python 依赖清单](./ZAPI%20Bridge%20Python%20依赖清单.md)
+> 详细依赖清单见 [ZAPI Bridge Python 依赖清单](./ZAPI Bridge Python 依赖清单.md)
 
 ### 3.3 目录结构
 
@@ -903,4 +903,4 @@ python zapi_bridge.py
 - [浏览器调用 C++ 的三种方案对比：为什么我们选择了 zAPI 网关](../web/浏览器调用%20C++%20的三种方案对比：为什么我们选择了%20zAPI%20网关.md)
 - [js_api.py 使用指南](../web/js_api.py%20使用指南.md)
 - [ZAPI Bridge Python 依赖清单](./ZAPI%20Bridge%20Python%20依赖清单.md)
-- [ZAPI 桥接开发踩坑记录](./ZAPI%20桥接开发踩坑记录.md)
+- [ZAPI 桥接开发踩坑记录](./ZAPI 桥接开发踩坑记录.md)

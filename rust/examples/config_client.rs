@@ -7,18 +7,19 @@ fn main() -> Result<()> {
     prepare_done()?;
 
     let mut set_param = DataHandle::new("set")?;
-    set_param.write_string("db_url")?;
-    set_param.write_string("postgres://localhost:5432")?;
+    set_param.write_string_null_terminated("db_url")?;
+    set_param.write_string_null_terminated("postgres://localhost:5432")?;
     notify("ConfigService", set_param.as_raw());
 
     let mut get_param = DataHandle::new("get")?;
-    get_param.write_string("db_url")?;
+    get_param.write_string_null_terminated("db_url")?;
     let res = call("ConfigService", get_param.as_raw(), 3000)?;
     if get_size(res) == 0 {
         println!("获取配置失败");
     } else {
-        let mut resp = unsafe { DataHandle::from_raw(res) };
-        let val = resp.read_string()?;
+        // 修改点
+        let mut resp = unsafe { DataHandle::from_owned_raw(res) };
+        let val = resp.read_string_null_terminated()?;
         println!("db_url = {}", val);
     }
 

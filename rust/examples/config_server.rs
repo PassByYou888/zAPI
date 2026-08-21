@@ -15,15 +15,15 @@ fn get_config() -> &'static Arc<Mutex<HashMap<String, String>>> {
 
 extern "C" fn set_callback(_trigger: *mut c_void, input: DataHnd) {
     let mut h = unsafe { DataHandle::from_raw(input) };
-    let key = h.read_string().unwrap_or_default();
-    let val = h.read_string().unwrap_or_default();
+    let key = h.read_string_null_terminated().unwrap_or_default();
+    let val = h.read_string_null_terminated().unwrap_or_default();
     let mut map = get_config().lock().unwrap();
     map.insert(key.clone(), val.clone());
     println!("[Config] set {} = {}", key, val);
 }
 extern "C" fn get_callback(_trigger: *mut c_void, input: DataHnd, output: DataHnd) {
     let mut h = unsafe { DataHandle::from_raw(input) };
-    let key = h.read_string().unwrap_or_default();
+    let key = h.read_string_null_terminated().unwrap_or_default();
     let map = get_config().lock().unwrap();
     let val = map.get(&key).cloned().unwrap_or_default();
     let _ = write_buffer(output, val.as_bytes());

@@ -6,7 +6,7 @@
 
 
 uses
-  FastMM5, // 内存管理器（仅 Delphi 下有效，用于调试和性能）
+//  FastMM5, // 内存管理器（仅 Delphi 下有效，用于调试和性能）
 {$IFDEF UNIX}
   cthreads, // Free Pascal 下多线程支持
 {$ENDIF}
@@ -46,7 +46,7 @@ type
 type
   TSequPool = class(TBigList<TSequ_Data>)
   private
-    FMax_recv_Num: Integer; // 期望接收的总块数（由 EndData 设置）
+    FMax_recv_Num: UInt64; // 期望接收的总块数（由 EndData 设置）
     FLast_Update: TTimeTick; // 最后一次收到 Data 或 EndData 的时间（毫秒）
     FU64_Inst: UInt64;
   public
@@ -204,7 +204,7 @@ begin
   if API_GetSize(Input) < 16 then
       Exit;
   API_SetPos(Input, 0);
-  u64 := API_ReadUInt64(Input, 0);
+  API_ReadUInt64(Input, u64);
   if u64 = 0 then
       Exit;
   p := Pointer(u64);
@@ -228,7 +228,7 @@ begin
     // 在池中新增一条记录
     with dataQueue.Add_Null^ do
       begin
-        Data.index := API_ReadInt64(Input, -1); // 读取索引
+        API_ReadInt64(Input, Data.index); // 读取索引
         Data.Mem := TMem64.Create;
         // 从偏移 16 处开始读取数据（前 16 字节是 ID + 索引）
         Data.Mem.WritePtr(API_GetBuffer2(Input, 16), API_GetSize(Input) - 16);
@@ -250,7 +250,7 @@ begin
   if API_GetSize(Input) < 16 then
       Exit;
   API_SetPos(Input, 0);
-  u64 := API_ReadUInt64(Input, 0);
+  API_ReadUInt64(Input, u64);
   if u64 = 0 then
       Exit;
   p := Pointer(u64);
@@ -265,7 +265,7 @@ begin
 
     dataQueue := p;
     // 读取总块数
-    dataQueue.FMax_recv_Num := API_ReadUInt64(Input, 0);
+    API_ReadUInt64(Input, dataQueue.FMax_recv_Num);
     dataQueue.FU64_Inst := u64;
     if dataQueue.FMax_recv_Num = 0 then
         Exit;

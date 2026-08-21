@@ -8,14 +8,15 @@ fn main() -> Result<()> {
 
     let msg = "Hello from Rust echo client!";
     let mut param = DataHandle::new("echo")?;
-    param.write_string(msg)?;
+    param.write_string_null_terminated(msg)?;
     let res = call("EchoService", param.as_raw(), 3000)?;
     let size = get_size(res);
     if size == 0 {
         println!("回显调用超时或失败");
     } else {
-        let mut resp = unsafe { DataHandle::from_raw(res) };
-        let reply = resp.read_string()?;
+        // 修改点：from_raw → from_owned_raw
+        let mut resp = unsafe { DataHandle::from_owned_raw(res) };
+        let reply = resp.read_string_null_terminated()?;
         println!("原始: {}\n回显: {}", msg, reply);
     }
 

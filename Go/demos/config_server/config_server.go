@@ -16,18 +16,18 @@ func main() {
 	srv, _ := api_hub.NewServer("ConfigService", "config center")
 	defer srv.Stop()
 	srv.RegisterNotify("set", "", func(in api_hub.DataHnd) {
-		key, _ := api_hub.ReadString(in)
-		val, _ := api_hub.ReadString(in)
+		key, _ := api_hub.ReadStringZ(in)
+		val, _ := api_hub.ReadStringZ(in)
 		cfgMu.Lock()
 		cfg[key] = val
 		cfgMu.Unlock()
 	})
 	srv.RegisterCall("get", "", func(in, out api_hub.DataHnd) {
-		key, _ := api_hub.ReadString(in)
+		key, _ := api_hub.ReadStringZ(in)
 		cfgMu.RLock()
 		val := cfg[key]
 		cfgMu.RUnlock()
-		api_hub.WriteString(out, val)
+		api_hub.WriteStringZ(out, val)
 	})
 	srv.Start("ipc:config_service")
 	for { time.Sleep(time.Hour) }

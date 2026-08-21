@@ -9,13 +9,17 @@ import java.util.concurrent.*;
  * FuncClient – 真正并发的性能压测客户端。
  * 对每个 API 发起指定次数的调用，统计延迟（微秒）及 QPS。
  * 所有调用同时进行（线程数 = 总调用数），无锁，依赖库的线程安全。
+ * 
+ * <p><b>Cross‑language string protocol (2026-08-21):</b> All string
+ * I/O now uses {@link DataHandle#writeStringNullTerminated(String)}
+ * and {@link DataHandle#readStringNullTerminated()}, ensuring full
+ * compatibility with Pascal and other language bindings.</p>
  */
 public class FuncClient {
 
     private static final int TOTAL_CALLS = 100;   // 每个 API 的总调用次数
     private static final int TIMEOUT_MS = 5000;
 
-    // 统计结构
     static class Stats {
         double avg, min, max, median, stddev;
         long count;
@@ -23,7 +27,6 @@ public class FuncClient {
         double totalSec;
     }
 
-    // 计算统计信息
     private static Stats computeStats(List<Double> times, double elapsedSec) {
         if (times.isEmpty()) return new Stats();
         Collections.sort(times);
@@ -36,7 +39,7 @@ public class FuncClient {
         double median = times.get(times.size() / 2);
         double qps = times.size() / elapsedSec;
         Stats s = new Stats();
-        s.avg = mean / 1000.0;          // 转为毫秒
+        s.avg = mean / 1000.0;
         s.min = times.get(0) / 1000.0;
         s.max = times.get(times.size() - 1) / 1000.0;
         s.median = median / 1000.0;
@@ -47,19 +50,17 @@ public class FuncClient {
         return s;
     }
 
-    // 并发执行一个 API 调用，返回延迟微秒
     private static double measureOneCall(Callable<Void> action) throws Exception {
         long start = System.nanoTime();
         action.call();
         long end = System.nanoTime();
-        return (end - start) / 1000.0; // 微秒
+        return (end - start) / 1000.0;
     }
 
-    // 针对每个 API 运行压测
     private static Stats benchmark(String name, int totalCalls, Callable<Void> action) throws Exception {
         List<Double> times = Collections.synchronizedList(new ArrayList<>(totalCalls));
         CountDownLatch latch = new CountDownLatch(totalCalls);
-        ExecutorService pool = Executors.newFixedThreadPool(totalCalls); // 每个调用一个线程
+        ExecutorService pool = Executors.newFixedThreadPool(totalCalls);
 
         long startNano = System.nanoTime();
 
@@ -69,7 +70,7 @@ public class FuncClient {
                     double us = measureOneCall(action);
                     times.add(us);
                 } catch (Exception e) {
-                    // 失败则记录 0，可忽略
+                    // 失败则忽略，计数仍递减
                 } finally {
                     latch.countDown();
                 }
@@ -90,7 +91,6 @@ public class FuncClient {
         System.out.printf("Threads per API: %d, total calls per API: %d\n", TOTAL_CALLS, TOTAL_CALLS);
         System.out.println("Times in milliseconds (ms), QPS = calls/sec\n");
 
-        // 连接服务（纯消费）
         ApiHub.resetPrepare();
         ApiHub.prepareClient("ipc:func_service", null);
         ApiHub.prepareClient("127.0.0.1:9899", null);
@@ -110,7 +110,6 @@ public class FuncClient {
         }
         System.out.println("Warm-up done.\n");
 
-        // 准备测试数据
         int[] intArr = {1,2,3,4,5,6,7,8,9,10};
         String[] strArr = {"Hello", "world", "from", "client", "test"};
 
@@ -118,21 +117,20 @@ public class FuncClient {
                 "API", "Avg(ms)", "Min(ms)", "Max(ms)", "Median(ms)", "StdDev(ms)", "Calls", "QPS", "Total(s)");
         System.out.println("----------------------------------------------------------------------------------------------------------------------");
 
-        // 定义各个 API 的调用动作
         Map<String, Callable<Void>> actions = new LinkedHashMap<>();
         actions.put("add", () -> { try (DataHandle p = new DataHandle("add")) { p.writeInt(10); p.writeInt(20); try (DataHandle r = ApiHub.call("FuncService", p, TIMEOUT_MS)) { r.readInt(); } } return null; });
         actions.put("subtract", () -> { try (DataHandle p = new DataHandle("subtract")) { p.writeInt(50); p.writeInt(30); try (DataHandle r = ApiHub.call("FuncService", p, TIMEOUT_MS)) { r.readInt(); } } return null; });
         actions.put("multiply", () -> { try (DataHandle p = new DataHandle("multiply")) { p.writeInt(6); p.writeInt(7); try (DataHandle r = ApiHub.call("FuncService", p, TIMEOUT_MS)) { r.readInt(); } } return null; });
         actions.put("divide", () -> { try (DataHandle p = new DataHandle("divide")) { p.writeInt(10); p.writeInt(3); try (DataHandle r = ApiHub.call("FuncService", p, TIMEOUT_MS)) { r.readDouble(); } } return null; });
-        actions.put("to_upper", () -> { try (DataHandle p = new DataHandle("to_upper")) { p.writeString("hello"); try (DataHandle r = ApiHub.call("FuncService", p, TIMEOUT_MS)) { r.readString(); } } return null; });
-        actions.put("to_lower", () -> { try (DataHandle p = new DataHandle("to_lower")) { p.writeString("WORLD"); try (DataHandle r = ApiHub.call("FuncService", p, TIMEOUT_MS)) { r.readString(); } } return null; });
-        actions.put("reverse", () -> { try (DataHandle p = new DataHandle("reverse")) { p.writeString("abcdef"); try (DataHandle r = ApiHub.call("FuncService", p, TIMEOUT_MS)) { r.readString(); } } return null; });
-        actions.put("get_time", () -> { try (DataHandle p = new DataHandle("get_time")) { try (DataHandle r = ApiHub.call("FuncService", p, TIMEOUT_MS)) { r.readString(); } } return null; });
+        actions.put("to_upper", () -> { try (DataHandle p = new DataHandle("to_upper")) { p.writeStringNullTerminated("hello"); try (DataHandle r = ApiHub.call("FuncService", p, TIMEOUT_MS)) { r.readStringNullTerminated(); } } return null; });
+        actions.put("to_lower", () -> { try (DataHandle p = new DataHandle("to_lower")) { p.writeStringNullTerminated("WORLD"); try (DataHandle r = ApiHub.call("FuncService", p, TIMEOUT_MS)) { r.readStringNullTerminated(); } } return null; });
+        actions.put("reverse", () -> { try (DataHandle p = new DataHandle("reverse")) { p.writeStringNullTerminated("abcdef"); try (DataHandle r = ApiHub.call("FuncService", p, TIMEOUT_MS)) { r.readStringNullTerminated(); } } return null; });
+        actions.put("get_time", () -> { try (DataHandle p = new DataHandle("get_time")) { try (DataHandle r = ApiHub.call("FuncService", p, TIMEOUT_MS)) { r.readStringNullTerminated(); } } return null; });
         actions.put("get_random", () -> { try (DataHandle p = new DataHandle("get_random")) { p.writeInt(1); p.writeInt(100); try (DataHandle r = ApiHub.call("FuncService", p, TIMEOUT_MS)) { r.readInt(); } } return null; });
-        actions.put("echo", () -> { try (DataHandle p = new DataHandle("echo")) { p.writeString("Hello from client"); try (DataHandle r = ApiHub.call("FuncService", p, TIMEOUT_MS)) { r.readString(); } } return null; });
+        actions.put("echo", () -> { try (DataHandle p = new DataHandle("echo")) { p.writeStringNullTerminated("Hello from client"); try (DataHandle r = ApiHub.call("FuncService", p, TIMEOUT_MS)) { r.readStringNullTerminated(); } } return null; });
         actions.put("sum_array", () -> { try (DataHandle p = new DataHandle("sum_array")) { p.writeInt(intArr.length); for (int v : intArr) p.writeInt(v); try (DataHandle r = ApiHub.call("FuncService", p, TIMEOUT_MS)) { r.readInt(); } } return null; });
-        actions.put("concat_strings", () -> { try (DataHandle p = new DataHandle("concat_strings")) { p.writeInt(strArr.length); for (String s : strArr) p.writeString(s); try (DataHandle r = ApiHub.call("FuncService", p, TIMEOUT_MS)) { r.readString(); } } return null; });
-        actions.put("sha3", () -> { try (DataHandle p = new DataHandle("sha3")) { p.writeString("The quick brown fox jumps over the lazy dog"); try (DataHandle r = ApiHub.call("FuncService", p, TIMEOUT_MS)) { r.readString(); } } return null; });
+        actions.put("concat_strings", () -> { try (DataHandle p = new DataHandle("concat_strings")) { p.writeInt(strArr.length); for (String s : strArr) p.writeStringNullTerminated(s); try (DataHandle r = ApiHub.call("FuncService", p, TIMEOUT_MS)) { r.readStringNullTerminated(); } } return null; });
+        actions.put("sha3", () -> { try (DataHandle p = new DataHandle("sha3")) { p.writeStringNullTerminated("The quick brown fox jumps over the lazy dog"); try (DataHandle r = ApiHub.call("FuncService", p, TIMEOUT_MS)) { r.readStringNullTerminated(); } } return null; });
 
         for (Map.Entry<String, Callable<Void>> entry : actions.entrySet()) {
             String name = entry.getKey();

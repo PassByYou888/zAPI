@@ -375,9 +375,6 @@ type
     procedure Remove_Update(Bind: TCore_Object);
   end;
 
-var
-  Running_API_Num: TAtomInt;
-
 implementation
 
 { ----------------------------------------------------------------------------
@@ -787,7 +784,6 @@ var
   api_: TAPI_Info;
   input_, output_: PAPI_Data;
 begin
-  Running_API_Num.UnLock(Running_API_Num.LockP^ + 1);
   input_ := TAPI_Data.New_Param_From(Memory_Param);
   output_ := TAPI_Data.New_Result;
   Result := TMem64.Create;
@@ -820,7 +816,6 @@ begin
     Result.SwapInstance(output_.Data_Result);
     TAPI_Data.Free_Data(input_);
     TAPI_Data.Free_Data(output_);
-    Running_API_Num.UnLock(Running_API_Num.LockP^ - 1);
   end;
 end;
 
@@ -835,7 +830,6 @@ var
   api_: TAPI_Info;
   input_: PAPI_Data;
 begin
-  Running_API_Num.UnLock(Running_API_Num.LockP^ + 1);
   input_ := TAPI_Data.New_Param_From(Memory_Param);
   try
     api_ := API_Pool.Get_Default_Value(input_.Data_Param.apiName, nil);
@@ -863,8 +857,7 @@ begin
     end;
 
   finally
-    TAPI_Data.Free_Data(input_);
-    Running_API_Num.UnLock(Running_API_Num.LockP^ - 1);
+      TAPI_Data.Free_Data(input_);
   end;
 end;
 
@@ -959,13 +952,5 @@ procedure TAPI_APP.Remove_Update(Bind: TCore_Object);
 begin
   FAPIUpdate_Event_Pool.Delete(Bind);
 end;
-
-initialization
-
-Running_API_Num := TAtomInt.Create(0);
-
-finalization
-
-DisposeObject(Running_API_Num);
 
 end.

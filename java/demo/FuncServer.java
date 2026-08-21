@@ -12,6 +12,12 @@ import java.util.Random;
  * FuncServer – 功能丰富的服务端，注册 13 个 API。
  * 包含 SHA3-256 纯 Java 实现（自包含，无外部依赖）。
  * 支持 IPC 和 TCP，同时自连以允许本地环回。
+ * 
+ * <p><b>Cross‑language string protocol (2026-08-21):</b> All string
+ * I/O now uses {@link DataHandle#writeStringNullTerminated(String)}
+ * and {@link DataHandle#readStringNullTerminated()}, which are
+ * fully compatible with the Pascal {@code API_WriteString} / 
+ * {@code API_ReadString} contract (UTF‑8 + NUL terminator).</p>
  */
 public class FuncServer {
 
@@ -165,6 +171,7 @@ public class FuncServer {
 
     // ============================================================
     // 3. API 回调函数（从 DataHnd 读写）
+    //    All string I/O now uses NUL‑terminated format for cross‑language compatibility.
     // ============================================================
 
     private static void addCallback(Pointer trigger, Pointer input, Pointer output) {
@@ -219,8 +226,8 @@ public class FuncServer {
         try {
             DataHandle in = DataHandle.wrapInput(input);
             DataHandle out = DataHandle.wrapOutput(output);
-            String s = in.readString();
-            out.writeString(toUpper(s));
+            String s = in.readStringNullTerminated();
+            out.writeStringNullTerminated(toUpper(s));
         } catch (Exception e) {
             System.err.println("toUpperCallback error: " + e.getMessage());
         }
@@ -230,8 +237,8 @@ public class FuncServer {
         try {
             DataHandle in = DataHandle.wrapInput(input);
             DataHandle out = DataHandle.wrapOutput(output);
-            String s = in.readString();
-            out.writeString(toLower(s));
+            String s = in.readStringNullTerminated();
+            out.writeStringNullTerminated(toLower(s));
         } catch (Exception e) {
             System.err.println("toLowerCallback error: " + e.getMessage());
         }
@@ -241,8 +248,8 @@ public class FuncServer {
         try {
             DataHandle in = DataHandle.wrapInput(input);
             DataHandle out = DataHandle.wrapOutput(output);
-            String s = in.readString();
-            out.writeString(reverse(s));
+            String s = in.readStringNullTerminated();
+            out.writeStringNullTerminated(reverse(s));
         } catch (Exception e) {
             System.err.println("reverseCallback error: " + e.getMessage());
         }
@@ -251,7 +258,7 @@ public class FuncServer {
     private static void getTimeCallback(Pointer trigger, Pointer input, Pointer output) {
         try {
             DataHandle out = DataHandle.wrapOutput(output);
-            out.writeString(getTime());
+            out.writeStringNullTerminated(getTime());
         } catch (Exception e) {
             System.err.println("getTimeCallback error: " + e.getMessage());
         }
@@ -273,8 +280,8 @@ public class FuncServer {
         try {
             DataHandle in = DataHandle.wrapInput(input);
             DataHandle out = DataHandle.wrapOutput(output);
-            String s = in.readString();
-            out.writeString(echo(s));
+            String s = in.readStringNullTerminated();
+            out.writeStringNullTerminated(echo(s));
         } catch (Exception e) {
             System.err.println("echoCallback error: " + e.getMessage());
         }
@@ -300,8 +307,10 @@ public class FuncServer {
             DataHandle out = DataHandle.wrapOutput(output);
             int len = in.readInt();
             String[] arr = new String[len];
-            for (int i = 0; i < len; i++) arr[i] = in.readString();
-            out.writeString(concatStrings(arr));
+            for (int i = 0; i < len; i++) {
+                arr[i] = in.readStringNullTerminated();
+            }
+            out.writeStringNullTerminated(concatStrings(arr));
         } catch (Exception e) {
             System.err.println("concatStringsCallback error: " + e.getMessage());
         }
@@ -311,8 +320,8 @@ public class FuncServer {
         try {
             DataHandle in = DataHandle.wrapInput(input);
             DataHandle out = DataHandle.wrapOutput(output);
-            String s = in.readString();
-            out.writeString(Sha3.hashHex(s));
+            String s = in.readStringNullTerminated();
+            out.writeStringNullTerminated(Sha3.hashHex(s));
         } catch (Exception e) {
             System.err.println("sha3Callback error: " + e.getMessage());
         }
@@ -325,7 +334,6 @@ public class FuncServer {
     public static void main(String[] args) {
         System.out.println("=== Java FuncService (13 APIs) ===");
 
-        // 注册 Shutdown Hook 保证优雅退出
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             System.out.println("Shutdown hook triggered.");
             ApiHub.exitMainThread();
@@ -334,7 +342,6 @@ public class FuncServer {
 
         try (AppHandle app = new AppHandle("FuncService", "Functional service with 13 APIs")) {
 
-            // 注册所有回调
             app.registerCall("add", "Add two integers", FuncServer::addCallback);
             app.registerCall("subtract", "Subtract two integers", FuncServer::subtractCallback);
             app.registerCall("multiply", "Multiply two integers", FuncServer::multiplyCallback);
@@ -351,7 +358,6 @@ public class FuncServer {
 
             System.out.println("Registered 13 APIs.");
 
-            // 网络准备：IPC + TCP，并自连
             ApiHub.resetPrepare();
             ApiHub.prepareService("ipc:func_service", "ipc:func_service");
             ApiHub.prepareService("0.0.0.0", "127.0.0.1:9899");
@@ -366,7 +372,6 @@ public class FuncServer {
             System.out.println("Service started on ipc:func_service and TCP 127.0.0.1:9899");
             System.out.println("Press Ctrl+C to stop...");
 
-            // 可中断循环
             while (!Thread.currentThread().isInterrupted()) {
                 try {
                     Thread.sleep(1000);
@@ -375,7 +380,6 @@ public class FuncServer {
                     Thread.currentThread().interrupt();
                     break;
                 }
-                // 状态信息由库直接打印到控制台，无需手动获取
             }
         } catch (Exception e) {
             e.printStackTrace();

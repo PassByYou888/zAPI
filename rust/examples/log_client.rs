@@ -7,13 +7,13 @@ fn main() -> Result<()> {
     prepare_done()?;
 
     let mut param = DataHandle::new("log")?;
-    param.write_string("INFO")?;
-    param.write_string("Hello from Rust log client!")?;
+    param.write_string_null_terminated("INFO")?;
+    param.write_string_null_terminated("Hello from Rust log client!")?;
     notify("LogService", param.as_raw());
 
     let mut param2 = DataHandle::new("log")?;
-    param2.write_string("ERROR")?;
-    param2.write_string("Something went wrong!")?;
+    param2.write_string_null_terminated("ERROR")?;
+    param2.write_string_null_terminated("Something went wrong!")?;
     notify("LogService", param2.as_raw());
 
     std::thread::sleep(std::time::Duration::from_millis(500));

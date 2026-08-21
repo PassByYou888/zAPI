@@ -16,7 +16,8 @@ fn main() -> Result<()> {
             if size == 0 {
                 println!("调用 {}({}, {}) 超时或失败", $api, $a, $b);
             } else {
-                let mut resp = unsafe { DataHandle::from_raw(res) };
+                // 修改点
+                let mut resp = unsafe { DataHandle::from_owned_raw(res) };
                 let result = resp.read_i32()?;
                 println!("{}({}, {}) = {}", $api, $a, $b, result);
             }

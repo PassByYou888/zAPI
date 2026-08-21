@@ -19,7 +19,7 @@ func main() {
 	// upload: 接收文件名 + 整个文件内容（一次性读取）
 	srv.RegisterCall("upload", "", func(in, out api_hub.DataHnd) {
 		// 1. 读取文件名（字符串）
-		name, err := api_hub.ReadString(in)
+		name, err := api_hub.ReadStringZ(in)
 		if err != nil {
 			fmt.Println("upload: read name failed:", err)
 			api_hub.WriteBool(out, false)
@@ -55,7 +55,7 @@ func main() {
 
 	// download: 读取文件名，返回整个文件内容（一次性写入）
 	srv.RegisterCall("download", "", func(in, out api_hub.DataHnd) {
-		name, err := api_hub.ReadString(in)
+		name, err := api_hub.ReadStringZ(in)
 		if err != nil {
 			fmt.Println("download: read name failed:", err)
 			return

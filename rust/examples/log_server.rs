@@ -9,8 +9,8 @@ use std::time::{Duration, Instant};
 
 extern "C" fn log_callback(_trigger: *mut c_void, input: DataHnd) {
     let mut h = unsafe { DataHandle::from_raw(input) };
-    let level = h.read_string().unwrap_or_default();
-    let msg = h.read_string().unwrap_or_default();
+    let level = h.read_string_null_terminated().unwrap_or_default();
+    let msg = h.read_string_null_terminated().unwrap_or_default();
     println!("[Log] {}: {}", level, msg);
 }
 

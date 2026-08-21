@@ -42,10 +42,10 @@ func main() {
 	}
 	defer client.FreeDataHnd(h)
 
-	if err := client.WriteString(h, "weather"); err != nil {
+	if err := client.WriteStringZ(h, "weather"); err != nil {
 		panic(err)
 	}
-	if err := client.WriteString(h, "client1"); err != nil {
+	if err := client.WriteStringZ(h, "client1"); err != nil {
 		panic(err)
 	}
 	client.Notify("PubSubService", h)
@@ -57,10 +57,10 @@ func main() {
 	}
 	defer client.FreeDataHnd(h2)
 
-	if err := client.WriteString(h2, "weather"); err != nil {
+	if err := client.WriteStringZ(h2, "weather"); err != nil {
 		panic(err)
 	}
-	if err := client.WriteString(h2, "Sunny"); err != nil {
+	if err := client.WriteStringZ(h2, "Sunny"); err != nil {
 		panic(err)
 	}
 	client.Notify("PubSubService", h2)

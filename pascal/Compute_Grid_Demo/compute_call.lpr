@@ -23,18 +23,14 @@ uses
 function Express(exp_: string): string;
 var
   send_, return_: TDataHnd;
-  p: Pointer;
-  siz: integer;
 begin
   Result := '';
   send_ := API_Create_DataHnd2('exp');
-  p := TPascalString(exp_).BuildUTF8AnsiChar(siz);
-  API_WriteBuffer(send_, p, siz);
-  TPascalString.FreeUTF8AnsiChar(p);
+  API_WriteString(send_, exp_);
 
   return_ := API_Call2('pas', send_, 1000);
   if API_GetSize(return_) > 0 then
-    Result := TPascalString.ReadUTF8AnsiCharTo(API_GetBuffer(return_));
+    Result := API_ReadString(return_);
 
   API_Free_DataHnd(send_);
   API_Free_DataHnd(return_);

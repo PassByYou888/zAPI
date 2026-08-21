@@ -28,7 +28,8 @@ fn main() -> Result<()> {
                 if get_size(res) > 0 {
                     counter.fetch_add(1, Ordering::SeqCst);
                 }
-                unsafe { DataHandle::from_raw(res) };
+                // 修改点：使用 from_owned_raw 确保释放
+                unsafe { DataHandle::from_owned_raw(res) };
             }
         }));
     }

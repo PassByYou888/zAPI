@@ -7,13 +7,13 @@ fn main() -> Result<()> {
     prepare_done()?;
 
     let mut sub = DataHandle::new("subscribe")?;
-    sub.write_string("weather")?;
-    sub.write_string("client1")?;
+    sub.write_string_null_terminated("weather")?;
+    sub.write_string_null_terminated("client1")?;
     notify("PubSubService", sub.as_raw());
 
     let mut pub_msg = DataHandle::new("publish")?;
-    pub_msg.write_string("weather")?;
-    pub_msg.write_string("Sunny day!")?;
+    pub_msg.write_string_null_terminated("weather")?;
+    pub_msg.write_string_null_terminated("Sunny day!")?;
     notify("PubSubService", pub_msg.as_raw());
 
     std::thread::sleep(std::time::Duration::from_millis(500));

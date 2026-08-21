@@ -12,7 +12,8 @@ fn main() -> Result<()> {
     param.write_i32(200)?;
     let res = call("FuncService", param.as_raw(), 3000)?;
     if get_size(res) > 0 {
-        let mut resp = unsafe { DataHandle::from_raw(res) };
+        // 修改点
+        let mut resp = unsafe { DataHandle::from_owned_raw(res) };
         let sum = resp.read_i32()?;
         println!("add(100,200) = {}", sum);
     } else {
@@ -20,11 +21,12 @@ fn main() -> Result<()> {
     }
 
     let mut param2 = DataHandle::new("to_upper")?;
-    param2.write_string("hello from rust")?;
+    param2.write_string_null_terminated("hello from rust")?;
     let res2 = call("FuncService", param2.as_raw(), 3000)?;
     if get_size(res2) > 0 {
-        let mut resp2 = unsafe { DataHandle::from_raw(res2) };
-        let s = resp2.read_string()?;
+        // 修改点
+        let mut resp2 = unsafe { DataHandle::from_owned_raw(res2) };
+        let s = resp2.read_string_null_terminated()?;
         println!("to_upper('hello from rust') = '{}'", s);
     } else {
         println!("to_upper 调用失败");

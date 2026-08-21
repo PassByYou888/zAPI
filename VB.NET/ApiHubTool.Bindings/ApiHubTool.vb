@@ -364,7 +364,7 @@ Public NotInheritable Class API
     End Sub
 
     ' ======================================================================
-    ' Convenience Helpers
+    ' Convenience Helpers (Existing)
     ' ======================================================================
 
     ''' <summary>
@@ -409,5 +409,264 @@ Public NotInheritable Class API
         nullTerm(bytes.Length) = 0
         WriteBytes(hnd, nullTerm)
     End Sub
+
+    ' ======================================================================
+    ' NEW: Atomic Type Helpers (Pascal‑compatible, little‑endian)
+    ' Added 2026-08-20, matching z_api_hubtool_import.pas exactly.
+    ' All write methods return Boolean indicating success (full bytes written).
+    ' All read methods return the value via ByRef and return Boolean.
+    ' ======================================================================
+
+    ' ---------- Write Helpers ----------
+
+    ''' <summary>
+    ''' Writes a signed 8‑bit integer (1 byte) to the handle at the current position.
+    ''' </summary>
+    ''' <returns>True if the byte was successfully written.</returns>
+    Public Shared Function WriteInt8(hnd As DataHnd, value As SByte) As Boolean
+        Dim b As Byte = CByte(value)
+        Return WriteBytes(hnd, {b}) = 1
+    End Function
+
+    ''' <summary>
+    ''' Writes an unsigned 8‑bit integer (1 byte) to the handle.
+    ''' </summary>
+    Public Shared Function WriteUInt8(hnd As DataHnd, value As Byte) As Boolean
+        Return WriteBytes(hnd, {value}) = 1
+    End Function
+
+    ''' <summary>
+    ''' Writes a signed 16‑bit integer (2 bytes, little‑endian) to the handle.
+    ''' </summary>
+    Public Shared Function WriteInt16(hnd As DataHnd, value As Short) As Boolean
+        Return WriteBytes(hnd, BitConverter.GetBytes(value)) = 2
+    End Function
+
+    ''' <summary>
+    ''' Writes an unsigned 16‑bit integer (2 bytes, little‑endian) to the handle.
+    ''' </summary>
+    Public Shared Function WriteUInt16(hnd As DataHnd, value As UShort) As Boolean
+        Return WriteBytes(hnd, BitConverter.GetBytes(value)) = 2
+    End Function
+
+    ''' <summary>
+    ''' Writes a signed 32‑bit integer (4 bytes, little‑endian) to the handle.
+    ''' </summary>
+    Public Shared Function WriteInt32(hnd As DataHnd, value As Integer) As Boolean
+        Return WriteBytes(hnd, BitConverter.GetBytes(value)) = 4
+    End Function
+
+    ''' <summary>
+    ''' Writes an unsigned 32‑bit integer (4 bytes, little‑endian) to the handle.
+    ''' </summary>
+    Public Shared Function WriteUInt32(hnd As DataHnd, value As UInteger) As Boolean
+        Return WriteBytes(hnd, BitConverter.GetBytes(value)) = 4
+    End Function
+
+    ''' <summary>
+    ''' Writes a signed 64‑bit integer (8 bytes, little‑endian) to the handle.
+    ''' </summary>
+    Public Shared Function WriteInt64(hnd As DataHnd, value As Long) As Boolean
+        Return WriteBytes(hnd, BitConverter.GetBytes(value)) = 8
+    End Function
+
+    ''' <summary>
+    ''' Writes an unsigned 64‑bit integer (8 bytes, little‑endian) to the handle.
+    ''' </summary>
+    Public Shared Function WriteUInt64(hnd As DataHnd, value As ULong) As Boolean
+        Return WriteBytes(hnd, BitConverter.GetBytes(value)) = 8
+    End Function
+
+    ''' <summary>
+    ''' Writes a 32‑bit IEEE 754 single‑precision float (4 bytes, little‑endian) to the handle.
+    ''' </summary>
+    Public Shared Function WriteSingle(hnd As DataHnd, value As Single) As Boolean
+        Return WriteBytes(hnd, BitConverter.GetBytes(value)) = 4
+    End Function
+
+    ''' <summary>
+    ''' Writes a 64‑bit IEEE 754 double‑precision float (8 bytes, little‑endian) to the handle.
+    ''' </summary>
+    Public Shared Function WriteDouble(hnd As DataHnd, value As Double) As Boolean
+        Return WriteBytes(hnd, BitConverter.GetBytes(value)) = 8
+    End Function
+
+    ''' <summary>
+    ''' Writes a UTF‑8 encoded string followed by a null terminator (#0).
+    ''' This matches the standard "UTF‑8 + #0" format used across all languages.
+    ''' The position is advanced by Length(UTF8String) + 1 bytes.
+    ''' </summary>
+    ''' <returns>True if the entire string (including the trailing null) was written.</returns>
+    Public Shared Function WriteStringNullTerminated(hnd As DataHnd, str As String) As Boolean
+        Dim bytes = Encoding.UTF8.GetBytes(str)
+        Dim totalLen = bytes.Length + 1
+        Dim buf(totalLen - 1) As Byte
+        Array.Copy(bytes, 0, buf, 0, bytes.Length)
+        buf(bytes.Length) = 0
+        Return WriteBytes(hnd, buf) = totalLen
+    End Function
+
+    ' ---------- Read Helpers ----------
+
+    ''' <summary>
+    ''' Reads a signed 8‑bit integer (1 byte) from the current position.
+    ''' </summary>
+    ''' <returns>True if the byte was successfully read.</returns>
+    Public Shared Function ReadInt8(hnd As DataHnd, ByRef value As SByte) As Boolean
+        Dim b(0) As Byte
+        If API_ReadBuffer(hnd, b, 1) <> 1 Then
+            Return False
+        End If
+        value = CSByte(b(0))
+        Return True
+    End Function
+
+    ''' <summary>
+    ''' Reads an unsigned 8‑bit integer (1 byte) from the current position.
+    ''' </summary>
+    Public Shared Function ReadUInt8(hnd As DataHnd, ByRef value As Byte) As Boolean
+        Dim b(0) As Byte
+        If API_ReadBuffer(hnd, b, 1) <> 1 Then
+            Return False
+        End If
+        value = b(0)
+        Return True
+    End Function
+
+    ''' <summary>
+    ''' Reads a signed 16‑bit integer (2 bytes, little‑endian) from the current position.
+    ''' </summary>
+    Public Shared Function ReadInt16(hnd As DataHnd, ByRef value As Short) As Boolean
+        Dim b(1) As Byte
+        If API_ReadBuffer(hnd, b, 2) <> 2 Then
+            Return False
+        End If
+        value = BitConverter.ToInt16(b, 0)
+        Return True
+    End Function
+
+    ''' <summary>
+    ''' Reads an unsigned 16‑bit integer (2 bytes, little‑endian) from the current position.
+    ''' </summary>
+    Public Shared Function ReadUInt16(hnd As DataHnd, ByRef value As UShort) As Boolean
+        Dim b(1) As Byte
+        If API_ReadBuffer(hnd, b, 2) <> 2 Then
+            Return False
+        End If
+        value = BitConverter.ToUInt16(b, 0)
+        Return True
+    End Function
+
+    ''' <summary>
+    ''' Reads a signed 32‑bit integer (4 bytes, little‑endian) from the current position.
+    ''' </summary>
+    Public Shared Function ReadInt32(hnd As DataHnd, ByRef value As Integer) As Boolean
+        Dim b(3) As Byte
+        If API_ReadBuffer(hnd, b, 4) <> 4 Then
+            Return False
+        End If
+        value = BitConverter.ToInt32(b, 0)
+        Return True
+    End Function
+
+    ''' <summary>
+    ''' Reads an unsigned 32‑bit integer (4 bytes, little‑endian) from the current position.
+    ''' </summary>
+    Public Shared Function ReadUInt32(hnd As DataHnd, ByRef value As UInteger) As Boolean
+        Dim b(3) As Byte
+        If API_ReadBuffer(hnd, b, 4) <> 4 Then
+            Return False
+        End If
+        value = BitConverter.ToUInt32(b, 0)
+        Return True
+    End Function
+
+    ''' <summary>
+    ''' Reads a signed 64‑bit integer (8 bytes, little‑endian) from the current position.
+    ''' </summary>
+    Public Shared Function ReadInt64(hnd As DataHnd, ByRef value As Long) As Boolean
+        Dim b(7) As Byte
+        If API_ReadBuffer(hnd, b, 8) <> 8 Then
+            Return False
+        End If
+        value = BitConverter.ToInt64(b, 0)
+        Return True
+    End Function
+
+    ''' <summary>
+    ''' Reads an unsigned 64‑bit integer (8 bytes, little‑endian) from the current position.
+    ''' </summary>
+    Public Shared Function ReadUInt64(hnd As DataHnd, ByRef value As ULong) As Boolean
+        Dim b(7) As Byte
+        If API_ReadBuffer(hnd, b, 8) <> 8 Then
+            Return False
+        End If
+        value = BitConverter.ToUInt64(b, 0)
+        Return True
+    End Function
+
+    ''' <summary>
+    ''' Reads a 32‑bit IEEE 754 single‑precision float (4 bytes, little‑endian) from the current position.
+    ''' </summary>
+    Public Shared Function ReadSingle(hnd As DataHnd, ByRef value As Single) As Boolean
+        Dim b(3) As Byte
+        If API_ReadBuffer(hnd, b, 4) <> 4 Then
+            Return False
+        End If
+        value = BitConverter.ToSingle(b, 0)
+        Return True
+    End Function
+
+    ''' <summary>
+    ''' Reads a 64‑bit IEEE 754 double‑precision float (8 bytes, little‑endian) from the current position.
+    ''' </summary>
+    Public Shared Function ReadDouble(hnd As DataHnd, ByRef value As Double) As Boolean
+        Dim b(7) As Byte
+        If API_ReadBuffer(hnd, b, 8) <> 8 Then
+            Return False
+        End If
+        value = BitConverter.ToDouble(b, 0)
+        Return True
+    End Function
+
+    ''' <summary>
+    ''' Reads a UTF‑8 encoded string terminated by a null byte (#0) from the current position.
+    ''' The read position is advanced past the terminating null.
+    ''' If no null terminator is found, the position remains unchanged and False is returned.
+    ''' </summary>
+    ''' <returns>True if a null terminator was found and the string was read.</returns>
+    ''' <param name="hnd">Data handle.</param>
+    ''' <param name="value">Output string (empty if no data or no null found).</param>
+    Public Shared Function ReadStringNullTerminated(hnd As DataHnd, ByRef value As String) As Boolean
+        Dim size = API_GetSize(hnd)
+        Dim pos = API_GetPos(hnd)
+        If pos >= size Then
+            value = ""
+            Return False
+        End If
+        ' Read all remaining bytes
+        Dim remaining = CInt(size - pos)
+        Dim buf(remaining - 1) As Byte
+        Dim read = API_ReadBuffer(hnd, buf, remaining)
+        If read = 0 Then
+            value = ""
+            Return False
+        End If
+        ' Find null terminator
+        Dim nulPos = Array.IndexOf(buf, CByte(0), 0, CInt(read))
+        If nulPos >= 0 Then
+            ' Found null: extract string without it, and move position to after the null
+            API_SetPos(hnd, pos + nulPos + 1)
+            Dim strBytes(nulPos - 1) As Byte
+            Array.Copy(buf, 0, strBytes, 0, nulPos)
+            value = Encoding.UTF8.GetString(strBytes)
+            Return True
+        Else
+            ' No null found: restore position to original, return False
+            API_SetPos(hnd, pos)
+            value = ""
+            Return False
+        End If
+    End Function
 
 End Class

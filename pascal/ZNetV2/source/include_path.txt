@@ -1,0 +1,6 @@
+delphi path
+D:\git\zNetV2\source\;D:\git\zNetV2\source\sec\
+
+****************************************************************************
+D:\git\zNetV2\source\
+D:\git\zNetV2\source\sec\

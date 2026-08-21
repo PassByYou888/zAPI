@@ -161,7 +161,11 @@ unit z_api_hubtool_import;
   {$CODEPAGE UTF8}
 {$endif}
 
+{$R-}
+
 interface
+
+uses SysUtils;
 
 {===============================================================================
   1. Type Definitions
@@ -252,7 +256,7 @@ const
   {$IF Defined(CPU64) or Defined(CPUX64)}
     libapi_hub = 'z_api_hub64.dll';   // 64-bit Windows
   {$ELSE}
-    libapi_hub = 'z_api_hub32.dll';   // 32-bit Windows
+  libapi_hub = 'z_api_hub32.dll';   // 32-bit Windows
   {$ENDIF}
 {$ELSE}
   {$IFDEF DARWIN}
@@ -291,7 +295,7 @@ const
         API_Free_DataHnd(d);
       end;
   ****************************************************************************}
-function API_Create_DataHnd(APIName: PAnsiChar): TDataHnd; cdecl; external libapi_hub name 'API_Create_DataHnd';
+function API_Create_DataHnd(APIName: pansichar): TDataHnd; cdecl; external libapi_hub name 'API_Create_DataHnd';
 function API_Create_DataHnd2(APIName: string): TDataHnd;   // convenience overload, auto UTF‑8
 
   {****************************************************************************
@@ -325,7 +329,7 @@ procedure API_Free_DataHnd(Hnd: TDataHnd); cdecl; external libapi_hub name 'API_
       end;
   ****************************************************************************}
 function API_GetBuffer(Hnd: TDataHnd): Pointer; cdecl; external libapi_hub name 'API_GetBuffer';
-function API_GetBuffer2(Hnd: TDataHnd; Offset: NativeInt): Pointer;   // returns pointer with offset
+function API_GetBuffer2(Hnd: TDataHnd; Offset: nativeint): Pointer;   // returns pointer with offset
 
   {****************************************************************************
     3.4 API_WriteBuffer
@@ -346,11 +350,95 @@ function API_GetBuffer2(Hnd: TDataHnd; Offset: NativeInt): Pointer;   // returns
         API_WriteBuffer(d, @i, SizeOf(i));
       end;
   ****************************************************************************}
-function API_WriteBuffer(Hnd: TDataHnd; Buff: Pointer; Size: Int64): Int64; cdecl; external libapi_hub name 'API_WriteBuffer';
-function API_WriteInt64(Hnd: TDataHnd; i64: Int64): Boolean;       // convenience write Int64
-function API_WriteInt32(Hnd: TDataHnd; i32: Integer): Boolean;      // convenience write Int32
-function API_WriteUInt64(Hnd: TDataHnd; u64: UInt64): Boolean;      // convenience write UInt64
-function API_WriteUInt32(Hnd: TDataHnd; u32: Cardinal): Boolean;    // convenience write UInt32
+function API_WriteBuffer(Hnd: TDataHnd; Buff: Pointer; Size: int64): int64; cdecl; external libapi_hub name 'API_WriteBuffer';
+
+// ========================== ATOMIC WRITE HELPERS ==========================
+// All write helpers return True if the full number of bytes was written.
+// They use little‑endian byte order and operate at the current read/write position.
+
+{****************************************************************************
+  3.4a API_WriteInt8
+  Writes a signed 8‑bit integer (1 byte) to the buffer at the current position.
+  Parameters:
+    Hnd   : data handle.
+    Value : signed 8‑bit value.
+  Returns:
+    True if the byte was successfully written.
+  Thread safe: write operations on the same handle must be serialized.
+  Example:
+    if API_WriteInt8(d, 127) then ...
+****************************************************************************}
+function API_WriteInt8(Hnd: TDataHnd; Value: int8): boolean;
+
+{****************************************************************************
+  3.4b API_WriteUInt8
+  Writes an unsigned 8‑bit integer (1 byte) to the buffer.
+****************************************************************************}
+function API_WriteUInt8(Hnd: TDataHnd; Value: uint8): boolean;
+
+{****************************************************************************
+  3.4c API_WriteInt16
+  Writes a signed 16‑bit integer (2 bytes, little‑endian) to the buffer.
+****************************************************************************}
+function API_WriteInt16(Hnd: TDataHnd; Value: int16): boolean;
+
+{****************************************************************************
+  3.4d API_WriteUInt16
+  Writes an unsigned 16‑bit integer (2 bytes, little‑endian) to the buffer.
+****************************************************************************}
+function API_WriteUInt16(Hnd: TDataHnd; Value: uint16): boolean;
+
+{****************************************************************************
+  3.4e API_WriteInt32
+  Writes a signed 32‑bit integer (4 bytes, little‑endian) to the buffer.
+****************************************************************************}
+function API_WriteInt32(Hnd: TDataHnd; Value: int32): boolean;
+
+{****************************************************************************
+  3.4f API_WriteUInt32
+  Writes an unsigned 32‑bit integer (4 bytes, little‑endian) to the buffer.
+****************************************************************************}
+function API_WriteUInt32(Hnd: TDataHnd; Value: uint32): boolean;
+
+{****************************************************************************
+  3.4g API_WriteInt64
+  Writes a signed 64‑bit integer (8 bytes, little‑endian) to the buffer.
+****************************************************************************}
+function API_WriteInt64(Hnd: TDataHnd; Value: int64): boolean;
+
+{****************************************************************************
+  3.4h API_WriteUInt64
+  Writes an unsigned 64‑bit integer (8 bytes, little‑endian) to the buffer.
+****************************************************************************}
+function API_WriteUInt64(Hnd: TDataHnd; Value: uint64): boolean;
+
+{****************************************************************************
+  3.4i API_WriteSingle
+  Writes a 32‑bit IEEE 754 single‑precision float (4 bytes, little‑endian).
+****************************************************************************}
+function API_WriteSingle(Hnd: TDataHnd; Value: single): boolean;
+
+{****************************************************************************
+  3.4j API_WriteDouble
+  Writes a 64‑bit IEEE 754 double‑precision float (8 bytes, little‑endian).
+****************************************************************************}
+function API_WriteDouble(Hnd: TDataHnd; Value: double): boolean;
+
+{****************************************************************************
+  3.4k API_WriteString
+  Writes a UTF‑8 encoded Pascal string, followed by a null terminator (#0).
+  This matches the standard "UTF‑8 + #0" format used across all languages.
+  Parameters:
+    Hnd   : data handle.
+    Value : Pascal string (will be encoded as UTF‑8 internally).
+  Returns:
+    True if the string (including the trailing null) was fully written.
+  Thread safe: write operations on the same handle must be serialized.
+  Example:
+    if API_WriteString(d, 'Hello') then ...
+  Note: The position is advanced by Length(UTF8String(Value)) + 1 bytes.
+****************************************************************************}
+function API_WriteString(Hnd: TDataHnd; const Value: string): boolean;
 
   {****************************************************************************
     3.5 API_ReadBuffer
@@ -372,11 +460,117 @@ function API_WriteUInt32(Hnd: TDataHnd; u32: Cardinal): Boolean;    // convenien
         if API_ReadBuffer(d, @i, SizeOf(i)) = SizeOf(i) then ...
       end;
   ****************************************************************************}
-function API_ReadBuffer(Hnd: TDataHnd; Buff: Pointer; Size: Int64): Int64; cdecl; external libapi_hub name 'API_ReadBuffer';
-function API_ReadInt64(Hnd: TDataHnd; Default: Int64): Int64;        // convenience read Int64 (returns Default on failure)
-function API_ReadInt32(Hnd: TDataHnd; Default: Integer): Integer;    // convenience read Int32
-function API_ReadUInt64(Hnd: TDataHnd; Default: UInt64): UInt64;     // convenience read UInt64
-function API_ReadUInt32(Hnd: TDataHnd; Default: Cardinal): Cardinal; // convenience read UInt32
+function API_ReadBuffer(Hnd: TDataHnd; Buff: Pointer; Size: int64): int64; cdecl; external libapi_hub name 'API_ReadBuffer';
+
+// ========================== ATOMIC READ HELPERS ==========================
+// All read helpers return True if the full number of bytes was read.
+// They use little‑endian byte order and operate at the current read/write position.
+
+{****************************************************************************
+  3.5a API_ReadInt8
+  Reads a signed 8‑bit integer (1 byte) from the current position.
+  Parameters:
+    Hnd   : data handle.
+    out Value : the read value (only valid if function returns True).
+  Returns:
+    True if the byte was successfully read.
+  Thread safe: reads on the same handle are safe as long as no concurrent write.
+  Example:
+    var v: Int8;
+    if API_ReadInt8(d, v) then ...
+****************************************************************************}
+function API_ReadInt8(Hnd: TDataHnd; out Value: int8): boolean; overload;
+
+{****************************************************************************
+  3.5b API_ReadUInt8
+  Reads an unsigned 8‑bit integer (1 byte).
+****************************************************************************}
+function API_ReadUInt8(Hnd: TDataHnd; out Value: uint8): boolean; overload;
+
+{****************************************************************************
+  3.5c API_ReadInt16
+  Reads a signed 16‑bit integer (2 bytes, little‑endian).
+****************************************************************************}
+function API_ReadInt16(Hnd: TDataHnd; out Value: int16): boolean; overload;
+
+{****************************************************************************
+  3.5d API_ReadUInt16
+  Reads an unsigned 16‑bit integer (2 bytes, little‑endian).
+****************************************************************************}
+function API_ReadUInt16(Hnd: TDataHnd; out Value: uint16): boolean; overload;
+
+{****************************************************************************
+  3.5e API_ReadInt32
+  Reads a signed 32‑bit integer (4 bytes, little‑endian).
+****************************************************************************}
+function API_ReadInt32(Hnd: TDataHnd; out Value: int32): boolean; overload;
+
+{****************************************************************************
+  3.5f API_ReadUInt32
+  Reads an unsigned 32‑bit integer (4 bytes, little‑endian).
+****************************************************************************}
+function API_ReadUInt32(Hnd: TDataHnd; out Value: uint32): boolean; overload;
+
+{****************************************************************************
+  3.5g API_ReadInt64
+  Reads a signed 64‑bit integer (8 bytes, little‑endian).
+****************************************************************************}
+function API_ReadInt64(Hnd: TDataHnd; out Value: int64): boolean; overload;
+
+{****************************************************************************
+  3.5h API_ReadUInt64
+  Reads an unsigned 64‑bit integer (8 bytes, little‑endian).
+****************************************************************************}
+function API_ReadUInt64(Hnd: TDataHnd; out Value: uint64): boolean; overload;
+
+{****************************************************************************
+  3.5i API_ReadSingle
+  Reads a 32‑bit IEEE 754 single‑precision float (4 bytes, little‑endian).
+****************************************************************************}
+function API_ReadSingle(Hnd: TDataHnd; out Value: single): boolean; overload;
+
+{****************************************************************************
+  3.5j API_ReadDouble
+  Reads a 64‑bit IEEE 754 double‑precision float (8 bytes, little‑endian).
+****************************************************************************}
+function API_ReadDouble(Hnd: TDataHnd; out Value: double): boolean; overload;
+
+{****************************************************************************
+  Overload: direct return version for each read function.
+  Returns the value read, or 0 (0.0 for floats) if reading fails.
+****************************************************************************}
+function API_ReadInt8(Hnd: TDataHnd): int8; overload;
+function API_ReadUInt8(Hnd: TDataHnd): uint8; overload;
+function API_ReadInt16(Hnd: TDataHnd): int16; overload;
+function API_ReadUInt16(Hnd: TDataHnd): uint16; overload;
+function API_ReadInt32(Hnd: TDataHnd): int32; overload;
+function API_ReadUInt32(Hnd: TDataHnd): uint32; overload;
+function API_ReadInt64(Hnd: TDataHnd): int64; overload;
+function API_ReadUInt64(Hnd: TDataHnd): uint64; overload;
+function API_ReadSingle(Hnd: TDataHnd): single; overload;
+function API_ReadDouble(Hnd: TDataHnd): double; overload;
+
+{****************************************************************************
+  3.5k API_ReadString
+  Reads a UTF‑8 encoded string terminated by a null byte (#0) from the current
+  position. The read position is advanced past the terminating null.
+  Parameters:
+    Hnd   : data handle.
+    out Value : the decoded Pascal string (empty if no data or invalid UTF‑8).
+  Returns:
+    True if at least one byte was read and a null terminator was found.
+    False if the end of the buffer is reached without a null terminator.
+  Thread safe: reads on the same handle are safe as long as no concurrent write.
+  Example:
+    var s: string;
+    if API_ReadString(d, s) then ...
+  Note: This function reads until a null byte (#0) is encountered. If the buffer
+        contains no null byte within the current size, it returns False and
+        Value is set to empty string. The position is moved to the byte after
+        the null terminator.
+****************************************************************************}
+function API_ReadString(Hnd: TDataHnd; out Value: string): boolean; overload;
+function API_ReadString(Hnd: TDataHnd): string; overload;
 
   {****************************************************************************
     3.6 API_GetPos / API_SetPos
@@ -384,8 +578,8 @@ function API_ReadUInt32(Hnd: TDataHnd; Default: Cardinal): Cardinal; // convenie
     If SetPos exceeds the current size, the buffer is extended with zero bytes.
     Thread safe: GetPos is read‑only safe; SetPos must be serialized.
   ****************************************************************************}
-function API_GetPos(Hnd: TDataHnd): Int64; cdecl; external libapi_hub name 'API_GetPos';
-procedure API_SetPos(Hnd: TDataHnd; Pos_: Int64); cdecl; external libapi_hub name 'API_SetPos';
+function API_GetPos(Hnd: TDataHnd): int64; cdecl; external libapi_hub name 'API_GetPos';
+procedure API_SetPos(Hnd: TDataHnd; Pos_: int64); cdecl; external libapi_hub name 'API_SetPos';
 
   {****************************************************************************
     3.7 API_GetSize / API_SetSize
@@ -394,8 +588,8 @@ procedure API_SetPos(Hnd: TDataHnd; Pos_: Int64); cdecl; external libapi_hub nam
     space is uninitialized.
     Thread safe: GetSize is read‑only safe; SetSize must be serialized.
   ****************************************************************************}
-function API_GetSize(Hnd: TDataHnd): Int64; cdecl; external libapi_hub name 'API_GetSize';
-procedure API_SetSize(Hnd: TDataHnd; Size_: Int64); cdecl; external libapi_hub name 'API_SetSize';
+function API_GetSize(Hnd: TDataHnd): int64; cdecl; external libapi_hub name 'API_GetSize';
+procedure API_SetSize(Hnd: TDataHnd; Size_: int64); cdecl; external libapi_hub name 'API_SetSize';
 
 {===============================================================================
   4. Application Handle Operations
@@ -413,7 +607,7 @@ procedure API_SetSize(Hnd: TDataHnd; Size_: Int64); cdecl; external libapi_hub n
     Note: must be freed with API_Free_APPHnd.
     Thread safe: Yes.
   ****************************************************************************}
-function API_Create_APPHnd(appName, Desc: PAnsiChar): TAppHnd; cdecl; external libapi_hub name 'API_Create_APPHnd';
+function API_Create_APPHnd(appName, Desc: pansichar): TAppHnd; cdecl; external libapi_hub name 'API_Create_APPHnd';
 function API_Create_APPHnd2(appName, Desc: string): TAppHnd;  // convenience overload, auto UTF‑8
 
   {****************************************************************************
@@ -439,8 +633,8 @@ procedure API_Free_APPHnd(appHnd: TAppHnd); cdecl; external libapi_hub name 'API
     Thread safe: Yes.
     Note: see TAPI_Call for callback constraints.
   ****************************************************************************}
-function API_Reg_Call(appHnd: TAppHnd; APIName, Desc: PAnsiChar; Trigger: Pointer; OnCall: TAPI_Call): Integer; cdecl; external libapi_hub name 'API_Reg_Call';
-function API_Reg_Call2(appHnd: TAppHnd; APIName, Desc: string; Trigger: Pointer; OnCall: TAPI_Call): Integer;  // convenience overload
+function API_Reg_Call(appHnd: TAppHnd; APIName, Desc: pansichar; Trigger: Pointer; OnCall: TAPI_Call): integer; cdecl; external libapi_hub name 'API_Reg_Call';
+function API_Reg_Call2(appHnd: TAppHnd; APIName, Desc: string; Trigger: Pointer; OnCall: TAPI_Call): integer;  // convenience overload
 
   {****************************************************************************
     4.4 API_Reg_Notify
@@ -449,8 +643,8 @@ function API_Reg_Call2(appHnd: TAppHnd; APIName, Desc: string; Trigger: Pointer;
     (no output).
     Thread safe: Yes.
   ****************************************************************************}
-function API_Reg_Notify(appHnd: TAppHnd; APIName, Desc: PAnsiChar; Trigger: Pointer; OnNotify: TAPI_Notify): Integer; cdecl; external libapi_hub name 'API_Reg_Notify';
-function API_Reg_Notify2(appHnd: TAppHnd; APIName, Desc: string; Trigger: Pointer; OnNotify: TAPI_Notify): Integer;  // convenience overload
+function API_Reg_Notify(appHnd: TAppHnd; APIName, Desc: pansichar; Trigger: Pointer; OnNotify: TAPI_Notify): integer; cdecl; external libapi_hub name 'API_Reg_Notify';
+function API_Reg_Notify2(appHnd: TAppHnd; APIName, Desc: string; Trigger: Pointer; OnNotify: TAPI_Notify): integer;  // convenience overload
 
 { * --------------------------------------------------------------------------
   * API_UnReg: Removes a previously registered API from the application.
@@ -470,8 +664,8 @@ function API_Reg_Notify2(appHnd: TAppHnd; APIName, Desc: string; Trigger: Pointe
   *       until all peers have received the update.
   * @SeeAlso API_Reg_Call, API_Reg_Notify
   * -------------------------------------------------------------------------- }
-function API_UnReg(appHnd: TAppHnd; APIName: PAnsiChar): Integer; cdecl; external libapi_hub name 'API_UnReg';
-function API_UnReg2(appHnd: TAppHnd; APIName: string): Integer;
+function API_UnReg(appHnd: TAppHnd; APIName: pansichar): integer; cdecl; external libapi_hub name 'API_UnReg';
+function API_UnReg2(appHnd: TAppHnd; APIName: string): integer;
 
   {****************************************************************************
     4.5 API_Local_APP_Call
@@ -520,8 +714,8 @@ procedure API_Local_APP_Notify(appHnd: TAppHnd; Param: TDataHnd); cdecl; externa
           wait for services to appear.
     Thread safe: Yes (usually called from the main thread).
   ****************************************************************************}
-function API_Prepare_Service(ListeningAddr_, PhysicsAddr_: PAnsiChar): Integer; cdecl; external libapi_hub name 'API_Prepare_Service';
-function API_Prepare_Service2(ListeningAddr_, PhysicsAddr_: string): Integer;  // convenience overload
+function API_Prepare_Service(ListeningAddr_, PhysicsAddr_: pansichar): integer; cdecl; external libapi_hub name 'API_Prepare_Service';
+function API_Prepare_Service2(ListeningAddr_, PhysicsAddr_: string): integer;  // convenience overload
 
   {****************************************************************************
     5.2 API_Prepare_Client
@@ -539,9 +733,9 @@ function API_Prepare_Service2(ListeningAddr_, PhysicsAddr_: string): Integer;  /
           and re‑registers the application if provided.
     Thread safe: Yes.
   ****************************************************************************}
-function API_Prepare_Client(PhysicsAddr_: PAnsiChar; appHnd: TAppHnd): Integer; cdecl; external libapi_hub name 'API_Prepare_Client';
-function API_Prepare_Client2(PhysicsAddr_: string; appHnd: TAppHnd): Integer; overload;  // convenience overload
-function API_Prepare_Client2(PhysicsAddr_: string): Integer; overload;                  // convenience overload (no app)
+function API_Prepare_Client(PhysicsAddr_: pansichar; appHnd: TAppHnd): integer; cdecl; external libapi_hub name 'API_Prepare_Client';
+function API_Prepare_Client2(PhysicsAddr_: string; appHnd: TAppHnd): integer; overload;  // convenience overload
+function API_Prepare_Client2(PhysicsAddr_: string): integer; overload;                  // convenience overload (no app)
 
   {****************************************************************************
     5.3 API_Reset_Prepare
@@ -563,7 +757,7 @@ procedure API_Reset_Prepare(); cdecl; external libapi_hub name 'API_Reset_Prepar
       • After this call, remote calls can be made.
     Thread safe: Yes, but recommended to call from the main thread.
   ****************************************************************************}
-function API_Prepare_Done: Integer; cdecl; external libapi_hub name 'API_Prepare_Done';
+function API_Prepare_Done: integer; cdecl; external libapi_hub name 'API_Prepare_Done';
 
   {****************************************************************************
     5.5 API_Exit_MainThread
@@ -606,8 +800,8 @@ procedure API_Exit_MainThread; cdecl; external libapi_hub name 'API_Exit_MainThr
         API_Free_DataHnd(res);   // always free result
       end;
   ****************************************************************************}
-function API_Call(appName: PAnsiChar; Param: TDataHnd; Timeout_: UInt64): TDataHnd; cdecl; external libapi_hub name 'API_Call';
-function API_Call2(appName: string; Param: TDataHnd; Timeout_: UInt64): TDataHnd;  // convenience overload
+function API_Call(appName: pansichar; Param: TDataHnd; Timeout_: uint64): TDataHnd; cdecl; external libapi_hub name 'API_Call';
+function API_Call2(appName: string; Param: TDataHnd; Timeout_: uint64): TDataHnd;  // convenience overload
 
   {****************************************************************************
     5.7 API_Notify
@@ -618,7 +812,7 @@ function API_Call2(appName: string; Param: TDataHnd; Timeout_: UInt64): TDataHnd
     Thread safe: Yes.
     Note: order of notifications is not guaranteed; no response is expected.
   ****************************************************************************}
-procedure API_Notify(appName: PAnsiChar; Param: TDataHnd); cdecl; external libapi_hub name 'API_Notify';
+procedure API_Notify(appName: pansichar; Param: TDataHnd); cdecl; external libapi_hub name 'API_Notify';
 procedure API_Notify2(appName: string; Param: TDataHnd);   // convenience overload
 
 { * --------------------------------------------------------------------------
@@ -681,7 +875,7 @@ procedure API_Notify2(appName: string; Param: TDataHnd);   // convenience overlo
   *       secure and flexible deployment. See the comments in the implementation
   *       for detailed internal behaviour.
   * -------------------------------------------------------------------------- }
-procedure API_SetOption(Option, Value: PAnsiChar); cdecl; external libapi_hub name 'API_SetOption';
+procedure API_SetOption(Option, Value: pansichar); cdecl; external libapi_hub name 'API_SetOption';
 procedure API_SetOption2(Option, Value: string);
 
   {****************************************************************************
@@ -705,122 +899,330 @@ implementation
 
 function API_Create_DataHnd2(APIName: string): TDataHnd;
 begin
-  Result := API_Create_DataHnd(PAnsiChar(UTF8Encode(APIName)));
+  Result := API_Create_DataHnd(pansichar(UTF8Encode(APIName)));
 end;
 
-function API_GetBuffer2(Hnd: TDataHnd; Offset: NativeInt): Pointer;
+function API_GetBuffer2(Hnd: TDataHnd; Offset: nativeint): Pointer;
+var
+  base: Pointer;
 begin
-  Result := Pointer(NativeUInt(API_GetBuffer(Hnd)) + Offset);
+  base := API_GetBuffer(Hnd);
+  if base = nil then
+    Result := nil
+  else
+    Result := Pointer(nativeuint(base) + Offset);
 end;
 
-function API_WriteInt64(Hnd: TDataHnd; i64: Int64): Boolean;
+{===============================================================================
+  6a. Implementation of atomic write helpers
+===============================================================================}
+function API_WriteInt8(Hnd: TDataHnd; Value: int8): boolean;
 begin
-  Result := API_WriteBuffer(Hnd, @i64, SizeOf(i64)) = SizeOf(i64);
+  Result := API_WriteBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
 end;
 
-function API_WriteInt32(Hnd: TDataHnd; i32: Integer): Boolean;
+function API_WriteUInt8(Hnd: TDataHnd; Value: uint8): boolean;
 begin
-  Result := API_WriteBuffer(Hnd, @i32, SizeOf(i32)) = SizeOf(i32);
+  Result := API_WriteBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
 end;
 
-function API_WriteUInt64(Hnd: TDataHnd; u64: UInt64): Boolean;
+function API_WriteInt16(Hnd: TDataHnd; Value: int16): boolean;
 begin
-  Result := API_WriteBuffer(Hnd, @u64, SizeOf(u64)) = SizeOf(u64);
+  Result := API_WriteBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
 end;
 
-function API_WriteUInt32(Hnd: TDataHnd; u32: Cardinal): Boolean;
+function API_WriteUInt16(Hnd: TDataHnd; Value: uint16): boolean;
 begin
-  Result := API_WriteBuffer(Hnd, @u32, SizeOf(u32)) = SizeOf(u32);
+  Result := API_WriteBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
 end;
 
-function API_ReadInt64(Hnd: TDataHnd; Default: Int64): Int64;
+function API_WriteInt32(Hnd: TDataHnd; Value: int32): boolean;
 begin
-  if API_ReadBuffer(Hnd, @Result, SizeOf(Default)) <> SizeOf(Default) then
-    Result := Default;
+  Result := API_WriteBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
 end;
 
-function API_ReadInt32(Hnd: TDataHnd; Default: Integer): Integer;
+function API_WriteUInt32(Hnd: TDataHnd; Value: uint32): boolean;
 begin
-  if API_ReadBuffer(Hnd, @Result, SizeOf(Default)) <> SizeOf(Default) then
-    Result := Default;
+  Result := API_WriteBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
 end;
 
-function API_ReadUInt64(Hnd: TDataHnd; Default: UInt64): UInt64;
+function API_WriteInt64(Hnd: TDataHnd; Value: int64): boolean;
 begin
-  if API_ReadBuffer(Hnd, @Result, SizeOf(Default)) <> SizeOf(Default) then
-    Result := Default;
+  Result := API_WriteBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
 end;
 
-function API_ReadUInt32(Hnd: TDataHnd; Default: Cardinal): Cardinal;
+function API_WriteUInt64(Hnd: TDataHnd; Value: uint64): boolean;
 begin
-  if API_ReadBuffer(Hnd, @Result, SizeOf(Default)) <> SizeOf(Default) then
-    Result := Default;
+  Result := API_WriteBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
+end;
+
+function API_WriteSingle(Hnd: TDataHnd; Value: single): boolean;
+begin
+  Result := API_WriteBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
+end;
+
+function API_WriteDouble(Hnd: TDataHnd; Value: double): boolean;
+begin
+  Result := API_WriteBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
+end;
+
+function API_WriteString(Hnd: TDataHnd; const Value: string): boolean;
+var
+  utf8: TBytes;
+  len: Integer;
+  written: Int64;
+begin
+  // Empty string: write only a null terminator.
+  if Value = '' then
+  begin
+    Result := API_WriteUInt8(Hnd, 0);
+    Exit;
+  end;
+
+  utf8 := TEncoding.UTF8.GetBytes(Value);
+  len := Length(utf8);
+  written := API_WriteBuffer(Hnd, @utf8[0], len);
+  if written <> len then
+  begin
+    Result := False;
+    Exit;
+  end;
+  // Write the null terminator and ensure it succeeds.
+  Result := API_WriteUInt8(Hnd, 0);
+end;
+
+{===============================================================================
+  6b. Implementation of atomic read helpers
+===============================================================================}
+function API_ReadInt8(Hnd: TDataHnd; out Value: int8): boolean;
+begin
+  Result := API_ReadBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
+end;
+
+function API_ReadUInt8(Hnd: TDataHnd; out Value: uint8): boolean;
+begin
+  Result := API_ReadBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
+end;
+
+function API_ReadInt16(Hnd: TDataHnd; out Value: int16): boolean;
+begin
+  Result := API_ReadBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
+end;
+
+function API_ReadUInt16(Hnd: TDataHnd; out Value: uint16): boolean;
+begin
+  Result := API_ReadBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
+end;
+
+function API_ReadInt32(Hnd: TDataHnd; out Value: int32): boolean;
+begin
+  Result := API_ReadBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
+end;
+
+function API_ReadUInt32(Hnd: TDataHnd; out Value: uint32): boolean;
+begin
+  Result := API_ReadBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
+end;
+
+function API_ReadInt64(Hnd: TDataHnd; out Value: int64): boolean;
+begin
+  Result := API_ReadBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
+end;
+
+function API_ReadUInt64(Hnd: TDataHnd; out Value: uint64): boolean;
+begin
+  Result := API_ReadBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
+end;
+
+function API_ReadSingle(Hnd: TDataHnd; out Value: single): boolean;
+begin
+  Result := API_ReadBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
+end;
+
+function API_ReadDouble(Hnd: TDataHnd; out Value: double): boolean;
+begin
+  Result := API_ReadBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
+end;
+
+{===============================================================================
+  6c. Direct‑return overloads for read helpers (return 0 on failure)
+===============================================================================}
+function API_ReadInt8(Hnd: TDataHnd): int8;
+var v: int8;
+begin
+  if API_ReadInt8(Hnd, v) then Result := v else Result := 0;
+end;
+
+function API_ReadUInt8(Hnd: TDataHnd): uint8;
+var v: uint8;
+begin
+  if API_ReadUInt8(Hnd, v) then Result := v else Result := 0;
+end;
+
+function API_ReadInt16(Hnd: TDataHnd): int16;
+var v: int16;
+begin
+  if API_ReadInt16(Hnd, v) then Result := v else Result := 0;
+end;
+
+function API_ReadUInt16(Hnd: TDataHnd): uint16;
+var v: uint16;
+begin
+  if API_ReadUInt16(Hnd, v) then Result := v else Result := 0;
+end;
+
+function API_ReadInt32(Hnd: TDataHnd): int32;
+var v: int32;
+begin
+  if API_ReadInt32(Hnd, v) then Result := v else Result := 0;
+end;
+
+function API_ReadUInt32(Hnd: TDataHnd): uint32;
+var v: uint32;
+begin
+  if API_ReadUInt32(Hnd, v) then Result := v else Result := 0;
+end;
+
+function API_ReadInt64(Hnd: TDataHnd): int64;
+var v: int64;
+begin
+  if API_ReadInt64(Hnd, v) then Result := v else Result := 0;
+end;
+
+function API_ReadUInt64(Hnd: TDataHnd): uint64;
+var v: uint64;
+begin
+  if API_ReadUInt64(Hnd, v) then Result := v else Result := 0;
+end;
+
+function API_ReadSingle(Hnd: TDataHnd): single;
+var v: single;
+begin
+  if API_ReadSingle(Hnd, v) then Result := v else Result := 0.0;
+end;
+
+function API_ReadDouble(Hnd: TDataHnd): double;
+var v: double;
+begin
+  if API_ReadDouble(Hnd, v) then Result := v else Result := 0.0;
+end;
+
+function API_ReadString(Hnd: TDataHnd; out Value: string): boolean;
+type
+  TByteArray = array [0..0] of byte;
+  PByteArray = ^TByteArray;
+var
+  p: PByteArray;
+  b, e, sz: int64;
+  buff: TBytes;
+begin
+  p := API_GetBuffer(Hnd);
+  sz := API_GetSize(Hnd);
+
+  // Handle null or empty buffer.
+  if (p = nil) or (sz = 0) then
+  begin
+    Value := '';
+    Result := False;
+    Exit;
+  end;
+
+  b := API_GetPos(Hnd);
+  if b >= sz then
+  begin
+    Value := '';
+    Result := False;
+    Exit;
+  end;
+
+  e := b;
+  // Search for the null terminator with correct bounds check first.
+  while (e < sz) and (p^[e] <> 0) do
+    Inc(e);
+
+  // If we reached the end without finding a null, fail.
+  if e = sz then
+  begin
+    Value := '';
+    Result := False;
+    Exit;
+  end;
+
+  // Copy bytes from b to e-1 (excluding the null terminator).
+  SetLength(buff, e - b);
+  if e > b then
+    Move(p^[b], buff[0], e - b)
+  else
+    buff := nil;  // empty string
+
+  // Advance position past the null terminator.
+  API_SetPos(Hnd, e + 1);
+
+  // Decode UTF-8.
+  Value := TEncoding.UTF8.GetString(buff);
+  Result := True;
+end;
+
+function API_ReadString(Hnd: TDataHnd): string;
+begin
+  // Call the out-version; on failure it returns empty string.
+  API_ReadString(Hnd, Result);
 end;
 
 function API_Create_APPHnd2(appName, Desc: string): TAppHnd;
 begin
-  Result := API_Create_APPHnd(PAnsiChar(UTF8Encode(appName)), PAnsiChar(UTF8Encode(Desc)));
+  Result := API_Create_APPHnd(pansichar(UTF8Encode(appName)), pansichar(UTF8Encode(Desc)));
 end;
 
-function API_Reg_Call2(appHnd: TAppHnd; APIName, Desc: string; Trigger: Pointer; OnCall: TAPI_Call): Integer;
+function API_Reg_Call2(appHnd: TAppHnd; APIName, Desc: string; Trigger: Pointer; OnCall: TAPI_Call): integer;
 begin
-  Result := API_Reg_Call(appHnd, PAnsiChar(UTF8Encode(APIName)), PAnsiChar(UTF8Encode(Desc)), Trigger, OnCall);
+  Result := API_Reg_Call(appHnd, pansichar(UTF8Encode(APIName)), pansichar(UTF8Encode(Desc)), Trigger, OnCall);
 end;
 
-function API_Reg_Notify2(appHnd: TAppHnd; APIName, Desc: string; Trigger: Pointer; OnNotify: TAPI_Notify): Integer;
+function API_Reg_Notify2(appHnd: TAppHnd; APIName, Desc: string; Trigger: Pointer; OnNotify: TAPI_Notify): integer;
 begin
-  Result := API_Reg_Notify(appHnd, PAnsiChar(UTF8Encode(APIName)), PAnsiChar(UTF8Encode(Desc)), Trigger, OnNotify);
+  Result := API_Reg_Notify(appHnd, pansichar(UTF8Encode(APIName)), pansichar(UTF8Encode(Desc)), Trigger, OnNotify);
 end;
 
-function API_UnReg2(appHnd: TAppHnd; APIName: string): Integer;
+function API_UnReg2(appHnd: TAppHnd; APIName: string): integer;
 begin
-  Result := API_UnReg(appHnd, PAnsiChar(UTF8Encode(APIName)));
+  Result := API_UnReg(appHnd, pansichar(UTF8Encode(APIName)));
 end;
 
-function API_Prepare_Service2(ListeningAddr_, PhysicsAddr_: string): Integer;
+function API_Prepare_Service2(ListeningAddr_, PhysicsAddr_: string): integer;
 begin
-  Result := API_Prepare_Service(PAnsiChar(UTF8Encode(ListeningAddr_)), PAnsiChar(UTF8Encode(PhysicsAddr_)));
+  Result := API_Prepare_Service(pansichar(UTF8Encode(ListeningAddr_)), pansichar(UTF8Encode(PhysicsAddr_)));
 end;
 
-function API_Prepare_Client2(PhysicsAddr_: string; appHnd: TAppHnd): Integer;
+function API_Prepare_Client2(PhysicsAddr_: string; appHnd: TAppHnd): integer;
 begin
-  Result := API_Prepare_Client(PAnsiChar(UTF8Encode(PhysicsAddr_)), appHnd);
+  Result := API_Prepare_Client(pansichar(UTF8Encode(PhysicsAddr_)), appHnd);
 end;
 
-function API_Prepare_Client2(PhysicsAddr_: string): Integer;
+function API_Prepare_Client2(PhysicsAddr_: string): integer;
 begin
   Result := API_Prepare_Client2(PhysicsAddr_, nil);
 end;
 
-function API_Call2(appName: string; Param: TDataHnd; Timeout_: UInt64): TDataHnd;
+function API_Call2(appName: string; Param: TDataHnd; Timeout_: uint64): TDataHnd;
 begin
-  Result := API_Call(PAnsiChar(UTF8Encode(appName)), Param, Timeout_);
+  Result := API_Call(pansichar(UTF8Encode(appName)), Param, Timeout_);
 end;
 
 procedure API_Notify2(appName: string; Param: TDataHnd);
 begin
-  API_Notify(PAnsiChar(UTF8Encode(appName)), Param);
+  API_Notify(pansichar(UTF8Encode(appName)), Param);
 end;
 
 procedure API_SetOption2(Option, Value: string);
 begin
-  API_SetOption(PAnsiChar(UTF8Encode(Option)), PAnsiChar(UTF8Encode(Value)));
+  API_SetOption(pansichar(UTF8Encode(Option)), pansichar(UTF8Encode(Value)));
 end;
-
-
-{===============================================================================
-  7. Automatic Initialization & Finalization
-  No special initialization is needed at program start.
-  On program exit, API_shutdown is automatically called to release resources.
-  If you need explicit control over shutdown order, you may ignore the
-  finalization call and manually call API_Exit_MainThread and API_shutdown
-  in your main program.
-===============================================================================}
 
 initialization
   // Nothing to initialize
 
 finalization
-  API_shutdown();   // automatic cleanup
-
+  if not IsLibrary then
+    API_shutdown();   // automatic cleanup
 end.

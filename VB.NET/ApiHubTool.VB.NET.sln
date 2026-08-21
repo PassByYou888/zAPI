@@ -15,6 +15,12 @@ Project("{F184B08F-C81C-45F6-A57F-5ABD9991F28F}") = "FuncService", "FuncService\
 EndProject
 Project("{F184B08F-C81C-45F6-A57F-5ABD9991F28F}") = "FuncClient", "FuncClient\FuncClient.vbproj", "{18AF906B-07E9-9D8D-D65A-20C300C5139D}"
 EndProject
+Project("{F184B08F-C81C-45F6-A57F-5ABD9991F28F}") = "CrossService", "CrossService\CrossService.vbproj", "{B20FAD5A-880F-4231-9755-28CD5C00175E}"
+EndProject
+Project("{F184B08F-C81C-45F6-A57F-5ABD9991F28F}") = "CrossNode", "CrossNode\CrossNode.vbproj", "{BAF13993-3C58-4DC8-9EE9-2D19DBF109B8}"
+EndProject
+Project("{F184B08F-C81C-45F6-A57F-5ABD9991F28F}") = "CrossCall", "CrossCall\CrossCall.vbproj", "{02E5E776-2DC4-4E17-9213-2795BC2991DB}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -45,8 +51,23 @@ Global
 		{18AF906B-07E9-9D8D-D65A-20C300C5139D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{18AF906B-07E9-9D8D-D65A-20C300C5139D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{18AF906B-07E9-9D8D-D65A-20C300C5139D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B20FAD5A-880F-4231-9755-28CD5C00175E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B20FAD5A-880F-4231-9755-28CD5C00175E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B20FAD5A-880F-4231-9755-28CD5C00175E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B20FAD5A-880F-4231-9755-28CD5C00175E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BAF13993-3C58-4DC8-9EE9-2D19DBF109B8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BAF13993-3C58-4DC8-9EE9-2D19DBF109B8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BAF13993-3C58-4DC8-9EE9-2D19DBF109B8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BAF13993-3C58-4DC8-9EE9-2D19DBF109B8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{02E5E776-2DC4-4E17-9213-2795BC2991DB}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{02E5E776-2DC4-4E17-9213-2795BC2991DB}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{02E5E776-2DC4-4E17-9213-2795BC2991DB}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{02E5E776-2DC4-4E17-9213-2795BC2991DB}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {B1808431-9E8F-4A2D-B4A4-C82DC2409B02}
 	EndGlobalSection
 EndGlobal

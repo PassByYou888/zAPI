@@ -20,8 +20,8 @@ func main() {
 
 	// 注册 notify API
 	srv.RegisterNotify("log", "", func(in api_hub.DataHnd) {
-		level, _ := api_hub.ReadString(in)
-		msg, _ := api_hub.ReadString(in)
+		level, _ := api_hub.ReadStringZ(in)
+		msg, _ := api_hub.ReadStringZ(in)
 		fmt.Printf("[%s] %s: %s\n", time.Now().Format("15:04:05"), level, msg)
 	})
 

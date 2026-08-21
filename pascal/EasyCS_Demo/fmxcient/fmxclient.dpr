@@ -10,6 +10,9 @@ uses
 {$R *.res}
 
 begin
+  ReportMemoryLeaksOnShutdown := True; // 只要有内存泄漏就会报
+  // ReportMemoryLeaksOnShutdown := DebugHook<>0; //在真正的debug时，闭关窗口会报内存泄漏
+
   Application.Initialize;
   Application.CreateForm(TForm1, Form1);
   Application.Run;

@@ -24,8 +24,8 @@ func main() {
 
 	// 订阅
 	srv.RegisterNotify("subscribe", "", func(in api_hub.DataHnd) {
-		topic, _ := api_hub.ReadString(in)
-		clientID, _ := api_hub.ReadString(in)
+		topic, _ := api_hub.ReadStringZ(in)
+		clientID, _ := api_hub.ReadStringZ(in)
 		subsMu.Lock()
 		subs[topic] = append(subs[topic], clientID)
 		subsMu.Unlock()
@@ -34,8 +34,8 @@ func main() {
 
 	// 发布
 	srv.RegisterNotify("publish", "", func(in api_hub.DataHnd) {
-		topic, _ := api_hub.ReadString(in)
-		msg, _ := api_hub.ReadString(in)
+		topic, _ := api_hub.ReadStringZ(in)
+		msg, _ := api_hub.ReadStringZ(in)
 		subsMu.Lock()
 		list := subs[topic]
 		subsMu.Unlock()

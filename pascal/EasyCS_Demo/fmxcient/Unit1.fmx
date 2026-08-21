@@ -1,7 +1,7 @@
 object Form1: TForm1
   Left = 0
   Top = 0
-  Caption = 'Form1'
+  Caption = 'fmxclient'
   ClientHeight = 412
   ClientWidth = 580
   FormFactor.Width = 320
@@ -15,7 +15,7 @@ object Form1: TForm1
     Size.Width = 265.000000000000000000
     Size.Height = 22.000000000000000000
     Size.PlatformDefault = False
-    TabOrder = 3
+    TabOrder = 6
     Text = #36830#25509#21040#26381#21153#65288#32431#28040#36153#31471#65292#19981#26292#38706' API'#65289
     OnClick = Button1Click
   end
@@ -23,11 +23,11 @@ object Form1: TForm1
     Enabled = False
     Position.X = 8.000000000000000000
     Position.Y = 38.000000000000000000
-    Size.Width = 145.000000000000000000
+    Size.Width = 89.000000000000000000
     Size.Height = 22.000000000000000000
     Size.PlatformDefault = False
-    TabOrder = 2
-    Text = #35775#38382#20855#20307#26381#21153
+    TabOrder = 5
+    Text = #35843#29992#20989#25968'add'
     OnClick = Button2Click
   end
   object Memo1: TMemo
@@ -35,24 +35,68 @@ object Form1: TForm1
     DataDetectorTypes = []
     Align = Bottom
     Anchors = [akLeft, akTop, akRight, akBottom]
-    Position.Y = 68.000000000000000000
+    Position.Y = 88.000000000000000000
     Size.Width = 580.000000000000000000
-    Size.Height = 344.000000000000000000
+    Size.Height = 324.000000000000000000
     Size.PlatformDefault = False
-    TabOrder = 4
+    TabOrder = 7
     Viewport.Width = 576.000000000000000000
-    Viewport.Height = 340.000000000000000000
+    Viewport.Height = 320.000000000000000000
   end
   object Button3: TButton
     Anchors = [akTop, akRight]
     Enabled = False
-    Position.X = 427.000000000000000000
+    Position.X = 496.000000000000000000
     Position.Y = 8.000000000000000000
-    Size.Width = 145.000000000000000000
+    Size.Width = 76.000000000000000000
     Size.Height = 22.000000000000000000
     Size.PlatformDefault = False
     TabOrder = 1
     Text = #20851#38381#23458#25143#31471
     OnClick = Button3Click
+  end
+  object Button4: TButton
+    Enabled = False
+    Position.X = 408.000000000000000000
+    Position.Y = 38.000000000000000000
+    Size.Width = 76.000000000000000000
+    Size.Height = 22.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 3
+    Text = #24182#21457#27979#35797
+    OnClick = Button4Click
+  end
+  object Text5: TText
+    Anchors = [akLeft, akTop, akRight]
+    Margins.Left = 10.000000000000000000
+    Position.X = 8.000000000000000000
+    Position.Y = 64.000000000000000000
+    Size.Width = 564.000000000000000000
+    Size.Height = 20.000000000000000000
+    Size.PlatformDefault = False
+    Text = '      '
+    TextSettings.FontColor = claCrimson
+    TextSettings.HorzAlign = Leading
+  end
+  object Button6: TButton
+    Position.X = 496.000000000000000000
+    Position.Y = 38.000000000000000000
+    Size.Width = 76.000000000000000000
+    Size.Height = 22.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 2
+    Text = #28165#31354
+    OnClick = Button6Click
+  end
+  object Button5: TButton
+    Enabled = False
+    Position.X = 120.000000000000000000
+    Position.Y = 38.000000000000000000
+    Size.Width = 129.000000000000000000
+    Size.Height = 22.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 4
+    Text = #35843#29992#20989#25968'jsonceshi'
+    OnClick = Button5Click
   end
 end

@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 
 extern "C" fn upload_callback(_trigger: *mut c_void, input: DataHnd, output: DataHnd) {
     let mut h = unsafe { DataHandle::from_raw(input) };
-    let name = h.read_string().unwrap_or_default();
+    let name = h.read_string_null_terminated().unwrap_or_default();
     let pos = get_pos(input);
     let size = get_size(input);
     let data_len = (size - pos) as usize;
@@ -29,7 +29,7 @@ extern "C" fn upload_callback(_trigger: *mut c_void, input: DataHnd, output: Dat
 }
 extern "C" fn download_callback(_trigger: *mut c_void, input: DataHnd, output: DataHnd) {
     let mut h = unsafe { DataHandle::from_raw(input) };
-    let name = h.read_string().unwrap_or_default();
+    let name = h.read_string_null_terminated().unwrap_or_default();
     match fs::read(&name) {
         Ok(data) => {
             println!("[File] 下载文件: {} ({} bytes)", name, data.len());

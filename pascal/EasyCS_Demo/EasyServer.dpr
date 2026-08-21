@@ -25,7 +25,7 @@ begin
 end;
 
 var
-  App: TAppHandle;
+  App: TAppHandle=nil;
 
 begin
   // 1. 创建应用（RAII，自动释放）
@@ -56,6 +56,6 @@ begin
   // 4. 清理（RAII 会自动释放 App，但我们手动调用网络停止）
   ExitMainThread;
   Shutdown;
-  App.Free;  // 非必须，但显式释放更清晰
+  Freeandnil(App);  // 非必须，但显式释放更清晰
 end.
 

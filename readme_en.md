@@ -1,3 +1,5 @@
+# zAPI — Make All Programming Languages Talk on Equal Terms
+
 **zAPI** is a **cross-language RPC framework** based on **pure C ABI**, enabling services written in 10+ languages — C++, Python, Go, Rust, Java, C#, Pascal, PHP, Node.js, and more — to call each other as easily as calling local functions.
 
 > **Core Promise:** No IDL, no code generation, no new protocols to learn — use your familiar language, call the world.
@@ -244,6 +246,17 @@ lazbuild z_api_hub.lpi
 1. **Zero-copy data transfer:** `API_GetBuffer()` returns internal pointers directly
 2. **Binary protocol:** No JSON/Protobuf encoding/decoding overhead
 3. **C-level concurrency scheduling:** Callbacks execute in C thread pools, unaffected by Python/Node GILs
+
+---
+
+## 🐝 Cross Demo: Multi-Language Distributed Computing Demonstration
+
+Want to see load balancing in action across 10+ languages with your own eyes? **Cross Demo** is a demonstration cluster built with fewer than 200 lines of code. It lets you launch any number of worker nodes in Python, Go, Rust, Java, C#, Pascal, and more — all automatically registering with the same service mesh, with client requests evenly distributed by the C4 mesh.
+
+- [🚀 Cross Demo: Full Language Playbook](./🚀%20Cross%20Demo%20全语言实战手册.md) — One-click operation guide for launching nodes in every language, with detailed command-line steps.
+- [🚀 Cross Demo: A Visual "Swarm" of Distributed Computing 🐝](./🚀%20Cross%20Demo：分布式计算的可视化“蜂群”%20🐝.md) — Deep dive into load-balancing principles, binary serialization protocols, and the underlying mechanisms of cross-language interoperability.
+
+> No matter which language you use, Cross Demo lets you experience zAPI's "language transparency" and "automatic governance" firsthand. We recommend trying Cross Demo right after completing the "5-Minute Quick Start" to feel the power of a multi-language cluster.
 
 ---
 

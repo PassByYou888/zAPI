@@ -44,10 +44,10 @@ func main() {
 	}
 	defer client.FreeDataHnd(h)
 
-	if err := client.WriteString(h, "INFO"); err != nil {
+	if err := client.WriteStringZ(h, "INFO"); err != nil {
 		panic(err)
 	}
-	if err := client.WriteString(h, "Hello from Go client (INFO)"); err != nil {
+	if err := client.WriteStringZ(h, "Hello from Go client (INFO)"); err != nil {
 		panic(err)
 	}
 	client.Notify("LogService", h)
@@ -59,10 +59,10 @@ func main() {
 	}
 	defer client.FreeDataHnd(h2)
 
-	if err := client.WriteString(h2, "ERROR"); err != nil {
+	if err := client.WriteStringZ(h2, "ERROR"); err != nil {
 		panic(err)
 	}
-	if err := client.WriteString(h2, "Something went wrong (ERROR)"); err != nil {
+	if err := client.WriteStringZ(h2, "Something went wrong (ERROR)"); err != nil {
 		panic(err)
 	}
 	client.Notify("LogService", h2)

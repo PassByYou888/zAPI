@@ -15,6 +15,9 @@
         <Projects Include="vclclient\vclclient.dproj">
             <Dependencies/>
         </Projects>
+        <Projects Include="vclEasyServer\vclEasyServer.dproj">
+            <Dependencies/>
+        </Projects>
     </ItemGroup>
     <ProjectExtensions>
         <Borland.Personality>Default.Personality.12</Borland.Personality>
@@ -59,14 +62,23 @@
     <Target Name="vclclient:Make">
         <MSBuild Projects="vclclient\vclclient.dproj" Targets="Make"/>
     </Target>
+    <Target Name="vclEasyServer">
+        <MSBuild Projects="vclEasyServer\vclEasyServer.dproj"/>
+    </Target>
+    <Target Name="vclEasyServer:Clean">
+        <MSBuild Projects="vclEasyServer\vclEasyServer.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="vclEasyServer:Make">
+        <MSBuild Projects="vclEasyServer\vclEasyServer.dproj" Targets="Make"/>
+    </Target>
     <Target Name="Build">
-        <CallTarget Targets="EasyServer;EasyClient;fmxclient;vclclient"/>
+        <CallTarget Targets="EasyServer;EasyClient;fmxclient;vclclient;vclEasyServer"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="EasyServer:Clean;EasyClient:Clean;fmxclient:Clean;vclclient:Clean"/>
+        <CallTarget Targets="EasyServer:Clean;EasyClient:Clean;fmxclient:Clean;vclclient:Clean;vclEasyServer:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="EasyServer:Make;EasyClient:Make;fmxclient:Make;vclclient:Make"/>
+        <CallTarget Targets="EasyServer:Make;EasyClient:Make;fmxclient:Make;vclclient:Make;vclEasyServer:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>

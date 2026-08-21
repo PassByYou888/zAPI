@@ -46,7 +46,7 @@ func main() {
 	defer client.FreeDataHnd(h)
 
 	// 写入文件名
-	if err := client.WriteString(h, "test.txt"); err != nil {
+	if err := client.WriteStringZ(h, "test.txt"); err != nil {
 		panic(err)
 	}
 	// 一次性写入整个文件内容（而不是分块）
@@ -75,7 +75,7 @@ func main() {
 	}
 	defer client.FreeDataHnd(h2)
 
-	if err := client.WriteString(h2, "test.txt"); err != nil {
+	if err := client.WriteStringZ(h2, "test.txt"); err != nil {
 		panic(err)
 	}
 

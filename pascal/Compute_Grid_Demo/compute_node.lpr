@@ -24,15 +24,11 @@ procedure do_exp_Call(Trigger: Pointer; Input: Pointer; Output: TDataHnd); cdecl
 var
   exp: TPascalString;
   tmp: TPascalString;
-  p: Pointer;
-  siz: integer;
 begin
-  exp.ReadUTF8AnsiChar(API_GetBuffer(input));
+  exp := API_ReadString(input);
   tmp := VarToStr(EvaluateExpressionValue(tsC, exp));
   DoStatus('收到计算请求 "%s" = 计算结果 "%s"', [exp.Text, tmp.Text]);
-  p := tmp.BuildUTF8AnsiChar(siz); // 不使用堆栈,直接内存交换
-  API_WriteBuffer(Output, p, siz); // 返回值规则是utf8+#0
-  tmp.FreeUTF8AnsiChar(p);
+  API_WriteString(Output, tmp);
 end;
 
 var
