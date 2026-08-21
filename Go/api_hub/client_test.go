@@ -62,11 +62,11 @@ func TestDataHandle(t *testing.T) {
 		t.Errorf("read value = %d, expected 12345", val)
 	}
 
-	if err := testClient.WriteString(h, "Hello, Go!"); err != nil {
+	if err := testClient.WriteStringZ(h, "Hello, Go!"); err != nil {
 		t.Fatal(err)
 	}
 	testClient.SetPos(h, 4)
-	readStr, err := testClient.ReadString(h)
+	readStr, err := testClient.ReadStringZ(h)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +120,7 @@ func TestRemoteCall(t *testing.T) {
 	}
 	defer testClient.FreeDataHnd(param2)
 
-	if err := testClient.WriteString(param2, "hello world"); err != nil {
+	if err := testClient.WriteStringZ(param2, "hello world"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -134,7 +134,7 @@ func TestRemoteCall(t *testing.T) {
 	defer testClient.FreeDataHnd(res2)
 
 	testClient.SetPos(res2, 0)
-	upper, err := testClient.ReadString(res2)
+	upper, err := testClient.ReadStringZ(res2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -274,7 +274,7 @@ func TestUTF8ChineseAPI(t *testing.T) {
 	// Also test Chinese notification
 	notifyDone := false
 	err = server.RegisterNotify("日志", "中文日志", func(in DataHnd) {
-		msg, _ := ReadString(in)
+		msg, _ := ReadStringZ(in)
 		if msg == "测试通知" {
 			notifyDone = true
 		}
@@ -288,7 +288,7 @@ func TestUTF8ChineseAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer client.FreeDataHnd(notifyParam)
-	_ = client.WriteString(notifyParam, "测试通知")
+	_ = client.WriteStringZ(notifyParam, "测试通知")
 	client.Notify("中文服务", notifyParam)
 	time.Sleep(200 * time.Millisecond)
 	if !notifyDone {
