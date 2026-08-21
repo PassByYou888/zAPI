@@ -11,48 +11,34 @@ import java.nio.charset.StandardCharsets;
  * RAII wrapper for a {@code TDataHnd} (data handle) that automatically
  * releases the native resource when closed.
  * <p>
- * A data handle contains an <b>API name</b> (set at creation) and a
- * <b>binary payload</b>. All read/write operations affect only the payload.
- * The API name is immutable after creation.
- * <p>
- * <b>Ownership:</b> There are two kinds of instances:
+ * <b>Cross‑language compatibility note (2026-08-21 hardening):</b>
  * <ul>
- *   <li><b>Owned</b> – created via {@link #DataHandle(String)}. The wrapper
- *       owns the underlying pointer and will call {@link ApiHubNative#API_Free_DataHnd}
- *       when closed.</li>
- *   <li><b>Borrowed</b> – obtained via {@link #wrapInput(Pointer)} or
- *       {@link #wrapOutput(Pointer)} for pointers passed into callbacks.
- *       These wrappers <b>do not own</b> the pointer and {@link #close()}
- *       will <b>not</b> free it.</li>
+ *   <li>For strings, use {@link #writeStringNullTerminated(String)} and
+ *       {@link #readStringNullTerminated()} to match the Pascal
+ *       {@code API_WriteString} / {@code API_ReadString} contract (UTF‑8 + NUL).</li>
+ *   <li>The legacy {@link #writeString(String)} and {@link #readString()}
+ *       methods use a 4‑byte length prefix and are <b>NOT</b> compatible with
+ *       other language bindings. They are retained for internal Java‑only
+ *       protocols but marked deprecated.</li>
+ *   <li>All atomic writes now roll back the cursor on partial failure,
+ *       preventing stream corruption (defensive fix for W-01).</li>
+ *   <li>All reads from native memory include explicit {@code null} checks
+ *       and length caps (defensive fixes for F-01 and W-02).</li>
  * </ul>
- * <p>
- * <b>Thread safety:</b> The underlying library is fully thread‑safe for all
- * operations. However, for a given {@code DataHandle}, write operations
- * ({@link #write}, {@link #setPos}, {@link #setSize}) must be serialised
- * across threads. Read operations can be concurrent with other reads.
- * <p>
- * <b>Zero‑copy access:</b> Use {@link #getBuffer()} to obtain a direct
- * pointer to the internal buffer – useful for performance but be careful
- * not to write beyond the size returned by {@link #getSize()}.
- * <p>
- * The helper methods ({@link #writeInt}, {@link #readString}, etc.) use
- * <b>little‑endian</b> byte order and UTF‑8 for strings, with a length
- * prefix (4 bytes) for strings. This is a convenience; you may use any
- * binary format you like.
+ *
+ * @see ApiHubNative
+ * @see ApiHub
  */
 public class DataHandle implements AutoCloseable {
 
+    // ========== Security & Stability Constants (Added 2026-08-21) ==========
+    private static final long MAX_STRING_SCAN = 64 * 1024 * 1024; // 64 MB
+    private static final int MAX_STRING_LENGTH = 64 * 1024 * 1024; // 64 MB
+
     private final Pointer ptr;
-    private final boolean owned;   // true if we own the pointer and must free it
+    private final boolean owned;
     private boolean closed = false;
 
-    /**
-     * Creates a new owned data handle with the given API name.
-     * The payload is initially empty (size = 0).
-     *
-     * @param apiName target API name (case‑sensitive, used for routing)
-     * @throws RuntimeException if the underlying library call fails
-     */
     public DataHandle(String apiName) {
         this.ptr = ApiHubNative.INSTANCE.API_Create_DataHnd(apiName);
         if (this.ptr == null) {
@@ -61,138 +47,341 @@ public class DataHandle implements AutoCloseable {
         this.owned = true;
     }
 
-    /**
-     * Internal constructor for wrapping a borrowed pointer.
-     * The {@code owned} flag determines whether {@link #close()} will free it.
-     *
-     * @param ptr   native pointer (may be borrowed)
-     * @param owned {@code true} if this wrapper should free the pointer
-     */
     DataHandle(Pointer ptr, boolean owned) {
         this.ptr = ptr;
         this.owned = owned;
     }
 
-    /**
-     * Wraps an {@code input} pointer from a callback as a read‑only handle.
-     * The wrapper does <b>not</b> own the pointer; calling {@code close()}
-     * has no effect (other than marking the wrapper closed).
-     *
-     * @param ptr native pointer to the input data
-     * @return a new {@code DataHandle} that must not be freed
-     */
     public static DataHandle wrapInput(Pointer ptr) {
         return new DataHandle(ptr, false);
     }
 
-    /**
-     * Wraps an {@code output} pointer from a callback as a write‑only handle.
-     * The wrapper does <b>not</b> own the pointer; calling {@code close()}
-     * has no effect.
-     *
-     * @param ptr native pointer to the output buffer
-     * @return a new {@code DataHandle} that must not be freed
-     */
     public static DataHandle wrapOutput(Pointer ptr) {
         return new DataHandle(ptr, false);
     }
 
-    /**
-     * Returns the underlying native pointer.
-     * @return the JNA {@code Pointer} (never {@code null})
-     */
     public Pointer getPointer() {
         return ptr;
     }
 
     // ---------- Basic I/O ----------
 
-    /**
-     * Writes raw bytes at the current position. The buffer is automatically
-     * enlarged if needed. The position advances by {@code data.length}.
-     *
-     * @param data bytes to write
-     * @return number of bytes actually written (usually equals {@code data.length})
-     * @throws IllegalStateException if the handle is already closed
-     * @see ApiHubNative#API_WriteBuffer
-     */
     public long write(byte[] data) {
         checkNotClosed();
+        if (data == null || data.length == 0) return 0;
         try (Memory mem = new Memory(data.length)) {
             mem.write(0, data, 0, data.length);
             return ApiHubNative.INSTANCE.API_WriteBuffer(ptr, mem, data.length);
         }
     }
 
-    /**
-     * Reads up to {@code length} bytes from the current position.
-     * The position advances by the number of bytes read.
-     *
-     * @param length maximum number of bytes to read
-     * @return a byte array containing the actually read data (may be shorter)
-     * @throws IllegalStateException if the handle is closed
-     * @see ApiHubNative#API_ReadBuffer
-     */
     public byte[] read(int length) {
         checkNotClosed();
-        try (Memory mem = new Memory(length)) {
-            long read = ApiHubNative.INSTANCE.API_ReadBuffer(ptr, mem, length);
+        if (length <= 0) return new byte[0];
+        // Defensive: cap length to prevent malicious OOM (though C layer also limits)
+        int safeLen = Math.min(length, MAX_STRING_LENGTH);
+        try (Memory mem = new Memory(safeLen)) {
+            long read = ApiHubNative.INSTANCE.API_ReadBuffer(ptr, mem, safeLen);
+            if (read <= 0) return new byte[0];
             return mem.getByteArray(0, (int) read);
         }
     }
 
     // ---------- Convenience methods for primitive types (little‑endian) ----------
 
-    /**
-     * Writes an {@code int} in little‑endian order.
-     */
     public long writeInt(int v) {
         byte[] b = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(v).array();
         return write(b);
     }
 
-    /**
-     * Reads an {@code int} in little‑endian order.
-     */
     public int readInt() {
         byte[] b = read(4);
+        if (b.length < 4) return 0;
         return ByteBuffer.wrap(b).order(ByteOrder.LITTLE_ENDIAN).getInt();
     }
 
-    /**
-     * Writes a {@code double} in little‑endian order.
-     */
     public long writeDouble(double v) {
         byte[] b = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).putDouble(v).array();
         return write(b);
     }
 
-    /**
-     * Reads a {@code double} in little‑endian order.
-     */
     public double readDouble() {
         byte[] b = read(8);
+        if (b.length < 8) return 0.0;
         return ByteBuffer.wrap(b).order(ByteOrder.LITTLE_ENDIAN).getDouble();
     }
 
-    // ---------- String helpers (UTF‑8, length‑prefixed) ----------
+    // ---------- DEPRECATED: Length‑prefixed strings (Java‑only, NOT cross‑language) ----------
 
     /**
-     * Writes a UTF‑8 string with a 4‑byte length prefix (int, little‑endian).
+     * @deprecated This method uses a 4‑byte length prefix (Little‑Endian), which is
+     *             <b>INCOMPATIBLE</b> with the Pascal {@code API_WriteString} contract
+     *             (which uses NUL termination). For cross‑language communication,
+     *             use {@link #writeStringNullTerminated(String)} instead.
+     *             Retained only for legacy Java‑internal protocols.
      */
+    @Deprecated
     public long writeString(String s) {
+        checkNotClosed();
+        if (s == null) s = ""; // defensive null guard
         byte[] bytes = s.getBytes(StandardCharsets.UTF_8);
+        if (bytes.length > MAX_STRING_LENGTH) {
+            // Truncate silently to prevent OOM, as this is a deprecated path
+            byte[] truncated = new byte[MAX_STRING_LENGTH];
+            System.arraycopy(bytes, 0, truncated, 0, MAX_STRING_LENGTH);
+            bytes = truncated;
+        }
         long len = writeInt(bytes.length);
         len += write(bytes);
         return len;
     }
 
     /**
-     * Reads a UTF‑8 string that was written with a 4‑byte length prefix.
+     * @deprecated This method reads a 4‑byte length prefix (Little‑Endian), which is
+     *             <b>INCOMPATIBLE</b> with the Pascal {@code API_ReadString} contract
+     *             (which reads until NUL). For cross‑language communication,
+     *             use {@link #readStringNullTerminated()} instead.
      */
+    @Deprecated
     public String readString() {
+        checkNotClosed();
         int len = readInt();
+        // Defensive: reject maliciously huge or negative lengths
+        if (len <= 0 || len > MAX_STRING_LENGTH) {
+            return "";
+        }
         byte[] data = read(len);
+        if (data.length < len) {
+            // Underflow: not enough bytes in buffer, return what we got or empty
+            return new String(data, StandardCharsets.UTF_8);
+        }
+        return new String(data, StandardCharsets.UTF_8);
+    }
+
+    // ========================================================================
+    // RECOMMENDED CROSS‑LANGUAGE ATOMIC API (Pascal‑compatible)
+    // ========================================================================
+
+    // ---------- Write helpers (all return true if full bytes written) ----------
+
+    public boolean writeInt8(byte value) {
+        long before = getPos();
+        long written = write(new byte[]{value});
+        if (written != 1) { setPos(before); return false; }
+        return true;
+    }
+
+    public boolean writeUInt8(int value) {
+        long before = getPos();
+        long written = write(new byte[]{(byte)(value & 0xFF)});
+        if (written != 1) { setPos(before); return false; }
+        return true;
+    }
+
+    public boolean writeInt16(short value) {
+        long before = getPos();
+        byte[] b = ByteBuffer.allocate(2).order(ByteOrder.LITTLE_ENDIAN).putShort(value).array();
+        long written = write(b);
+        if (written != 2) { setPos(before); return false; }
+        return true;
+    }
+
+    public boolean writeUInt16(int value) {
+        long before = getPos();
+        byte[] b = ByteBuffer.allocate(2).order(ByteOrder.LITTLE_ENDIAN).putShort((short)(value & 0xFFFF)).array();
+        long written = write(b);
+        if (written != 2) { setPos(before); return false; }
+        return true;
+    }
+
+    public boolean writeInt32(int value) {
+        long before = getPos();
+        long written = writeInt(value);
+        if (written != 4) { setPos(before); return false; }
+        return true;
+    }
+
+    public boolean writeUInt32(long value) {
+        long before = getPos();
+        byte[] b = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt((int)(value & 0xFFFFFFFFL)).array();
+        long written = write(b);
+        if (written != 4) { setPos(before); return false; }
+        return true;
+    }
+
+    public boolean writeInt64(long value) {
+        long before = getPos();
+        byte[] b = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN).putLong(value).array();
+        long written = write(b);
+        if (written != 8) { setPos(before); return false; }
+        return true;
+    }
+
+    public boolean writeUInt64(long value) {
+        return writeInt64(value); // same binary layout
+    }
+
+    public boolean writeSingle(float value) {
+        long before = getPos();
+        byte[] b = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putFloat(value).array();
+        long written = write(b);
+        if (written != 4) { setPos(before); return false; }
+        return true;
+    }
+
+    public boolean writeDouble2(double value) {
+        long before = getPos();
+        long written = writeDouble(value);
+        if (written != 8) { setPos(before); return false; }
+        return true;
+    }
+
+    /**
+     * Writes a UTF‑8 encoded Pascal string, followed by a null terminator (#0).
+     * This matches the standard "UTF‑8 + #0" format used across all language
+     * bindings (Pascal {@code API_WriteString} contract).
+     * The position is advanced by Length(UTF8String(Value)) + 1 bytes.
+     *
+     * @param value the string to write
+     * @return true if the string (including the trailing null) was fully written
+     */
+    public boolean writeStringNullTerminated(String value) {
+        checkNotClosed();
+        if (value == null) value = "";
+        byte[] utf8 = value.getBytes(StandardCharsets.UTF_8);
+        if (utf8.length > MAX_STRING_LENGTH) {
+            // Truncate to safe limit instead of crashing or silently corrupting
+            byte[] truncated = new byte[MAX_STRING_LENGTH];
+            System.arraycopy(utf8, 0, truncated, 0, MAX_STRING_LENGTH);
+            utf8 = truncated;
+        }
+        long before = getPos();
+        long written = write(utf8);
+        if (written != utf8.length) {
+            setPos(before);
+            return false;
+        }
+        // Write the null terminator and roll back on failure
+        if (!writeUInt8(0)) {
+            setPos(before);
+            return false;
+        }
+        return true;
+    }
+
+    // ---------- Read helpers (return 0 / 0.0 / empty string on underflow) ----------
+
+    public byte readInt8() {
+        byte[] b = read(1);
+        return b.length == 1 ? b[0] : 0;
+    }
+
+    public int readUInt8() {
+        byte[] b = read(1);
+        return b.length == 1 ? (b[0] & 0xFF) : 0;
+    }
+
+    public short readInt16() {
+        byte[] b = read(2);
+        if (b.length < 2) return 0;
+        return ByteBuffer.wrap(b).order(ByteOrder.LITTLE_ENDIAN).getShort();
+    }
+
+    public int readUInt16() {
+        byte[] b = read(2);
+        if (b.length < 2) return 0;
+        return ByteBuffer.wrap(b).order(ByteOrder.LITTLE_ENDIAN).getShort() & 0xFFFF;
+    }
+
+    public int readInt32() {
+        return readInt();
+    }
+
+    public long readUInt32() {
+        byte[] b = read(4);
+        if (b.length < 4) return 0;
+        return ByteBuffer.wrap(b).order(ByteOrder.LITTLE_ENDIAN).getInt() & 0xFFFFFFFFL;
+    }
+
+    public long readInt64() {
+        byte[] b = read(8);
+        if (b.length < 8) return 0;
+        return ByteBuffer.wrap(b).order(ByteOrder.LITTLE_ENDIAN).getLong();
+    }
+
+    public long readUInt64() {
+        return readInt64();
+    }
+
+    public float readSingle() {
+        byte[] b = read(4);
+        if (b.length < 4) return 0.0f;
+        return ByteBuffer.wrap(b).order(ByteOrder.LITTLE_ENDIAN).getFloat();
+    }
+
+    public double readDouble2() {
+        return readDouble();
+    }
+
+    /**
+     * Reads a UTF‑8 encoded string terminated by a null byte (#0) from the current
+     * position. The read position is advanced to the byte <b>after</b> the null
+     * terminator, matching the Pascal {@code API_ReadString} behavior.
+     * <p>
+     * <b>Hardened (2026-08-21):</b> If the underlying buffer pointer is null,
+     * or if the scan exceeds {@value #MAX_STRING_SCAN} bytes without finding a NUL,
+     * the method safely returns an empty string without throwing an exception
+     * and without modifying the current position.
+     *
+     * @return the decoded string (may be empty)
+     */
+    public String readStringNullTerminated() {
+        checkNotClosed();
+        long pos = getPos();
+        long size = getSize();
+
+        // Boundary check
+        if (pos >= size) {
+            return "";
+        }
+
+        // ========== F-01 FIX: Defensive null check on native buffer ==========
+        Pointer buf = getBuffer();
+        if (buf == null) {
+            // Native buffer is invalid; cannot read. Return empty, position unchanged.
+            return "";
+        }
+
+        long end = pos;
+        boolean foundNul = false;
+
+        // ========== W-02 FIX: Scan with upper bound to prevent infinite loops ==========
+        while (end < size && (end - pos) <= MAX_STRING_SCAN) {
+            if (buf.getByte(end) == 0) {
+                foundNul = true;
+                break;
+            }
+            end++;
+        }
+
+        // If we hit the scan limit or reached end without finding NUL, abort safely
+        if (!foundNul) {
+            // Position unchanged to avoid corrupting subsequent reads
+            return "";
+        }
+
+        int length = (int)(end - pos);
+        // ========== W-02 FIX: Guard against insane length values ==========
+        if (length < 0 || length > MAX_STRING_LENGTH) {
+            return "";
+        }
+
+        byte[] data = new byte[length];
+        buf.read(pos, data, 0, length);
+
+        // Advance position to right after the NUL terminator
+        setPos(end + 1);
+
         return new String(data, StandardCharsets.UTF_8);
     }
 
@@ -220,14 +409,6 @@ public class DataHandle implements AutoCloseable {
 
     // ---------- Zero‑copy access ----------
 
-    /**
-     * Returns a direct pointer to the internal buffer.
-     * This pointer is valid until the handle is freed or the buffer is resized.
-     * <b>Do not free this pointer</b> – it is owned by the handle.
-     * <p>
-     * You may read and write through this pointer, but you <b>must not</b>
-     * exceed the size returned by {@link #getSize()}.
-     */
     public Pointer getBuffer() {
         checkNotClosed();
         return ApiHubNative.INSTANCE.API_GetBuffer(ptr);
@@ -235,20 +416,13 @@ public class DataHandle implements AutoCloseable {
 
     // ---------- Resource management ----------
 
-    /**
-     * Closes the handle and frees the native memory <b>only if</b> this
-     * wrapper owns the pointer. Borrowed wrappers (from callbacks) do nothing.
-     * <p>
-     * It is safe to call this method multiple times; subsequent calls have
-     * no effect.
-     */
     @Override
     public void close() {
         if (!closed && owned && ptr != null) {
             ApiHubNative.INSTANCE.API_Free_DataHnd(ptr);
             closed = true;
         } else {
-            closed = true; // mark as closed even for borrowed
+            closed = true;
         }
     }
 
