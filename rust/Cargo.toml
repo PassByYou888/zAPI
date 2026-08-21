@@ -7,6 +7,7 @@ edition = "2021"
 libloading = "0.8"
 anyhow = "1.0"
 ctrlc = "3.4"       # 用于服务端示例捕获 Ctrl+C
+rand = "0.8"
 
 [lib]
 crate-type = ["lib"]
