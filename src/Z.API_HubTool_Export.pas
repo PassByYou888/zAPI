@@ -936,14 +936,9 @@ begin
 
   Init_Running := False; // Signal that initialisation is done.
 
-  try
-    if Init_Successed then
-      begin
-        while Simulated_Main_Thread_Running do
-            C40Progress(10); // Main event loop.
-      end;
-  except
-  end;
+  if Init_Successed then
+    while Simulated_Main_Thread_Running do
+        C40Progress(if_(Running_API_Num.V > 0, 0, 10)); // Main event loop.
 
   try
       C40Clean(); // Clean up C4 resources.
@@ -959,6 +954,7 @@ begin
   if Simulated_Main_Thread_Running then
       exit;
 
+  Open_Core_Dispatch_Thread();
   Init_Running := True;
   Init_Successed := False;
   Simulated_Main_Thread_Running := True;
@@ -1069,63 +1065,63 @@ var
     * -------------------------------------------------------------------------- }
 procedure API_SetOption(Option, Value: PAnsiChar);
 var
-  opt, v, tmp: TAPI_String;
+  opt, V, tmp: TAPI_String;
   L: Integer;
   i: Integer;
 begin
   opt := DS(Option);
-  v := DS(Value);
+  V := DS(Value);
 
   if opt.Same('password', 'passwd') then
     begin
-      Z.Net.C4.C40_Password := v;
+      Z.Net.C4.C40_Password := V;
       for i := 0 to tmp.L - 1 do
           tmp.Append(if_(TMT19937.Rand32 mod 2 = 0, '*', '**'));
       DoStatus('Update Password = %s', [tmp.Text]);
     end
   else if opt.Same('Quiet') then
     begin
-      C40SetQuietMode(EStrToBool(v.Text));
-      DoStatus('Quiet = %s', [umlBoolToStr(EStrToBool(v.Text)).Text]);
+      C40SetQuietMode(EStrToBool(V.Text));
+      DoStatus('Quiet = %s', [umlBoolToStr(EStrToBool(V.Text)).Text]);
     end
   else if opt.Same('External_Conf_Auto_Save', 'Conf_Auto_Save') then
     begin
-      External_Conf_Auto_Save := EStrToBool(v.Text);
+      External_Conf_Auto_Save := EStrToBool(V.Text);
       DoStatus('External Config Auto Save(.api-tool.ini) = %s', [umlBoolToStr(External_Conf_Auto_Save).Text]);
     end
   else if opt.Same('Wait_Connection_ReadyOk', 'Wait_API_Prepare_Done', 'API_Prepare_Done_Wait', 'WaitConnect', 'Wait_Ready', 'WaitReady') then
     begin
-      Wait_Connection_ReadyOk := EStrToBool(v.Text);
+      Wait_Connection_ReadyOk := EStrToBool(V.Text);
       DoStatus('Wait Connection ReadyOk = %s', [umlBoolToStr(Wait_Connection_ReadyOk).Text]);
     end
   else if opt.Same('Wait_Connection_Timeout', 'Wait_TimeOut', 'API_Prepare_Done_TimeOut', 'WaitTimeOut') then
     begin
-      Wait_Connection_Timeout := EStrToUInt64(v.Text);
+      Wait_Connection_Timeout := EStrToUInt64(V.Text);
       DoStatus('Wait Connection TimeOut = %s', [umlTimeTickToStr(Wait_Connection_Timeout).Text]);
     end
   else if opt.Same('ShowThreadID', 'ShowThread', 'Show_Thread') then
     begin
-      Z.Status.StatusThreadID := EStrToBool(v.Text);
+      Z.Status.StatusThreadID := EStrToBool(V.Text);
       DoStatus('Status Thread ID = %s', [umlBoolToStr(Z.Status.StatusThreadID).Text]);
     end
   else if opt.Same('ConsoleOutput', 'Console_Output') then
     begin
-      Z.Status.ConsoleOutput := EStrToBool(v.Text);
+      Z.Status.ConsoleOutput := EStrToBool(V.Text);
       DoStatus('Console Output = %s', [umlBoolToStr(Z.Status.ConsoleOutput).Text]);
     end
   else if opt.Same('IPC_Serv_ThreadCount', 'IPC_ThreadCount', 'IPC_Server_ThreadCount') then
     begin
-      TZNet_Server_IPC.IPC_Serv_ThreadCount := EStrToInt(v.Text);
+      TZNet_Server_IPC.IPC_Serv_ThreadCount := EStrToInt(V.Text);
       DoStatus('Interprocess Communication Server Thread Count = %s', [umlIntToStr(TZNet_Server_IPC.IPC_Serv_ThreadCount).Text]);
     end
   else if opt.Same('IPC_Serv_MaxQueueLength', 'IPC_MaxQueueLength', 'IPC_Server_MaxQueueLength') then
     begin
-      TZNet_Server_IPC.IPC_Serv_MaxQueueLength := EStrToInt(v.Text);
+      TZNet_Server_IPC.IPC_Serv_MaxQueueLength := EStrToInt(V.Text);
       DoStatus('Interprocess Communication Server Max Queue Length = %s', [umlIntToStr(TZNet_Server_IPC.IPC_Serv_MaxQueueLength).Text]);
     end
   else if opt.Same('IPC_Serv_MaxMsgSize', 'IPC_MaxMsgSize', 'IPC_Server_MaxMsgSize') then
     begin
-      TZNet_Server_IPC.IPC_Serv_MaxMsgSize := EStrToInt(v.Text);
+      TZNet_Server_IPC.IPC_Serv_MaxMsgSize := EStrToInt(V.Text);
       DoStatus('Interprocess Communication Server Max Msg Size = %s', [umlIntToStr(TZNet_Server_IPC.IPC_Serv_MaxMsgSize).Text]);
     end;
 end;
@@ -1147,7 +1143,7 @@ var
   External_Conf: TTextDataEngine;
 begin
   External_Conf := TTextDataEngine.Create;
-  External_Conf.AutoUpdateDefaultValue := True;
+  External_Conf.AutoUpdateDefaultValue := False;
   try
     mName_.Text := GetModuleName(0); // Get the executable name.
     External_Conf_FileName := mName_ + '.api-tool.ini';
@@ -1290,6 +1286,8 @@ const
 var
   buff_: TBytes;
 begin
+  if not External_Conf_Auto_Save then
+      exit;
   if not umlFileExists(External_Conf_FileName.Text) then
     begin
       buff_ := TAPI_String(Conf_Text).UTF8; // Convert default text to UTF‑8.
