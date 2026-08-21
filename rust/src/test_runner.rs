@@ -12,7 +12,6 @@ pub fn run_all_tests() -> Result<()> {
     test_notification()?;
     test_local_notification()?;
 
-    // ★ 关键：关闭网络框架，否则进程无法退出
     exit_main_thread();
     shutdown();
 
@@ -53,29 +52,14 @@ extern "C" fn get_time_callback(_trigger: *mut c_void, _input: DataHnd, output: 
     let secs = now.as_secs();
     let time_str = format!("{}", secs);
     let bytes = time_str.as_bytes();
-    let len = bytes.len() as i32;
-    let _ = write_buffer(output, &len.to_le_bytes());
     let _ = write_buffer(output, bytes);
+    let _ = write_buffer(output, &[0u8]);
 }
 
 extern "C" fn print_notify(_trigger: *mut c_void, input: DataHnd) {
-    unsafe {
-        let mut len_buf = [0u8; 4];
-        set_pos(input, 0);
-        if read_buffer(input, &mut len_buf).is_err() || len_buf.len() != 4 {
-            return;
-        }
-        let len = i32::from_le_bytes(len_buf) as usize;
-        if len == 0 {
-            return;
-        }
-        let mut buf = vec![0u8; len];
-        if read_buffer(input, &mut buf).is_err() || buf.len() != len {
-            return;
-        }
-        if let Ok(msg) = String::from_utf8(buf) {
-            println!("[Notify] Received: {}", msg);
-        }
+    let mut h = unsafe { DataHandle::from_raw(input) };
+    if let Ok(msg) = h.read_string_null_terminated() {
+        println!("[Notify] Received: {}", msg);
     }
 }
 
@@ -109,7 +93,6 @@ fn start_network_service() -> Result<AppHandle> {
 
     prepare_done()?;
 
-    // 状态信息由库自动打印到控制台，无需手动调用 get_status
     println!("服务已启动。查看控制台输出以获取状态信息。");
 
     std::thread::sleep(std::time::Duration::from_millis(800));
@@ -144,7 +127,8 @@ fn test_add() -> Result<()> {
         return Ok(());
     }
 
-    let mut resp = unsafe { DataHandle::from_raw(res) };
+    // 修改点
+    let mut resp = unsafe { DataHandle::from_owned_raw(res) };
     let result = resp.read_i32()?;
     println!("    远程 add(10,20) = {}", result);
     Ok(())
@@ -152,7 +136,7 @@ fn test_add() -> Result<()> {
 
 fn test_echo() -> Result<()> {
     let mut param = DataHandle::new("echo")?;
-    param.write_string("Hello from Rust!")?;
+    param.write_string_null_terminated("Hello from Rust!")?;
     println!("   发送 echo ...");
     let res = call("TestService", param.as_raw(), 5000)?;
 
@@ -162,8 +146,9 @@ fn test_echo() -> Result<()> {
         return Ok(());
     }
 
-    let mut resp = unsafe { DataHandle::from_raw(res) };
-    let result = resp.read_string()?;
+    // 修改点
+    let mut resp = unsafe { DataHandle::from_owned_raw(res) };
+    let result = resp.read_string_null_terminated()?;
     println!("    远程 echo -> '{}'", result);
     Ok(())
 }
@@ -179,8 +164,9 @@ fn test_get_time() -> Result<()> {
         return Ok(());
     }
 
-    let mut resp = unsafe { DataHandle::from_raw(res) };
-    let result = resp.read_string()?;
+    // 修改点
+    let mut resp = unsafe { DataHandle::from_owned_raw(res) };
+    let result = resp.read_string_null_terminated()?;
     println!("    远程 get_time -> '{}'", result);
     Ok(())
 }
@@ -188,10 +174,9 @@ fn test_get_time() -> Result<()> {
 fn test_notification() -> Result<()> {
     println!("\n-- 通知测试 --");
     let mut param = DataHandle::new("print")?;
-    param.write_string("Notification from Rust client")?;
+    param.write_string_null_terminated("Notification from Rust client")?;
     notify("TestService", param.as_raw());
     std::thread::sleep(std::time::Duration::from_millis(500));
-    // 状态信息由库自动打印到控制台
     Ok(())
 }
 
@@ -200,7 +185,7 @@ fn test_local_notification() -> Result<()> {
     let app = AppHandle::new("LocalAppNotify", "Local notify")?;
     app.register_notify("print", "Print", std::ptr::null_mut(), print_notify)?;
     let mut param = DataHandle::new("print")?;
-    param.write_string("Local notification")?;
+    param.write_string_null_terminated("Local notification")?;
     app.local_notify(&param);
     std::thread::sleep(std::time::Duration::from_millis(200));
     Ok(())

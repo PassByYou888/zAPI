@@ -7,6 +7,19 @@
 //! `Api` struct. RAII wrappers (`DataHandle`, `AppHandle`) are provided
 //! for automatic resource management.
 //!
+//! # Ownership Model (CRITICAL)
+//!
+//! `DataHandle` distinguishes between **owned** and **borrowed** handles.
+//! - **Owned** (`new` or `from_owned_raw`): the handle is freed on `Drop`.
+//!   Used for handles created by the user or returned from `call`/`local_call`.
+//! - **Borrowed** (`from_raw`): the handle is NOT freed on `Drop`.
+//!   Used exclusively inside callbacks for the `input` and `output` parameters
+//!   which are owned by the C library.
+//!
+//! **Important**: Borrowed handles can still be written to (e.g., `output` in callbacks).
+//! The developer must ensure that writes are only performed on handles that permit it
+//! (e.g., `output` for results, not `input` which is read‑only).
+//!
 //! # Thread Safety (based on the C ABI specification)
 //!
 //! **All functions are fully thread‑safe** and can be called concurrently
@@ -69,42 +82,12 @@
 //!   Max IPC queue length.
 //! - `"IPC_Serv_MaxMsgSize" / "IPC_MaxMsgSize" / "IPC_Server_MaxMsgSize"` :
 //!   Max IPC message size (bytes).
-//!
-//! # Example
-//!
-//! ```
-//! use api_hub::*;
-//!
-//! // Set a runtime option before starting
-//! set_option("Wait_Connection_ReadyOk", "False");
-//!
-//! // Create an application and register an 'echo' API
-//! let app = AppHandle::new("MyApp", "Example application")?;
-//! app.register_call("echo", "Echoes input", std::ptr::null_mut(), echo_callback)?;
-//!
-//! // Prepare network and start the framework
-//! reset_prepare();
-//! prepare_service("0.0.0.0:9898", "127.0.0.1:9898")?;
-//! prepare_client("127.0.0.1:9898", app.as_raw())?;
-//! prepare_done()?;
-//!
-//! // Later, dynamically unregister the 'echo' API
-//! app.unregister("echo")?;
-//!
-//! // Make a remote call
-//! let mut data = DataHandle::new("echo")?;
-//! data.write(b"Hello, world!")?;
-//! let result = call("MyApp", data.as_raw(), 5000)?;
-//! // Note: result is always a valid handle; check its size for success.
-//! // ...
-//! # Ok::<(), ApiError>(())
-//! ```
 
 #![allow(static_mut_refs)]
 #![allow(unused_unsafe)]
 
 use libloading::Library;
-use std::ffi::{CStr, CString, c_char, c_int, c_void, c_ulonglong};
+use std::ffi::{CString, c_char, c_int, c_void, c_ulonglong};
 use std::sync::Once;
 
 // ============================================================================
@@ -203,7 +186,7 @@ struct Api {
     free_app_hnd: fn(AppHnd),
     reg_call: fn(AppHnd, *const c_char, *const c_char, *mut c_void, APICall) -> c_int,
     reg_notify: fn(AppHnd, *const c_char, *const c_char, *mut c_void, APINotify) -> c_int,
-    un_reg: fn(AppHnd, *const c_char) -> c_int,                          // NEW
+    un_reg: fn(AppHnd, *const c_char) -> c_int,
     local_app_call: fn(AppHnd, DataHnd) -> DataHnd,
     local_app_notify: fn(AppHnd, DataHnd),
 
@@ -214,7 +197,7 @@ struct Api {
     exit_main_thread: fn(),
     call: fn(*const c_char, DataHnd, c_ulonglong) -> DataHnd,
     notify: fn(*const c_char, DataHnd),
-    set_option: fn(*const c_char, *const c_char),                        // NEW
+    set_option: fn(*const c_char, *const c_char),
     shutdown: fn(),
 }
 
@@ -231,11 +214,9 @@ const LIB_NAME: &str = "z_api_hub64.dll";
 const LIB_NAME: &str = "libz_api_hub.so";
 #[cfg(target_os = "macos")]
 const LIB_NAME: &str = "libz_api_hub.dylib";
-// BSD support (the library name is the same as on Linux)
 #[cfg(any(target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
 const LIB_NAME: &str = "libz_api_hub.so";
 
-/// Attempt to load the library from a set of candidate paths.
 fn find_library() -> Result<Library> {
     let mut candidates = Vec::new();
     candidates.push(std::path::PathBuf::from(LIB_NAME));
@@ -313,7 +294,7 @@ fn load_api() -> Result<()> {
         let free_app_hnd = get_fn!(lib, "API_Free_APPHnd", fn(AppHnd));
         let reg_call = get_fn!(lib, "API_Reg_Call", fn(AppHnd, *const c_char, *const c_char, *mut c_void, APICall) -> c_int);
         let reg_notify = get_fn!(lib, "API_Reg_Notify", fn(AppHnd, *const c_char, *const c_char, *mut c_void, APINotify) -> c_int);
-        let un_reg = get_fn!(lib, "API_UnReg", fn(AppHnd, *const c_char) -> c_int);  // NEW
+        let un_reg = get_fn!(lib, "API_UnReg", fn(AppHnd, *const c_char) -> c_int);
         let local_app_call = get_fn!(lib, "API_Local_APP_Call", fn(AppHnd, DataHnd) -> DataHnd);
         let local_app_notify = get_fn!(lib, "API_Local_APP_Notify", fn(AppHnd, DataHnd));
 
@@ -324,7 +305,7 @@ fn load_api() -> Result<()> {
         let exit_main_thread = get_fn!(lib, "API_Exit_MainThread", fn());
         let call = get_fn!(lib, "API_Call", fn(*const c_char, DataHnd, c_ulonglong) -> DataHnd);
         let notify = get_fn!(lib, "API_Notify", fn(*const c_char, DataHnd));
-        let set_option = get_fn!(lib, "API_SetOption", fn(*const c_char, *const c_char));  // NEW
+        let set_option = get_fn!(lib, "API_SetOption", fn(*const c_char, *const c_char));
         let shutdown = get_fn!(lib, "API_shutdown", fn());
 
         unsafe {
@@ -488,36 +469,6 @@ pub fn reg_notify(app: AppHnd, api_name: &str, desc: &str, trigger: *mut c_void,
     }
 }
 
-/// Unregisters a previously registered API from the application.
-///
-/// The API is **immediately** removed from the local registry and a network
-/// broadcast is triggered. Remote peers will stop seeing this API within
-/// approximately 3 seconds (depending on network latency and the C4 update
-/// interval). During that short window, remote calls may still be attempted;
-/// they will fail gracefully (the remote side will receive a "not found" error).
-///
-/// Use this function to dynamically unload plugins, temporarily disable
-/// services, or adjust exposed functionality at runtime without restarting
-/// the application.
-///
-/// # Arguments
-/// * `app`    - application handle
-/// * `api_name` - name of the API to unregister (UTF‑8)
-///
-/// # Returns
-/// `Ok(())` if the API was found and unregistered, or an `ApiError::UnregisterFailed`
-/// if the API name does not exist.
-///
-/// # Thread safety
-/// This function is thread‑safe.
-///
-/// # Example
-/// ```
-/// # use api_hub::*;
-/// # let app = AppHandle::new("MyApp", "")?;
-/// app.unregister("temp_api")?;
-/// # Ok::<(), ApiError>(())
-/// ```
 pub fn un_reg(app: AppHnd, api_name: &str) -> Result<()> {
     debug_log!("un_reg: app={:p}, api='{}'", app, api_name);
     let cname = CString::new(api_name).map_err(|_| ApiError::InvalidApiName)?;
@@ -553,7 +504,6 @@ pub fn reset_prepare() {
     (api().reset_prepare)();
 }
 
-/// Note: The return value is a service tag (tag seed); 0 is a valid tag and does not indicate failure.
 pub fn prepare_service(listening: &str, physics: &str) -> Result<c_int> {
     debug_log!("prepare_service: listening='{}', physics='{}'", listening, physics);
     let c1 = CString::new(listening).map_err(|_| ApiError::InvalidApiName)?;
@@ -563,7 +513,6 @@ pub fn prepare_service(listening: &str, physics: &str) -> Result<c_int> {
     Ok(ret)
 }
 
-/// Note: The return value is a client tag; 0 is valid and not an error.
 pub fn prepare_client(physics: &str, app: AppHnd) -> Result<c_int> {
     debug_log!("prepare_client: physics='{}', app={:p}", physics, app);
     let c = CString::new(physics).map_err(|_| ApiError::InvalidApiName)?;
@@ -589,18 +538,10 @@ pub fn exit_main_thread() {
     (api().exit_main_thread)();
 }
 
-/// Performs a remote (or local) call to the specified application.
-///
-/// **Important**: The returned handle is **never `null`**. If the call times out
-/// or fails, the handle will have size 0 (check with `get_size`). The caller
-/// must always free the returned handle (via `DataHandle` or `free_data_hnd`).
-///
-/// This function is fully thread‑safe.
 pub fn call(app_name: &str, param: DataHnd, timeout_ms: u64) -> Result<DataHnd> {
     debug_log!("call: app='{}', param={:p}, timeout={}", app_name, param, timeout_ms);
     let cname = CString::new(app_name).map_err(|_| ApiError::InvalidApiName)?;
     let ptr = (api().call)(cname.as_ptr(), param, timeout_ms);
-    // The C ABI guarantees that ptr is never null; this check is defensive.
     if ptr.is_null() {
         debug_log!("call returned null (should not happen per spec)");
         Err(ApiError::CallFailed)
@@ -610,49 +551,12 @@ pub fn call(app_name: &str, param: DataHnd, timeout_ms: u64) -> Result<DataHnd> 
     }
 }
 
-/// Sends a one‑way notification to the specified application.
-///
-/// This function returns immediately and does not wait for a response.
-/// Delivery is best‑effort. It is thread‑safe.
 pub fn notify(app_name: &str, param: DataHnd) {
     debug_log!("notify: app='{}', param={:p}", app_name, param);
     let cname = CString::new(app_name).unwrap_or_default();
     (api().notify)(cname.as_ptr(), param);
 }
 
-/// Dynamically adjusts global runtime options of the API Hub framework.
-///
-/// All changes take effect immediately for subsequent operations (except where
-/// noted). This function is intended for runtime tuning without restarting the
-/// application or modifying the .ini file. Unknown options are silently ignored.
-///
-/// # Supported Options
-///
-/// | Option key (case‑insensitive) | Aliases | Value type | Description |
-/// |-------------------------------|---------|------------|-------------|
-/// | `"password"` | `"passwd"` | String | Sets the C4 P2PVM authentication token. Must match on both service and client sides. Affects new connections only. |
-/// | `"Quiet"` | - | Boolean | Enable/disable quiet mode (True/False). Suppresses debug logs. |
-/// | `"External_Conf_Auto_Save"` | `"Conf_Auto_Save"` | Boolean | Auto‑save .ini on exit (True/False). Default True. |
-/// | `"Wait_Connection_ReadyOk"` | `"Wait_API_Prepare_Done"`, `"API_Prepare_Done_Wait"`, `"WaitConnect"`, `"Wait_Ready"`, `"WaitReady"` | Boolean | Controls whether `prepare_done` blocks until all clients are connected. When False, clients auto‑connect later (important for deployment). |
-/// | `"Wait_Connection_Timeout"` | `"Wait_TimeOut"`, `"API_Prepare_Done_TimeOut"`, `"WaitTimeOut"` | Integer (ms) | Max wait time when `Wait_Connection_ReadyOk` is True. Default 30000. |
-/// | `"ShowThreadID"` | `"ShowThread"`, `"Show_Thread"` | Boolean | Show thread IDs in logs. |
-/// | `"ConsoleOutput"` | `"Console_Output"` | Boolean | Enable/disable console logging. |
-/// | `"IPC_Serv_ThreadCount"` | `"IPC_ThreadCount"`, `"IPC_Server_ThreadCount"` | Integer | Number of threads in the IPC service thread pool. |
-/// | `"IPC_Serv_MaxQueueLength"` | `"IPC_MaxQueueLength"`, `"IPC_Server_MaxQueueLength"` | Integer | Max IPC queue length. |
-/// | `"IPC_Serv_MaxMsgSize"` | `"IPC_MaxMsgSize"`, `"IPC_Server_MaxMsgSize"` | Integer (bytes) | Max IPC message size. |
-///
-/// For boolean options, accepted values: `"True"`/`"False"`, `"1"`/`"0"`, `"Yes"`/`"No"`.
-///
-/// # Thread safety
-/// This function is thread‑safe.
-///
-/// # Example
-/// ```
-/// # use api_hub::set_option;
-/// set_option("password", "my_secret_token");
-/// set_option("Wait_Connection_ReadyOk", "False");
-/// set_option("Quiet", "True");
-/// ```
 pub fn set_option(option: &str, value: &str) {
     debug_log!("set_option: option='{}', value='{}'", option, value);
     let copt = CString::new(option).unwrap_or_default();
@@ -660,10 +564,6 @@ pub fn set_option(option: &str, value: &str) {
     (api().set_option)(copt.as_ptr(), cval.as_ptr());
 }
 
-/// Gracefully shuts down the entire API Hub framework.
-///
-/// This function stops all services, disconnects clients, and releases resources.
-/// After shutdown, the library can be re‑initialised by calling preparation functions again.
 pub fn shutdown() {
     debug_log!("shutdown");
     (api().shutdown)();
@@ -673,58 +573,78 @@ pub fn shutdown() {
 // RAII Wrappers
 // ============================================================================
 
-/// RAII wrapper for a data handle. Automatically frees the handle on drop.
-pub struct DataHandle(DataHnd);
+/// RAII wrapper for a data handle.
+///
+/// # Ownership
+/// - `owned = true`: drops the handle on `Drop`.
+/// - `owned = false`: does NOT drop the handle on `Drop` (borrowed).
+///
+/// See the module-level documentation for detailed ownership semantics.
+pub struct DataHandle {
+    ptr: DataHnd,
+    owned: bool,
+}
 
 impl DataHandle {
-    /// Creates a new data handle with the given API name.
+    /// Creates a new owned data handle with the given API name.
     pub fn new(api_name: &str) -> Result<Self> {
         let ptr = create_data_hnd(api_name)?;
-        Ok(DataHandle(ptr))
+        Ok(DataHandle { ptr, owned: true })
     }
 
-    /// Wraps an existing raw handle without taking ownership.
-    /// The caller is responsible for ensuring the handle is valid.
+    /// Wraps an existing raw handle **without taking ownership** (borrowed).
+    /// The caller must ensure the handle remains valid for the lifetime of this wrapper.
+    /// This is the correct constructor for `input` and `output` parameters inside callbacks.
     pub unsafe fn from_raw(ptr: DataHnd) -> Self {
-        DataHandle(ptr)
+        DataHandle { ptr, owned: false }
+    }
+
+    /// Wraps an existing raw handle **with ownership**.
+    /// The wrapper will free the handle on drop. This is the correct constructor
+    /// for handles returned by `call` or `local_app_call`.
+    pub unsafe fn from_owned_raw(ptr: DataHnd) -> Self {
+        DataHandle { ptr, owned: true }
     }
 
     /// Returns the raw handle (borrowed).
     pub fn as_raw(&self) -> DataHnd {
-        self.0
+        self.ptr
     }
 
-    /// Writes data to the handle's buffer at the current position.
+    /// Writes raw bytes to the handle's buffer at the current position.
+    /// This is allowed on both owned and borrowed handles.
     pub fn write(&mut self, data: &[u8]) -> Result<usize> {
-        write_buffer(self.0, data)
+        write_buffer(self.ptr, data)
     }
 
-    /// Reads data from the handle's buffer into the provided slice.
+    /// Reads raw bytes from the handle's buffer into the provided slice.
     pub fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
-        read_buffer(self.0, buf)
+        read_buffer(self.ptr, buf)
     }
 
     pub fn pos(&self) -> i64 {
-        get_pos(self.0)
+        get_pos(self.ptr)
     }
 
+    /// Sets the read/write position. This is allowed on both owned and borrowed handles.
     pub fn set_pos(&self, pos: i64) {
-        set_pos(self.0, pos)
+        set_pos(self.ptr, pos)
     }
 
     pub fn size(&self) -> i64 {
-        get_size(self.0)
+        get_size(self.ptr)
     }
 
+    /// Sets the buffer size. This is allowed on both owned and borrowed handles.
     pub fn set_size(&self, size: i64) {
-        set_size(self.0, size)
+        set_size(self.ptr, size)
     }
 
     pub fn buffer(&self) -> *mut c_void {
-        (api().get_buffer)(self.0)
+        (api().get_buffer)(self.ptr)
     }
 
-    // Convenience typed helpers
+    // ----- Convenience typed helpers (existing) -----
     pub fn write_i32(&mut self, v: i32) -> Result<()> {
         self.write(&v.to_le_bytes())?;
         Ok(())
@@ -758,7 +678,6 @@ impl DataHandle {
         Ok(f64::from_le_bytes(b))
     }
 
-    /// Writes a string as a length‑prefixed (i32) UTF‑8 byte sequence.
     pub fn write_string(&mut self, s: &str) -> Result<()> {
         let bytes = s.as_bytes();
         self.write_i32(bytes.len() as i32)?;
@@ -766,7 +685,6 @@ impl DataHandle {
         Ok(())
     }
 
-    /// Reads a length‑prefixed string.
     pub fn read_string(&mut self) -> Result<String> {
         let len = self.read_i32()?;
         if len < 0 {
@@ -776,12 +694,159 @@ impl DataHandle {
         self.read(&mut buf)?;
         String::from_utf8(buf).map_err(|_| ApiError::ReadFailed)
     }
+
+    // ========================================================================
+    // Atomic type helpers (Pascal‑compatible, little‑endian)
+    // All write methods are allowed on both owned and borrowed handles.
+    // ========================================================================
+
+    pub fn write_int8(&mut self, v: i8) -> Result<()> {
+        let written = self.write(&[v as u8])?;
+        if written == 1 { Ok(()) } else { Err(ApiError::WriteFailed) }
+    }
+
+    pub fn write_uint8(&mut self, v: u8) -> Result<()> {
+        let written = self.write(&[v])?;
+        if written == 1 { Ok(()) } else { Err(ApiError::WriteFailed) }
+    }
+
+    pub fn write_int16(&mut self, v: i16) -> Result<()> {
+        let written = self.write(&v.to_le_bytes())?;
+        if written == 2 { Ok(()) } else { Err(ApiError::WriteFailed) }
+    }
+
+    pub fn write_uint16(&mut self, v: u16) -> Result<()> {
+        let written = self.write(&v.to_le_bytes())?;
+        if written == 2 { Ok(()) } else { Err(ApiError::WriteFailed) }
+    }
+
+    pub fn write_int32(&mut self, v: i32) -> Result<()> {
+        self.write_i32(v)
+    }
+
+    pub fn write_uint32(&mut self, v: u32) -> Result<()> {
+        let written = self.write(&v.to_le_bytes())?;
+        if written == 4 { Ok(()) } else { Err(ApiError::WriteFailed) }
+    }
+
+    pub fn write_int64(&mut self, v: i64) -> Result<()> {
+        self.write_i64(v)
+    }
+
+    pub fn write_uint64(&mut self, v: u64) -> Result<()> {
+        let written = self.write(&v.to_le_bytes())?;
+        if written == 8 { Ok(()) } else { Err(ApiError::WriteFailed) }
+    }
+
+    pub fn write_single(&mut self, v: f32) -> Result<()> {
+        let written = self.write(&v.to_le_bytes())?;
+        if written == 4 { Ok(()) } else { Err(ApiError::WriteFailed) }
+    }
+
+    pub fn write_double(&mut self, v: f64) -> Result<()> {
+        self.write_f64(v)
+    }
+
+    pub fn write_string_null_terminated(&mut self, s: &str) -> Result<()> {
+        let bytes = s.as_bytes();
+        let written = self.write(bytes)?;
+        if written != bytes.len() {
+            return Err(ApiError::WriteFailed);
+        }
+        let nwritten = self.write(&[0])?;
+        if nwritten == 1 {
+            Ok(())
+        } else {
+            Err(ApiError::WriteFailed)
+        }
+    }
+
+    // ----- Atomic reads -----
+
+    pub fn read_int8(&mut self) -> Result<i8> {
+        let mut b = [0u8; 1];
+        let n = self.read(&mut b)?;
+        if n == 1 { Ok(b[0] as i8) } else { Err(ApiError::ReadFailed) }
+    }
+
+    pub fn read_uint8(&mut self) -> Result<u8> {
+        let mut b = [0u8; 1];
+        let n = self.read(&mut b)?;
+        if n == 1 { Ok(b[0]) } else { Err(ApiError::ReadFailed) }
+    }
+
+    pub fn read_int16(&mut self) -> Result<i16> {
+        let mut b = [0u8; 2];
+        let n = self.read(&mut b)?;
+        if n == 2 { Ok(i16::from_le_bytes(b)) } else { Err(ApiError::ReadFailed) }
+    }
+
+    pub fn read_uint16(&mut self) -> Result<u16> {
+        let mut b = [0u8; 2];
+        let n = self.read(&mut b)?;
+        if n == 2 { Ok(u16::from_le_bytes(b)) } else { Err(ApiError::ReadFailed) }
+    }
+
+    pub fn read_int32(&mut self) -> Result<i32> {
+        self.read_i32()
+    }
+
+    pub fn read_uint32(&mut self) -> Result<u32> {
+        let mut b = [0u8; 4];
+        let n = self.read(&mut b)?;
+        if n == 4 { Ok(u32::from_le_bytes(b)) } else { Err(ApiError::ReadFailed) }
+    }
+
+    pub fn read_int64(&mut self) -> Result<i64> {
+        self.read_i64()
+    }
+
+    pub fn read_uint64(&mut self) -> Result<u64> {
+        let mut b = [0u8; 8];
+        let n = self.read(&mut b)?;
+        if n == 8 { Ok(u64::from_le_bytes(b)) } else { Err(ApiError::ReadFailed) }
+    }
+
+    pub fn read_single(&mut self) -> Result<f32> {
+        let mut b = [0u8; 4];
+        let n = self.read(&mut b)?;
+        if n == 4 { Ok(f32::from_le_bytes(b)) } else { Err(ApiError::ReadFailed) }
+    }
+
+    pub fn read_double(&mut self) -> Result<f64> {
+        self.read_f64()
+    }
+
+    pub fn read_string_null_terminated(&mut self) -> Result<String> {
+        let size = self.size();
+        let pos = self.pos();
+        if pos >= size {
+            return Ok(String::new());
+        }
+        let remaining = (size - pos) as usize;
+        let mut buf = vec![0u8; remaining];
+        let n = self.read(&mut buf)?;
+        if n == 0 {
+            return Ok(String::new());
+        }
+        if let Some(nul_offset) = buf[0..n].iter().position(|&b| b == 0) {
+            let string_bytes = &buf[0..nul_offset];
+            self.set_pos(pos + nul_offset as i64 + 1);
+            Ok(String::from_utf8_lossy(string_bytes).into_owned())
+        } else {
+            self.set_pos(pos);
+            Err(ApiError::ReadFailed)
+        }
+    }
 }
 
 impl Drop for DataHandle {
     fn drop(&mut self) {
-        if !self.0.is_null() {
-            free_data_hnd(self.0);
+        if self.owned && !self.ptr.is_null() {
+            debug_log!("DataHandle drop: freeing owned ptr {:p}", self.ptr);
+            free_data_hnd(self.ptr);
+        } else if !self.owned && !self.ptr.is_null() {
+            debug_log!("DataHandle drop: borrowed ptr {:p} NOT freed", self.ptr);
         }
     }
 }
@@ -822,25 +887,14 @@ impl AppHandle {
         reg_notify(self.0, api_name, desc, trigger, callback)
     }
 
-    /// Unregisters a previously registered API from this application.
-    ///
-    /// This method wraps [`un_reg`]. See its documentation for details on
-    /// immediate local removal and asynchronous network broadcast.
-    ///
-    /// # Example
-    /// ```
-    /// # use api_hub::*;
-    /// # let app = AppHandle::new("MyApp", "")?;
-    /// app.unregister("old_api")?;
-    /// # Ok::<(), ApiError>(())
-    /// ```
     pub fn unregister(&self, api_name: &str) -> Result<()> {
         un_reg(self.0, api_name)
     }
 
     pub fn local_call(&self, param: &DataHandle) -> Result<DataHandle> {
         let ptr = local_app_call(self.0, param.as_raw())?;
-        Ok(unsafe { DataHandle::from_raw(ptr) })
+        // The returned handle is owned by the caller.
+        Ok(unsafe { DataHandle::from_owned_raw(ptr) })
     }
 
     pub fn local_notify(&self, param: &DataHandle) {
