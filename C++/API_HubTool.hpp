@@ -117,8 +117,10 @@
 #include <string>
 #include <stdexcept>
 #include <utility>   // for std::move
+#include <cstdint>   // for int8_t etc.
+#include <cstring>   // for memcpy
 
-    namespace z_api_hub {
+namespace z_api_hub {
 
     // ----------------------------------------------------------------------------
     //  ApiError – exception thrown on any API failure
@@ -166,7 +168,7 @@
     };
 
     // ----------------------------------------------------------------------------
-    //  DataHandle – RAII wrapper for TDataHnd
+    //  DataHandle – RAII wrapper for TDataHnd with atomic read/write methods
     // ----------------------------------------------------------------------------
     /**
      * @brief Manages the lifetime of a TDataHnd and provides easy read/write access.
@@ -179,6 +181,7 @@
      *   - Move semantics (copy is disabled).
      *   - write() / read() for trivially copyable types (appends/reads from current position).
      *   - seek(), pos(), size(), buffer() for low‑level control.
+     *   - Atomic write/read helpers (writeInt8, readInt8, writeString, readString, etc.)
      *
      * @note write() appends data at the current position. To overwrite from the start,
      *       call seek(0) before writing.
@@ -322,6 +325,84 @@
         size_t read(T& value) {
             static_assert(std::is_trivially_copyable_v<T>, "T must be trivially copyable");
             return read(&value, sizeof(T));
+        }
+
+        // ---------- Atomic write helpers (return true on success) ----------
+
+        bool writeInt8(int8_t v) { return API_WriteInt8(h_, v) != 0; }
+        bool writeUInt8(uint8_t v) { return API_WriteUInt8(h_, v) != 0; }
+        bool writeInt16(int16_t v) { return API_WriteInt16(h_, v) != 0; }
+        bool writeUInt16(uint16_t v) { return API_WriteUInt16(h_, v) != 0; }
+        bool writeInt32(int32_t v) { return API_WriteInt32(h_, v) != 0; }
+        bool writeUInt32(uint32_t v) { return API_WriteUInt32(h_, v) != 0; }
+        bool writeInt64(int64_t v) { return API_WriteInt64(h_, v) != 0; }
+        bool writeUInt64(uint64_t v) { return API_WriteUInt64(h_, v) != 0; }
+        bool writeSingle(float v) { return API_WriteSingle(h_, v) != 0; }
+        bool writeDouble(double v) { return API_WriteDouble(h_, v) != 0; }
+
+        /**
+         * @brief Writes a UTF‑8 string followed by a null terminator.
+         * @param str String to write (may be empty).
+         * @return true if the entire string (including null) was written.
+         */
+        bool writeString(const std::string& str) {
+            return API_WriteString(h_, str.c_str()) != 0;
+        }
+
+        // ---------- Atomic read helpers (return true on success) ----------
+
+        bool readInt8(int8_t* out) { return API_ReadInt8(h_, out) != 0; }
+        bool readUInt8(uint8_t* out) { return API_ReadUInt8(h_, out) != 0; }
+        bool readInt16(int16_t* out) { return API_ReadInt16(h_, out) != 0; }
+        bool readUInt16(uint16_t* out) { return API_ReadUInt16(h_, out) != 0; }
+        bool readInt32(int32_t* out) { return API_ReadInt32(h_, out) != 0; }
+        bool readUInt32(uint32_t* out) { return API_ReadUInt32(h_, out) != 0; }
+        bool readInt64(int64_t* out) { return API_ReadInt64(h_, out) != 0; }
+        bool readUInt64(uint64_t* out) { return API_ReadUInt64(h_, out) != 0; }
+        bool readSingle(float* out) { return API_ReadSingle(h_, out) != 0; }
+        bool readDouble(double* out) { return API_ReadDouble(h_, out) != 0; }
+
+        /**
+         * @brief Reads a null‑terminated UTF‑8 string from the current position.
+         *        The position is advanced past the null terminator.
+         *
+         * This method scans the internal buffer to find the null terminator,
+         * so it can read strings of any length without a hard‑coded limit.
+         *
+         * @param out     Output string (will be cleared and filled with the read string).
+         * @param maxLen  Maximum number of bytes to read (including null terminator).
+         *                0 means no limit (read entire string).
+         * @return true if a null terminator was found and the string was read;
+         *         false if the buffer ends without a null, or the string exceeds maxLen.
+         */
+        bool readString(std::string* out, size_t maxLen = 0) {
+            if (!out || !h_) return false;
+            out->clear();
+
+            int64_t start = pos();
+            int64_t total = size();
+            if (start >= total) return false;
+
+            const char* buf = static_cast<const char*>(buffer());
+            if (!buf) return false;
+
+            // Scan for the null terminator
+            int64_t end = start;
+            while (end < total && buf[end] != '\0')
+                ++end;
+
+            if (end >= total) // No null terminator found
+                return false;
+
+            size_t len = static_cast<size_t>(end - start);
+            if (maxLen > 0 && len >= maxLen) // Check if exceeds limit (allow equal because we need room for null)
+                return false;
+
+            // Copy the string (excluding the null)
+            out->assign(buf + start, len);
+            // Advance position to after the null
+            seek(end + 1);
+            return true;
         }
 
         // ---------- Position and size management ----------
