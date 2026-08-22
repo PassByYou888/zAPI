@@ -153,7 +153,7 @@ begin
   else
     begin
       Wait_Signal__ := True;
-      SyncQueue__.Add(TSynchronize_Data___.Init(OnSync, nil, nil, @Wait_Signal__));
+      SyncQueue__.Push(TSynchronize_Data___.Init(OnSync, nil, nil, @Wait_Signal__));
       while Wait_Signal__ do
           ;
     end;
@@ -174,7 +174,7 @@ begin
   else
     begin
       Wait_Signal__ := True;
-      SyncQueue__.Add(TSynchronize_Data___.Init(nil, OnSync, nil, @Wait_Signal__));
+      SyncQueue__.Push(TSynchronize_Data___.Init(nil, OnSync, nil, @Wait_Signal__));
       while Wait_Signal__ do
           ;
     end;
@@ -195,7 +195,7 @@ begin
   else
     begin
       Wait_Signal__ := True;
-      SyncQueue__.Add(TSynchronize_Data___.Init(nil, nil, OnSync, @Wait_Signal__));
+      SyncQueue__.Push(TSynchronize_Data___.Init(nil, nil, OnSync, @Wait_Signal__));
       while Wait_Signal__ do
           ;
     end;
