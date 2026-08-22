@@ -1578,15 +1578,12 @@ end;
   非同步版本直接在 C 线程池执行，同步版本则通过 TSoft_Synchronize_Tool
   排队到主线程（需外部定期调用 API_Sync 处理）。
 -------------------------------------------------------------------------------}
-const
-  max_API_Event = $FFFF;
-var
-  API_Event_Arry: array [0..max_API_Event] of TMethod;
-  API_Event_Index: integer;
-  Soft_Sync: TSoft_Synchronize_Tool;  // 需在初始化时创建
-
 type
+  TAPI_Event_Pool = TCriticalOrderStruct<TMethod>;
   PM = ^TMethod;
+var
+  API_Event_Pool: TAPI_Event_Pool;
+  Soft_Sync: TSoft_Synchronize_Tool;  // 需在初始化时创建
 
 // 非同步版本（直接在 C 线程池执行）
 procedure Do_Internal_Call__(Trigger: Pointer; Input: TDataHnd; Output: TDataHnd); cdecl;
@@ -1652,50 +1649,22 @@ end;
 
 function API_Reg_Call_M(appHnd: TAppHnd; APIName, Desc: string; OnCall: TAPI_Call_M): integer;
 begin
-  if API_Event_Index > max_API_Event then
-  begin
-    Result := 0;
-    Exit;
-  end;
-  API_Event_Arry[API_Event_Index] := TMethod(OnCall);
-  Result := API_Reg_Call2(appHnd, APIName, Desc, @API_Event_Arry[API_Event_Index], Do_Internal_Call__);
-  Inc(API_Event_Index);
+  Result := API_Reg_Call2(appHnd, APIName, Desc, @API_Event_Pool.Push(TMethod(OnCall)).Data, Do_Internal_Call__);
 end;
 
 function API_Reg_Sync_Call_M(appHnd: TAppHnd; APIName, Desc: string; OnCall: TAPI_Call_M): integer;
 begin
-  if API_Event_Index > max_API_Event then
-  begin
-    Result := 0;
-    Exit;
-  end;
-  API_Event_Arry[API_Event_Index] := TMethod(OnCall);
-  Result := API_Reg_Call2(appHnd, APIName, Desc, @API_Event_Arry[API_Event_Index], Do_Internal_Sync_Call__);
-  Inc(API_Event_Index);
+  Result := API_Reg_Call2(appHnd, APIName, Desc, @API_Event_Pool.Push(TMethod(OnCall)).Data, Do_Internal_Sync_Call__);
 end;
 
 function API_Reg_Notify_M(appHnd: TAppHnd; APIName, Desc: string; OnNotify: TAPI_Notify_M): integer;
 begin
-  if API_Event_Index > max_API_Event then
-  begin
-    Result := 0;
-    Exit;
-  end;
-  API_Event_Arry[API_Event_Index] := TMethod(OnNotify);
-  Result := API_Reg_Notify2(appHnd, APIName, Desc, @API_Event_Arry[API_Event_Index], Do_Internal_Notify__);
-  Inc(API_Event_Index);
+  Result := API_Reg_Notify2(appHnd, APIName, Desc, @API_Event_Pool.Push(TMethod(OnNotify)).Data, Do_Internal_Notify__);
 end;
 
 function API_Reg_Sync_Notify_M(appHnd: TAppHnd; APIName, Desc: string; OnNotify: TAPI_Notify_M): integer;
 begin
-  if API_Event_Index > max_API_Event then
-  begin
-    Result := 0;
-    Exit;
-  end;
-  API_Event_Arry[API_Event_Index] := TMethod(OnNotify);
-  Result := API_Reg_Notify2(appHnd, APIName, Desc, @API_Event_Arry[API_Event_Index], Do_Internal_Sync_Notify__);
-  Inc(API_Event_Index);
+  Result := API_Reg_Notify2(appHnd, APIName, Desc, @API_Event_Pool.Push(TMethod(OnNotify)).Data, Do_Internal_Sync_Notify__);
 end;
 
 {-------------------------------------------------------------------------------
@@ -1712,8 +1681,7 @@ end;
 -------------------------------------------------------------------------------}
 procedure Do_Init();
 begin
-  FillChar(API_Event_Arry, SizeOf(API_Event_Arry), #0);
-  API_Event_Index := 0;
+  API_Event_Pool := TAPI_Event_Pool.Create;
   // 注意：Soft_Sync 在此处未创建，需用户自行在主线程创建并赋值。
   // 若需使用 Sync_* 系列函数，请务必创建 Soft_Sync。
   Soft_Sync := TSoft_Synchronize_Tool.Create;
@@ -1721,7 +1689,8 @@ end;
 
 procedure Do_Free;
 begin
-  FillChar(API_Event_Arry, SizeOf(API_Event_Arry), #0);
+  API_Event_Pool.Free;
+  API_Event_Pool := nil;
   Soft_Sync.Free;
   Soft_Sync := nil;
 end;
