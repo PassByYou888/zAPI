@@ -1,9 +1,15 @@
-﻿program Squence_Cli;
+program sequence_cli;
+
+{$ifdef FPC}
+  {$mode delphi}{$H+}
+  {$modeswitch advancedrecords}
+  {$CODEPAGE UTF8}
+{$endif}
 
 {$APPTYPE CONSOLE}
 
-{$R *.res}
-
+{$R-}
+{$H+}
 
 uses
 {$IFDEF UNIX}
@@ -13,123 +19,117 @@ uses
   Windows,
 {$ENDIF}
   SysUtils,
-  Z.Core, // Z 框架核心（线程池、原子操作、时间等）
+  Z.Core,
   Z.PascalStrings,
   Z.UPascalStrings,
   Z.UnicodeMixedLib,
   Z.Parsing,
   Z.Expression,
-  Z.MemoryStream, // TMem64 内存流
+  Z.MemoryStream,
   Z.Status,
   Z.Int128,
   Z.Geometry2D,
   Z.Notify,
-  z_api_hubtool_helper in '..\z_api_hubtool_helper.pas', // RAII 封装
-  z_api_hubtool_import in '..\z_api_hubtool_import.pas'; // C 绑定
+  z_api_hubtool_import; // 直接使用底层绑定，不再使用 helper
 
 const
   Debug_Log = False;
-  SEQUENCE_SERVER_APP = 'sequence_test'; // 服务端应用名称（必须匹配）
-  SEQUENCE_TIMEOUT_MS = 5000; // BeginData 超时（毫秒）
+  SEQUENCE_SERVER_APP = 'sequence_test';
+  SEQUENCE_TIMEOUT_MS = 5000;
 
-  { -----------------------------------------------------------------------------
-    1. 开始一个新会话：调用服务端的 BeginData API
-    返回一个会话 ID（服务端对象的指针值），后续发送数据需携带此 ID
-    ----------------------------------------------------------------------------- }
+{ -----------------------------------------------------------------------------
+  1. 开始一个新会话：调用服务端的 BeginData API
+  返回一个会话 ID（服务端对象的指针值）
+  使用原生 import 函数，手动管理句柄
+  ----------------------------------------------------------------------------- }
 function SequenceBegin(var SessionID: UInt64): Boolean;
 var
-  Param, Res: TDataHandle; // RAII 句柄，自动释放
+  Param, Res: TDataHnd;
 begin
   Result := False;
   SessionID := 0;
 
-  Param := TDataHandle.Create('BeginData'); // 创建请求句柄（API 名必须 UTF-8）
+  Param := API_Create_DataHnd2('BeginData'); // 创建请求句柄
   try
     // 同步调用服务端，超时 5000ms，返回结果句柄
-    Res := CallApp(SEQUENCE_SERVER_APP, Param, SEQUENCE_TIMEOUT_MS);
+    Res := API_Call2(SEQUENCE_SERVER_APP, Param, SEQUENCE_TIMEOUT_MS);
     try
       // 结果至少 8 字节（UInt64）
-      if Res.GetSize >= 8 then
+      if API_GetSize(Res) >= 8 then
         begin
-          Res.SetPos(0);
-          Result := Res.ReadUInt64(SessionID); // 读取会话 ID
+          API_SetPos(Res, 0);
+          Result := API_ReadUInt64(Res, SessionID);
         end;
     finally
-        Res.Free; // 释放结果句柄（即使大小为 0 也必须释放）
+      API_Free_DataHnd(Res); // 释放结果句柄（即使大小为 0 也必须释放）
     end;
   finally
-      Param.Free; // 释放请求句柄
+    API_Free_DataHnd(Param); // 释放请求句柄
   end;
 end;
 
 { -----------------------------------------------------------------------------
-  2. 发送一个数据块：使用 Notify（单向通知，不等待响应）
-  参数：会话 ID、块索引、数据指针、数据大小
+  2. 发送一个数据块：使用 Notify（单向通知）
   ----------------------------------------------------------------------------- }
 procedure SequenceData(SessionID: UInt64; Index: Int64; const Data: Pointer; Size: Int64);
 var
-  Param: TDataHandle;
+  Param: TDataHnd;
 begin
-  Param := TDataHandle.Create('Data');
+  Param := API_Create_DataHnd2('Data');
   try
-    Param.WriteUInt64(SessionID); // 1) 会话 ID（8 字节）
-    Param.WriteInt64(Index); // 2) 块索引（8 字节）
-    Param.WriteBuffer(Data^, Size); // 3) 实际数据（任意大小）
-    // 单向通知：发送后立即返回，不等待服务端确认
-    NotifyApp(SEQUENCE_SERVER_APP, Param);
+    API_WriteUInt64(Param, SessionID);
+    API_WriteInt64(Param, Index);
+    API_WriteBuffer(Param, Data, Size);
+    API_Notify2(SEQUENCE_SERVER_APP, Param);
   finally
-      Param.Free;
+    API_Free_DataHnd(Param);
   end;
 end;
 
 { -----------------------------------------------------------------------------
-  3. 结束会话：发送 EndData 通知，告知服务端总块数
-  服务端收到后将在后台线程中等待所有块到达，然后排序并处理
+  3. 结束会话：发送 EndData 通知
   ----------------------------------------------------------------------------- }
 procedure SequenceEnd(SessionID: UInt64; TotalCount: Int64);
 var
-  Param: TDataHandle;
+  Param: TDataHnd;
 begin
-  Param := TDataHandle.Create('EndData');
+  Param := API_Create_DataHnd2('EndData');
   try
-    Param.WriteUInt64(SessionID); // 会话 ID
-    Param.WriteInt64(TotalCount); // 总块数（服务端将据此判断是否收齐）
-    NotifyApp(SEQUENCE_SERVER_APP, Param);
+    API_WriteUInt64(Param, SessionID);
+    API_WriteInt64(Param, TotalCount);
+    API_Notify2(SEQUENCE_SERVER_APP, Param);
   finally
-      Param.Free;
+    API_Free_DataHnd(Param);
   end;
 end;
 
 { -----------------------------------------------------------------------------
   4. 测试函数：生成 10MB 随机数据，分块发送到服务端
-  simulate_bad = True 时，不发送 EndData，模拟网络断线或客户端崩溃
   ----------------------------------------------------------------------------- }
 function Test_BigData(simulate_bad: Boolean): Boolean;
 var
-  m64: TMem64; // 内存流，存储测试数据
-  siz: Int64; // 每块大小（1536 字节）
+  m64: TMem64;
+  siz: Int64;
   SessionID: UInt64;
   i: Int64;
 begin
   Result := False;
   m64 := TMem64.Create;
   m64.Size := 1024 * 1024 * 10; // 10 MB
-  MT19937Rand32(MaxInt, m64.Memory, m64.Size div 4); // 填充随机数据
+  MT19937Rand32(MaxInt, m64.Memory, m64.Size div 4);
 
   if not simulate_bad then
       DoStatus('远程会响应,源数据指纹:%s', [umlMD5ToStr(m64.ToMD5).Text]);
 
   m64.Position := 0;
-  siz := 1536; // 每块 1536 字节（可调整）
+  siz := 1536;
   i := 0;
   SessionID := 0;
 
   try
-    // 4.1 开始会话，获取 SessionID
     if not SequenceBegin(SessionID) then
         Exit;
 
-    // 4.2 循环发送数据块
     while m64.Position + siz < m64.Size do
       begin
         SequenceData(SessionID, i, m64.PosAsPtr, siz);
@@ -139,7 +139,6 @@ begin
         Inc(i);
       end;
 
-    // 4.3 处理最后一个可能不足 siz 的块
     siz := m64.Size - m64.Position;
     if siz > 0 then
       begin
@@ -150,7 +149,6 @@ begin
         Inc(i);
       end;
 
-    // 4.4 如果不是模拟坏情况，则发送 EndData 通知服务端处理
     if not simulate_bad then
         SequenceEnd(SessionID, i);
   finally
@@ -165,7 +163,7 @@ begin
 end;
 
 { -----------------------------------------------------------------------------
-  5. 键盘监听线程（用于手动退出程序）
+  5. 键盘监听线程
   ----------------------------------------------------------------------------- }
 var
   is_Running: Boolean;
@@ -179,6 +177,7 @@ begin
     readln(s);
     s := umlLowerCase(s).TrimChar(#32#9);
   until s = 'exit';
+  is_Running := False;
 end;
 
 { -----------------------------------------------------------------------------
@@ -186,26 +185,25 @@ end;
   ----------------------------------------------------------------------------- }
 var
   tk: TTimeTick;
-
 begin
+  is_Running := True;
   try
-    // 6.1 连接到服务端（纯消费者，不暴露 API）
-    PrepareClient('ipc:demo', nil);
+    // 6.1 连接到服务端（纯消费者）
+    API_Prepare_Client2('ipc:demo', nil);
 
-    if not PrepareDone() then
+    if API_Prepare_Done() <> 1 then
         Exit;
 
     // 6.2 启动键盘监听线程
     TCompute.RunC_NP(Key_Listen, @is_Running, nil);
 
-    // 6.3 主循环：每 5 秒执行一次 Test_BigData
+    // 6.3 主循环
     tk := GetTimeTick();
     while is_Running do
       begin
-        Z.Core.Check_Soft_Thread_Synchronize(10); // 处理线程同步
+        Z.Core.Check_Soft_Thread_Synchronize(10);
         if GetTimeTick() - tk > 2000 then
           begin
-            // 随机决定是否模拟坏情况（约 50% 概率）
             if not Test_BigData((TMT19937.Rand32 mod 2) = 0) then
                 Exit;
             tk := GetTimeTick();
@@ -213,7 +211,6 @@ begin
       end;
 
   finally
-      Shutdown(); // 关闭 zAPI 框架
+      API_shutdown();
   end;
-
 end.
