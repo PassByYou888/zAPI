@@ -1,4 +1,4 @@
-# API Hub Tool for Pascal — 完整使用指南
+# API Hub Tool for Pascal — 完整使用手册
 
 > **让您的 Pascal 应用轻松融入分布式 API 生态，以最轻量的方式实现跨语言、跨进程、跨机器的函数调用。**  
 > 基于 C4 分布式服务网格与 Z 系列基础库，提供企业级服务发现、负载均衡与容错能力。
@@ -7,45 +7,38 @@
 
 ## 📖 目录
 
-- [1. 概述](#1-概述)
-- [2. 核心概念](#2-核心概念)
-- [3. 环境准备与库加载](#3-环境准备与库加载)
-- [4. 数据句柄操作（DataHnd）](#4-数据句柄操作datahnd)
-- [5. 应用句柄操作（AppHnd）](#5-应用句柄操作apphnd)
-  - [5.1 API_Create_APPHnd](#51-api_create_apphnd)
-  - [5.2 API_Free_APPHnd](#52-api_free_apphnd)
-  - [5.3 API_Reg_Call](#53-api_reg_call)
-  - [5.4 API_Reg_Notify](#54-api_reg_notify)
-  - [5.5 API_Local_APP_Call](#55-api_local_app_call)
-  - [5.6 API_Local_APP_Notify](#56-api_local_app_notify)
-  - [5.7 API_UnReg — 动态注销 API（新增）](#57-api_unreg--动态注销-api新增)
-- [6. 本地快速测试（无网络）](#6-本地快速测试无网络)
-- [7. 网络层准备与启动](#7-网络层准备与启动)
-- [8. 远程调用与通知](#8-远程调用与通知)
-  - [8.1 API_Call](#81-api_call)
-  - [8.2 API_Notify](#82-api_notify)
-  - [8.3 API_SetOption — 运行时动态调整全局配置（新增）](#83-api_setoption--运行时动态调整全局配置新增)
-- [9. 关闭与清理](#9-关闭与清理)
-- [10. 完整示例（服务端 + 客户端）](#10-完整示例服务端--客户端)
-- [11. 常见问题与排错](#11-常见问题与排错)
-- [附录 A：API 速查表](#附录-aapi-速查表)
-- [更新日志](#更新日志)
+1. [概述](#1-概述)
+2. [核心概念](#2-核心概念)
+3. [环境准备与库加载](#3-环境准备与库加载)
+4. [底层 `z_api_hubtool_import` 单元详解](#4-底层-z_api_hubtool_import-单元详解)
+   - 4.1 数据句柄操作
+   - 4.2 应用句柄操作
+   - 4.3 网络层准备与通信
+   - 4.4 运行时配置与关闭
+   - 4.5 同步辅助
+5. [高级 RAII 封装 `z_api_hubtool_helper` 单元](#5-高级-raii-封装-z_api_hubtool_helper-单元)
+   - 5.1 `API.TDataHandle` 类
+   - 5.2 `API.TAppHandle` 类
+   - 5.3 `API` 静态方法
+   - 5.4 `API__` 底层静态映射
+6. [回调函数详解与线程安全](#6-回调函数详解与线程安全)
+7. [完整示例：服务端与客户端](#7-完整示例服务端与客户端)
+8. [常见问题与排错](#8-常见问题与排错)
+9. [附录：函数速查表](#9-附录函数速查表)
 
 ---
 
 ## 1. 概述
 
-`z_api_hubtool_import` 是 API Hub 的 **Pascal 语言绑定单元**。它通过 `external` 动态链接方式加载底层 C 动态库（`z_api_hub64.dll` / `libz_api_hub.so` / `libz_api_hub.dylib`），让任何 Pascal 程序（Delphi / Free Pascal）能够：
+`z_api_hubtool_import` 是 API Hub 的 **Pascal 核心绑定单元**，通过 `external` 动态链接加载底层 C 动态库（`z_api_hub64.dll` / `libz_api_hub.so` / `libz_api_hub.dylib`），让任意 Pascal 程序（Delphi / Free Pascal）能够：
 
-- 将普通 Pascal 函数暴露为**远程可调用 API**（请求-响应或单向通知）
-- 调用其他语言（C++、C#、Python、Go、Rust、PHP、Node.js 等）注册的远程服务
-- 在同一台机器上通过 **IPC**（进程间通信）或跨机器通过 **TCP** 进行通信
+- 将普通 Pascal 函数暴露为**远程可调用 API**（请求‑响应 `Call` 或单向通知 `Notify`）。
+- 调用其他语言（C++、Python、Go、Rust、Java、C#、Node.js、PHP 等）注册的服务。
+- 通过 **IPC**（进程间通信，同机）或 **TCP**（跨机）进行高性能通信。
 
-底层基于 **C4 分布式服务网格**，自动处理服务发现、负载均衡、断线重连、NAT 穿越等复杂问题。
+此外，`z_api_hubtool_helper` 单元提供了 **RAII 封装**（`TDataHandle`、`TAppHandle`），自动管理句柄生命周期，并支持对象方法回调，极大简化使用。
 
-### 🔤 **字符串编码——强制 UTF-8**
-
-所有 `PAnsiChar` 类型的参数（包括 API 名称、描述和网络地址）**必须使用 UTF-8 编码**，并且必须以 **null 字节（#0）结尾**。这是跨语言、跨平台调用的一致约定。在 Windows 上，库**不会**使用系统 ANSI 代码页（如 GBK），而是始终按 UTF-8 处理字节流。
+底层基于 **C4 分布式服务网格**，自动处理服务发现、负载均衡、断线重连、NAT 穿透。
 
 ---
 
@@ -53,71 +46,29 @@
 
 ### 2.1 句柄
 
-- **`TDataHnd`**：数据句柄，封装了一个 API 名称和二进制载荷。用于输入参数和输出结果。
-- **`TAppHnd`**：应用句柄，代表一个逻辑应用，可注册多个 API，在网络中具有唯一名称。
+- **`TDataHnd`**（数据句柄）：封装 **API 名称** 和 **二进制载荷**。用于输入参数和输出结果。需显式创建和释放。
+- **`TAppHnd`**（应用句柄）：代表一个逻辑应用，可注册多个 API。应用名在网络中必须唯一（区分大小写）。
 
 ### 2.2 回调约定
 
-- **`TAPI_Call`**：请求-响应回调，必须声明为 `cdecl`，接收 `Trigger`（用户数据）、`Input`（只读）、`Output`（只写）。
-- **`TAPI_Notify`**：单向通知回调，也必须是 `cdecl`，只接收 `Trigger` 和 `Input`。
+- **`TAPI_Call`**：请求‑响应回调，必须为 `cdecl`，接收 `Trigger`、只读 `Input`、只写 `Output`。
+- **`TAPI_Notify`**：单向通知回调，`cdecl`，只接收 `Trigger` 和只读 `Input`。
 
-#### ⚠️ **回调执行上下文（关键）**
+**重要**：所有回调均在 **后台 C 线程池** 中执行，因此：
+- **禁止**长时间阻塞（`Sleep`、等待事件、密集循环）。
+- **可以**在回调内调用 `API_Call` / `API_Notify`（不会死锁），但需防止无限递归。
+- **禁止**直接访问 UI（必须同步到主线程）。
+- 耗时任务应异步提交到工作队列。
 
-所有回调函数（`TAPI_Call` 和 `TAPI_Notify`）都**在后台线程池线程中执行**，而不是在调用 `API_Call`/`API_Notify` 的线程中。
+### 2.3 字符串编码 —— 强制 UTF‑8 + #0
 
-这带来以下**重要约束**：
+所有 `PAnsiChar` 参数（API 名称、描述、网络地址、载荷中的字符串）**必须使用 UTF‑8 编码**，并以 **空字节 (#0) 结尾**。本库在 Windows 上不使用系统 ANSI 代码页，始终按 UTF‑8 处理。
 
-- **❌ 禁止**在回调内执行长时间阻塞操作（如 `Sleep`、等待事件、大量循环）。
-- **❌ 禁止**在回调内调用 `API_Call` 或 `API_Notify` —— 这可能导致**死锁**，因为回调线程可能持有内部锁，而 `API_Call` 需要获取同一锁。
-- **❌ 禁止**在回调内直接访问 UI 组件或线程局部存储（TLS），除非通过线程同步机制（如 `TThread.Synchronize`、`TMonitor`、消息队列等）。
-- **✅ 推荐**将耗时任务**异步提交**到自己的工作线程或任务队列，使回调快速返回。
+### 2.4 线程安全与执行顺序
 
-**示例（正确做法）**：将需要远程调用的请求放入队列，由另一个线程处理。
-
-```pascal
-// 在回调中不要直接调用 API_Call，而是发送一个异步任务
-TCompute.RunP_NP(procedure
-begin
-  // 在这里安全地调用 API_Call
-  Res := API_Call('TargetApp', Data, 5000);
-end);
-```
-
-> **为什么回调会在线程池中执行？**  
-> 因为 API Hub 的底层 C4 服务网格使用多线程处理并发请求，以充分利用多核 CPU。回调在线程池中执行可以最大化吞吐量，但您必须遵守上述规则。
-
----
-
-### 2.3 并发与执行顺序
-
-#### 🔄 **调用顺序不保证**
-
-当您从多个线程或连续多次调用 `API_Call` 时，**请求到达远程服务的顺序是不确定的**。这是因为：
-
-- 底层 C4 服务网格会**负载均衡**请求到多个服务实例（如果同一个应用名称在多个进程中注册）。
-- 每个实例内部的线程池也会以不确定的顺序处理请求。
-
-**示例**：如果您的程序按顺序发送调用 `1`、`2`、`3`，远程可能以 `2`、`1`、`3` 的顺序处理。**只有每个单个调用的请求-响应语义是可靠的**（原子性、正确性），但**全局顺序不保证**。
-
-**如果需要保证顺序**，您必须在应用层实现自己的顺序控制（例如在请求中包含序列号，或通过单线程串行化调用）。
-
----
-
-### 2.4 线程安全
-
-- **所有导出函数都是完全线程安全的**，可在任意线程并发调用。
-- 单个 `TDataHnd` 的写操作（`API_WriteBuffer`、`API_SetPos`、`API_SetSize`）应在同一句柄上串行化；不同句柄可以并发操作。
-
-### 2.5 网络地址格式
-
-| 协议 | 格式 | 示例 | 跨机 |
-|------|------|------|------|
-| TCP（IPv4） | `主机:端口` | `127.0.0.1:9898` | ✅ |
-| TCP（IPv6） | `[::1]:端口` 或 `::1\|端口` | `[::1]:8080` | ✅ |
-| IPC | `ipc:服务名` | `ipc:calc_service` | ❌ |
-| 通配符（服务端） | `0.0.0.0` | 监听所有接口 | - |
-
-默认 TCP 端口为 `9898`，IPC 忽略端口。
+- 所有导出函数（`external`）均为**完全线程安全**，可并发调用。
+- 同一 `TDataHnd` 的写操作需串行化；不同句柄可自由并发。
+- 由于负载均衡，**并发调用的顺序不保证**（若需顺序，需在应用层实现序列号或单线程调度）。
 
 ---
 
@@ -125,750 +76,457 @@ end);
 
 ### 3.1 动态库放置
 
-| 操作系统 | 动态库名称 | 放置位置 |
-|----------|-----------|----------|
-| Windows 64-bit | `z_api_hub64.dll` | 可执行文件目录或 `PATH` |
-| Windows 32-bit | `z_api_hub32.dll` | 可执行文件目录或 `PATH` |
-| Linux | `libz_api_hub.so` | `LD_LIBRARY_PATH` 或 `/usr/lib` |
-| BSD | `libz_api_hub.so` | `LD_LIBRARY_PATH` 或标准库路径 |
-| macOS | `libz_api_hub.dylib` | `DYLD_LIBRARY_PATH` 或 `/usr/local/lib` |
+从发布包获取对应平台的动态库，放至可执行文件目录或系统 `PATH`：
 
-**依赖库**（需与主库同目录）：
-- Windows：`z_ipc_64.dll` / `z_ipc_32.dll`
-- Linux/BSD：`libz_ipc.so`
-- macOS：`libz_ipc.dylib`（如有）
+| 操作系统 | 核心库 | IPC 依赖库 |
+|----------|--------|------------|
+| Windows 64-bit | `z_api_hub64.dll` | `z_ipc_64.dll` |
+| Windows 32-bit | `z_api_hub32.dll` | `z_ipc_32.dll` |
+| Linux / BSD | `libz_api_hub.so` | `libz_ipc.so` |
+| macOS | `libz_api_hub.dylib` | `libz_ipc.dylib`（如有） |
 
-### 3.2 库自动加载
+`z_api_hubtool_import` 使用 `external` 声明，**首次调用外部函数时自动加载**，无需手动 `LoadLibrary`。
 
-本单元使用 `external` 指令，库会在第一次调用外部函数时由操作系统自动加载。**无需手动调用 LoadLibrary**。
+### 3.2 配置文件
 
-加载搜索顺序（平台相关）：
-- 先搜索**可执行文件所在目录**（或当前工作目录，依系统而定）
-- 再搜索系统标准库路径（Windows 的 `PATH`，Linux/BSD 的 `LD_LIBRARY_PATH`，macOS 的 `DYLD_LIBRARY_PATH`）
-
-这使得部署非常简单：只需将库文件（及其辅助 IPC 库）放在可执行文件旁边或系统库目录中即可。
-
-若库缺失，程序会抛出异常（如 `External exception`），建议在程序入口处进行错误处理（例如使用 `try..except` 包围第一次调用）。
-
-### 3.3 配置文件
-
-首次运行时会生成 `<可执行文件名>.api-tool.ini`，可编辑调整超时、日志、线程池大小等参数，无需重新编译。
+首次运行生成 `<可执行文件名>.api-tool.ini`，可调优线程池、超时、日志等参数，无需重新编译。
 
 ---
 
-## 4. 数据句柄操作（DataHnd）
+## 4. 底层 `z_api_hubtool_import` 单元详解
 
-### 📦 **数据布局说明**
+本节介绍 `z_api_hubtool_import` 单元中所有 **`external` 导入** 的 C 函数以及 **Pascal 辅助** 函数（不带 `external`）。  
+**AI 注意**：跨语言绑定时，只需导入带 `external` 的 C 函数；Pascal 辅助函数是语法糖，其他语言应自行实现等价逻辑。
 
-`TDataHnd` 内部同时存储了 **API 名称**和**二进制载荷**。API 名称在创建时通过 `API_Create_DataHnd(APIName)` 设置，之后**不可更改**。所有 `API_WriteBuffer`、`API_ReadBuffer` 等操作**只影响载荷部分**，不会影响 API 名称。
+### 4.1 数据句柄操作
 
-**重要**：`APIName` 必须为 **UTF-8 编码**的 null 结尾字符串。
+#### 4.1.1 创建与销毁
 
-在传输时，载荷会与 API 名称一起打包（序列化格式由 `TMemory_Param_Tool` 处理），但作为用户，您只需使用提供的读写函数即可，无需关心内部细节。
-
----
-
-### 4.1 `API_Create_DataHnd`
-
-```pascal
-function API_Create_DataHnd(APIName: PAnsiChar): TDataHnd; cdecl;
-```
-
-**功能**：创建一个新的数据句柄，并设置其关联的 API 名称。初始载荷为空（大小 0）。
-
-**参数**：
-- `APIName`：目标 API 的名称（以空字符结尾的 **UTF-8 字符串**）。该名称将用于路由。
-
-**返回值**：新句柄。正常情况下永远返回非 `nil`。
-
-**线程安全**：✅
-
-**注意**：
-- API 名称会被内部复制，调用者可立即释放输入的字符串。
-- 句柄必须通过 `API_Free_DataHnd` 释放，否则内存泄漏。
+| 函数 | 类型 | 说明 |
+|------|------|------|
+| `API_Create_DataHnd(APIName: PAnsiChar): TDataHnd; cdecl; external ...` | **导入** | 创建数据句柄，绑定 API 名称。返回非 `nil` 句柄，需配合 `API_Free_DataHnd` 释放。 |
+| `API_Create_DataHnd2(APIName: string): TDataHnd;` | **Pascal 辅助** | 自动 UTF‑8 转换版本，等价于 `API_Create_DataHnd(PAnsiChar(UTF8Encode(APIName)))`。 |
+| `API_Free_DataHnd(Hnd: TDataHnd); cdecl; external ...` | **导入** | 销毁句柄，释放内存。传 `nil` 无操作。 |
 
 **示例**：
 ```pascal
 var
-  h: TDataHnd;
+  d: TDataHnd;
 begin
-  h := API_Create_DataHnd('add');   // 'add' 是 ASCII，也是合法的 UTF-8
-  // ... 写入数据 ...
-  API_Free_DataHnd(h);
+  d := API_Create_DataHnd2('my_api');
+  // ... 使用 d ...
+  API_Free_DataHnd(d);
 end;
 ```
 
----
+#### 4.1.2 读写原始字节
 
-### 4.2 `API_Free_DataHnd`
-
-```pascal
-procedure API_Free_DataHnd(Hnd: TDataHnd); cdecl;
-```
-
-**功能**：销毁数据句柄，释放所有关联内存。句柄变为无效。
-
-**参数**：
-- `Hnd`：要释放的句柄。若为 `nil` 则无操作。
-
-**线程安全**：✅ 是，但句柄不能被并发使用。
-
----
-
-### 4.3 `API_GetBuffer`
-
-```pascal
-function API_GetBuffer(Hnd: TDataHnd): Pointer; cdecl;
-```
-
-**功能**：返回指向句柄内部缓冲区的直接指针（零拷贝访问）。
-
-**参数**：
-- `Hnd`：数据句柄。
-
-**返回值**：内部缓冲区指针；若句柄无数据则返回 `nil`。
-
-**线程安全**：✅ 读安全，但若同时有写入操作（如其他线程调用 `API_WriteBuffer`）则不安全。
-
-**注意**：
-- 返回的指针可以**读取和写入**，但写入时**不得超过 `API_GetSize` 返回的大小**，否则会破坏内部状态。
-- 调用者**不应释放**此指针。
-- 指针在句柄被释放或重新调整大小后可能失效。
-
-**示例**：
-```pascal
-var
-  p: PByte;
-  sz: Int64;
-begin
-  sz := API_GetSize(h);
-  p := API_GetBuffer(h);
-  // 读写 p[0] .. p[sz-1]
-end;
-```
-
----
-
-### 4.4 `API_WriteBuffer`
-
-```pascal
-function API_WriteBuffer(Hnd: TDataHnd; Buff: Pointer; Size: Int64): Int64; cdecl;
-```
-
-**功能**：从当前读写位置开始，向句柄缓冲区写入数据。缓冲区自动扩容。
-
-**参数**：
-- `Hnd`：数据句柄。
-- `Buff`：源数据指针。
-- `Size`：要写入的字节数。
-
-**返回值**：实际写入的字节数（通常等于 `Size`）。
-
-**线程安全**：⚠️ 同一句柄上的写操作应串行化；不同句柄可并发写入。
+| 函数 | 类型 | 说明 |
+|------|------|------|
+| `API_WriteBuffer(Hnd: TDataHnd; Buff: Pointer; Size: Int64): Int64; cdecl; external ...` | **导入** | 从当前位置写入 `Size` 字节，返回实际写入数（通常等于 `Size`），缓冲区自动扩容，位置后移。 |
+| `API_ReadBuffer(Hnd: TDataHnd; Buff: Pointer; Size: Int64): Int64; cdecl; external ...` | **导入** | 从当前位置读取最多 `Size` 字节到 `Buff`，返回实际读取数，位置后移。 |
 
 **示例**：
 ```pascal
 var
   i: Integer;
+  buf: array[0..3] of Byte;
 begin
   i := 12345;
-  API_WriteBuffer(h, @i, SizeOf(i));
-  API_WriteBuffer(h, 'hello', 5);
+  API_WriteBuffer(d, @i, SizeOf(i));   // 写入 4 字节
+  API_SetPos(d, 0);
+  API_ReadBuffer(d, @buf[0], 4);       // 读回
 end;
 ```
 
----
+#### 4.1.3 原子读写辅助（Pascal 实现，非 external）
 
-### 4.5 `API_ReadBuffer`
+这些函数基于 `API_WriteBuffer`/`API_ReadBuffer`，提供类型安全、小端序的读写，均返回 `Boolean` 表示成功。
 
-```pascal
-function API_ReadBuffer(Hnd: TDataHnd; Buff: Pointer; Size: Int64): Int64; cdecl;
-```
-
-**功能**：从当前读写位置读取数据到调用者缓冲区，位置随读取字节数后移。
-
-**参数**：
-- `Hnd`：数据句柄。
-- `Buff`：目标缓冲区指针。
-- `Size`：最多读取的字节数。
-
-**返回值**：实际读取的字节数（可能小于 `Size`，若到达缓冲区尾部）。
-
-**线程安全**：⚠️ 同一句柄上不应同时读写；但多个线程同时读取是安全的。
-
-**示例**：
-```pascal
-var
-  i: Integer;
-begin
-  API_SetPos(h, 0);
-  if API_ReadBuffer(h, @i, SizeOf(i)) = SizeOf(i) then
-    // i 被成功读取
-end;
-```
-
----
-
-### 4.6 `API_GetPos` / `API_SetPos`
-
-```pascal
-function API_GetPos(Hnd: TDataHnd): Int64; cdecl;
-procedure API_SetPos(Hnd: TDataHnd; Pos_: Int64); cdecl;
-```
-
-**功能**：获取/设置当前读写位置（0-based 偏移）。
+| 写函数 | 读函数（`out` 版本） | 读函数（直接返回） | 说明 |
+|--------|----------------------|-------------------|------|
+| `API_WriteInt8` | `API_ReadInt8(out Value: Int8): Boolean` | `API_ReadInt8: Int8` | 8 位有符号整数 |
+| `API_WriteUInt8` | `API_ReadUInt8(out Value: UInt8): Boolean` | `API_ReadUInt8: UInt8` | 8 位无符号整数 |
+| `API_WriteInt16` | `API_ReadInt16(out Value: Int16): Boolean` | `API_ReadInt16: Int16` | 16 位有符号整数（小端） |
+| `API_WriteUInt16` | `API_ReadUInt16(out Value: UInt16): Boolean` | `API_ReadUInt16: UInt16` | 16 位无符号整数（小端） |
+| `API_WriteInt32` | `API_ReadInt32(out Value: Int32): Boolean` | `API_ReadInt32: Int32` | 32 位有符号整数（小端） |
+| `API_WriteUInt32` | `API_ReadUInt32(out Value: UInt32): Boolean` | `API_ReadUInt32: UInt32` | 32 位无符号整数（小端） |
+| `API_WriteInt64` | `API_ReadInt64(out Value: Int64): Boolean` | `API_ReadInt64: Int64` | 64 位有符号整数（小端） |
+| `API_WriteUInt64` | `API_ReadUInt64(out Value: UInt64): Boolean` | `API_ReadUInt64: UInt64` | 64 位无符号整数（小端） |
+| `API_WriteSingle` | `API_ReadSingle(out Value: Single): Boolean` | `API_ReadSingle: Single` | 32 位浮点数（IEEE 754） |
+| `API_WriteDouble` | `API_ReadDouble(out Value: Double): Boolean` | `API_ReadDouble: Double` | 64 位浮点数（IEEE 754） |
+| `API_WriteString` | `API_ReadString(out Value: string): Boolean` | `API_ReadString: string` | **UTF‑8 字符串 + #0 终止符**（跨语言标准） |
 
 **注意**：
-- `API_SetPos` 若位置超出当前大小，会自动扩展缓冲区（填充零）。
-- 位置必须 ≥ 0。
-
-**线程安全**：`GetPos` 只读安全；`SetPos` 需串行化。
-
----
-
-### 4.7 `API_GetSize` / `API_SetSize`
-
-```pascal
-function API_GetSize(Hnd: TDataHnd): Int64; cdecl;
-procedure API_SetSize(Hnd: TDataHnd; Size_: Int64); cdecl;
-```
-
-**功能**：获取/设置缓冲区总大小。`SetSize` 可截断或扩展（扩展部分未初始化）。
-
-**线程安全**：`GetSize` 只读安全；`SetSize` 需串行化。
-
----
-
-## 5. 应用句柄操作（AppHnd）
-
-### 5.1 `API_Create_APPHnd`
-
-```pascal
-function API_Create_APPHnd(appName, Desc: PAnsiChar): TAppHnd; cdecl;
-```
-
-**功能**：创建一个应用上下文。应用是 API 的容器，在网络中具有唯一名称。
-
-**参数**：
-- `appName`：应用名称（区分大小写，网络唯一，**UTF-8 编码**）。
-- `Desc`：描述（可为空字符串，**UTF-8 编码**）。
-
-**返回值**：新应用句柄，正常情况下非 `nil`。
-
-**线程安全**：✅
+- 直接返回版本失败时返回 `0`（浮点返回 `0.0`，字符串返回 `''`）。
+- `API_WriteString` 写入 UTF‑8 字节后追加一个 `#0`；`API_ReadString` 从当前位置扫描直到 `#0`，读取并解码 UTF‑8，位置移到终止符之后。
 
 **示例**：
 ```pascal
 var
-  app: TAppHnd;
+  s: string;
 begin
-  app := API_Create_APPHnd('Calculator', 'My Calc Service');
-  // 注册 API ...
-  API_Free_APPHnd(app);
+  API_WriteString(d, '你好');
+  API_SetPos(d, 0);
+  if API_ReadString(d, s) then WriteLn(s);  // 输出 "你好"
 end;
 ```
 
----
+#### 4.1.4 位置与大小
 
-### 5.2 `API_Free_APPHnd`
+| 函数 | 类型 | 说明 |
+|------|------|------|
+| `API_GetPos(Hnd: TDataHnd): Int64; cdecl; external ...` | **导入** | 获取当前读写位置（字节偏移，0‑based）。 |
+| `API_SetPos(Hnd: TDataHnd; Pos_: Int64); cdecl; external ...` | **导入** | 设置读写位置，若超出大小则扩展缓冲区（填充 0）。 |
+| `API_GetSize(Hnd: TDataHnd): Int64; cdecl; external ...` | **导入** | 获取缓冲区总大小（字节）。 |
+| `API_SetSize(Hnd: TDataHnd; Size_: Int64); cdecl; external ...` | **导入** | 设置缓冲区大小，截断或扩展（扩展部分未初始化）。 |
 
-```pascal
-procedure API_Free_APPHnd(appHnd: TAppHnd); cdecl;
-```
+#### 4.1.5 零拷贝访问
 
-**功能**：销毁应用句柄，释放所有已注册的 API 及相关资源。
+| 函数 | 类型 | 说明 |
+|------|------|------|
+| `API_GetBuffer(Hnd: TDataHnd): Pointer; cdecl; external ...` | **导入** | 返回内部缓冲区起始指针，可读写但不得越界，不要释放。 |
+| `API_GetBuffer2(Hnd: TDataHnd; Offset: NativeInt): Pointer;` | **Pascal 辅助** | 返回 `API_GetBuffer(Hnd) + Offset`，方便索引访问。 |
 
-**线程安全**：✅ 但确保没有其他线程正在使用该句柄。
-
----
-
-### 5.3 `API_Reg_Call`
-
-```pascal
-function API_Reg_Call(appHnd: TAppHnd; APIName, Desc: PAnsiChar; Trigger: Pointer; OnCall: TAPI_Call): Integer; cdecl;
-```
-
-**功能**：在应用中注册一个请求-响应（Call）API。当远程或本地调用此 API 时，`OnCall` 回调会被执行。
-
-**参数**：
-- `appHnd`：应用句柄。
-- `APIName`：API 名称（应用内唯一，区分大小写，**UTF-8**）。
-- `Desc`：描述（可选，**UTF-8**）。
-- `Trigger`：用户数据指针，回调时会原样传回。
-- `OnCall`：回调函数指针（必须 `cdecl`）。
-
-**返回值**：`1` 成功，`0` 失败（名称已存在）。
-
-**线程安全**：✅
-
-**注意**：回调中禁止调用 `API_Call`/`API_Notify`，避免死锁（详见 2.2 节）。
-
-**示例**：
-```pascal
-procedure MyAdd(Trigger: Pointer; Input, Output: Pointer); cdecl;
-var
-  a, b, sum: Integer;
-begin
-  API_ReadBuffer(Input, @a, SizeOf(a));
-  API_ReadBuffer(Input, @b, SizeOf(b));
-  sum := a + b;
-  API_WriteBuffer(Output, @sum, SizeOf(sum));
-end;
-
-// 注册
-if API_Reg_Call(app, 'add', 'Addition', nil, @MyAdd) = 1 then
-  // success
-```
+**注意**：指针有效期至句柄释放或调整大小。
 
 ---
 
-### 5.4 `API_Reg_Notify`
+### 4.2 应用句柄操作
 
-```pascal
-function API_Reg_Notify(appHnd: TAppHnd; APIName, Desc: PAnsiChar; Trigger: Pointer; OnNotify: TAPI_Notify): Integer; cdecl;
-```
+#### 4.2.1 创建与释放
 
-**功能**：注册一个单向通知（Notify）API。调用者不等待响应。
+| 函数 | 类型 | 说明 |
+|------|------|------|
+| `API_Create_APPHnd(appName, Desc: PAnsiChar): TAppHnd; cdecl; external ...` | **导入** | 创建应用句柄，应用名必须全网唯一（区分大小写）。 |
+| `API_Create_APPHnd2(appName, Desc: string): TAppHnd;` | **Pascal 辅助** | UTF‑8 自动转换版本。 |
+| `API_Free_APPHnd(appHnd: TAppHnd); cdecl; external ...` | **导入** | 销毁应用句柄，注销所有注册 API，释放资源。 |
 
-**参数**：类似 `API_Reg_Call`，但回调类型为 `TAPI_Notify`（无 `Output` 参数）。字符串均为 **UTF-8**。
+#### 4.2.2 注册 API（`cdecl` 函数指针）
 
-**返回值**：`1` 成功，`0` 失败。
+| 函数 | 类型 | 说明 |
+|------|------|------|
+| `API_Reg_Call(appHnd: TAppHnd; APIName, Desc: PAnsiChar; Trigger: Pointer; OnCall: TAPI_Call): Integer; cdecl; external ...` | **导入** | 注册请求‑响应 API，`OnCall` 必须为 `cdecl` 函数。返回 `1` 成功，`0` 名称重复。 |
+| `API_Reg_Notify(appHnd: TAppHnd; APIName, Desc: PAnsiChar; Trigger: Pointer; OnNotify: TAPI_Notify): Integer; cdecl; external ...` | **导入** | 注册单向通知 API，回调无输出。 |
 
-**线程安全**：✅
+辅助便捷版本（UTF‑8 自动转换）：
+- `API_Reg_Call2(appHnd; APIName, Desc: string; Trigger: Pointer; OnCall: TAPI_Call): Integer;`
+- `API_Reg_Notify2(...)`
 
----
+**回调注意事项**：详见第 6 节。
 
-### 5.5 `API_Local_APP_Call`
+#### 4.2.3 注册 API（对象方法版本，Pascal 辅助）
 
-```pascal
-function API_Local_APP_Call(appHnd: TAppHnd; Param: TDataHnd): TDataHnd; cdecl;
-```
+为方便 Pascal 开发者，提供了对象方法（`of object`）的注册函数，它们将对象方法适配为 `cdecl` 回调。
 
-**功能**：在**本地**同步执行一个 Call API，绕过网络。适用于单元测试或内部调用。
+| 函数 | 说明 |
+|------|------|
+| `API_Reg_Call_M(appHnd: TAppHnd; APIName, Desc: string; OnCall: TAPI_Call_M): Integer;` | 注册对象方法 `Call`，回调直接在 C 线程池执行。 |
+| `API_Reg_Sync_Call_M(appHnd; APIName, Desc: string; OnCall: TAPI_Call_M): Integer;` | 注册对象方法 `Call`，并通过 `TSoft_Synchronize_Tool` 将回调**同步到主线程**执行（需主线程定期调用 `API_Sync`）。 |
+| `API_Reg_Notify_M(...)` / `API_Reg_Sync_Notify_M(...)` | 同理用于 `Notify`。 |
 
-**参数**：
-- `appHnd`：应用句柄。
-- `Param`：输入数据句柄（必须包含 API 名称和参数，API 名称必须为 **UTF-8**）。
-
-**返回值**：新的结果句柄（必须释放）；若 API 未找到或出错，返回句柄大小为 0。
-
-**线程安全**：✅
-
-**示例**：
-```pascal
-var
-  d, res: TDataHnd;
-begin
-  d := API_Create_DataHnd('add');
-  API_WriteBuffer(d, @a, SizeOf(a));
-  API_WriteBuffer(d, @b, SizeOf(b));
-  res := API_Local_APP_Call(app, d);
-  // 处理 res
-  API_Free_DataHnd(d);
-  API_Free_DataHnd(res);
-end;
-```
-
----
-
-### 5.6 `API_Local_APP_Notify`
-
-```pascal
-procedure API_Local_APP_Notify(appHnd: TAppHnd; Param: TDataHnd); cdecl;
-```
-
-**功能**：在本地发送一个通知（无返回）。
-
-**线程安全**：✅
-
----
-
-### 5.7 `API_UnReg` — 动态注销 API（新增）
-
-```pascal
-function API_UnReg(appHnd: TAppHnd; APIName: PAnsiChar): Integer; cdecl;
-```
-
-**功能**：从应用中注销一个先前注册的 API。该 API 会**立即从本地注册表中移除**，并**触发网络广播**通知所有已连接的对等节点。广播完成后（通常在约 3 秒内，取决于网络延迟和 C4 更新间隔），远程节点将不再能发现或调用此 API。
-
-**参数**：
-- `appHnd`：应用句柄。
-- `APIName`：要注销的 API 名称（**UTF-8** 编码）。
-
-**返回值**：`1` 成功（API 存在并被移除），`0` 失败（API 名称不存在）。
-
-**线程安全**：✅
-
-**关键行为**：
-
-- **本地立即生效**：API 从 `TAPI_Info_Pool` 中同步删除，后续本地调用（如 `API_Local_APP_Call`）将立即失败（返回空结果）。
-- **网络异步广播**：删除操作会触发 `APP.DoChange()`，通过 C4 服务网格将更新广播给所有已连接的客户端。
-- **传播延迟窗口**：在广播传播期间（通常约 3 秒），远程调用可能仍然到达并失败（返回"未找到"错误）。这是正常的分布式系统最终一致性行为。
-
-**使用场景**：
-
-- **热卸载插件**：动态库插件可先注销自身 API，再安全卸载。
-- **临时维护模式**：临时下线某些功能 API，无需重启整个应用。
-- **权限动态调整**：根据用户角色或运行时条件，移除敏感 API 暴露。
-
-**示例**：
-
-```pascal
-var
-  app: TAppHnd;
-begin
-  app := API_Create_APPHnd('MyService', '');
-  API_Reg_Call(app, 'add', 'Addition', nil, @AddCallback);
-
-  // ... 运行一段时间后，决定下线 'add' API
-  if API_UnReg(app, 'add') = 1 then
-    Writeln('API "add" unregistered, broadcast in progress');
-  else
-    Writeln('API "add" not found');
-
-  API_Free_APPHnd(app);
-end;
-```
-
-**注意事项**：
-- 注销后，**正在执行中的回调不会被打断**（它们会正常完成）。
-- 新到达的远程请求会在广播传播前或传播后分别被路由到旧状态或新状态，这是分布式系统的正常行为。
-- 如需立即阻止新请求，可在注销前设置一个应用级别的"维护中"标志，由回调检查并拒绝请求。
-
----
-
-## 6. 本地快速测试（无网络）
-
-在开始网络编程之前，强烈建议先用本地调用验证您的 API 注册和回调逻辑。以下示例完全无需网络，仅在一个进程中测试：
-
-```pascal
-program QuickLocalTest;
-
-uses
-  z_api_hubtool_import;
-
-procedure EchoCallback(Trigger: Pointer; Input, Output: Pointer); cdecl;
-var
-  sz: Int64;
-  buf: PByte;
-begin
-  sz := API_GetSize(Input);
-  if sz > 0 then
-  begin
-    buf := GetMemory(sz);
-    API_SetPos(Input, 0);
-    API_ReadBuffer(Input, buf, sz);
-    API_WriteBuffer(Output, buf, sz);
-    FreeMemory(buf);
-  end;
-end;
-
-var
-  app: TAppHnd;
-  data, result: TDataHnd;
-  msg: string;
-begin
-  app := API_Create_APPHnd('TestApp', '');
-  API_Reg_Call(app, 'echo', 'Echo', nil, @EchoCallback);
-
-  data := API_Create_DataHnd('echo');
-  msg := 'Hello World';
-  // 注意：PAnsiChar 应使用 UTF-8，这里 msg 为 ASCII，可直接转换
-  API_WriteBuffer(data, PAnsiChar(msg), Length(msg));
-
-  result := API_Local_APP_Call(app, data);
-  if API_GetSize(result) > 0 then
-  begin
-    SetLength(msg, API_GetSize(result));
-    API_ReadBuffer(result, PAnsiChar(msg), API_GetSize(result));
-    WriteLn('Echo: ', msg);
-  end;
-
-  API_Free_DataHnd(data);
-  API_Free_DataHnd(result);
-  API_Free_APPHnd(app);
-end.
-```
-
-此测试不涉及任何网络，可用于快速验证回调逻辑。
-
----
-
-## 7. 网络层准备与启动
-
-### 7.1 地址匹配规则
-
-- **服务端**：`ListeningAddr_` 是**本地绑定**地址（如 `0.0.0.0` 表示监听所有接口）。`PhysicsAddr_` 是**对外公布**的地址，客户端将使用此地址连接。
-- **客户端**：`PhysicsAddr_` 必须与服务端的 `PhysicsAddr_` **完全一致**（包括端口）。对于 IPC，双方必须使用相同的服务名（如 `ipc:my_service`）。
-
-**示例**：
-- 服务端：`API_Prepare_Service('0.0.0.0', '127.0.0.1:9898')` → 绑定所有接口，公布地址为 `127.0.0.1:9898`（仅本地可连）。
-- 客户端：`API_Prepare_Client('127.0.0.1:9898', app)` → 连接 `127.0.0.1:9898`。
-
-所有地址字符串均为 **UTF-8**。
-
----
-
-### 7.2 `API_Reset_Prepare`
-
-```pascal
-procedure API_Reset_Prepare(); cdecl;
-```
-
-**功能**：清除所有之前准备的网络服务/客户端配置。在重新配置前调用。
-
-**线程安全**：✅
-
----
-
-### 7.3 `API_Prepare_Service`
-
-```pascal
-function API_Prepare_Service(ListeningAddr_, PhysicsAddr_: PAnsiChar): Integer; cdecl;
-```
-
-**功能**：准备一个服务端监听器。可多次调用以启动多个服务。
-
-**参数**：
-- `ListeningAddr_`：本地绑定地址（如 `"0.0.0.0:9898"` 或 `"ipc:my_service"`，**UTF-8**）。
-- `PhysicsAddr_`：对外公布的地址（客户端将使用此地址连接，**UTF-8**）。
-
-**返回值**：一个内部标签（`Tag_Seed`），通常可忽略。
-
-**线程安全**：✅
-
----
-
-### 7.4 `API_Prepare_Client`
-
-```pascal
-function API_Prepare_Client(PhysicsAddr_: PAnsiChar; appHnd: TAppHnd): Integer; cdecl;
-```
-
-**功能**：准备一个客户端连接。若提供了 `appHnd`，该应用会在连接成功后自动注册到服务端。
-
-**参数**：
-- `PhysicsAddr_`：远程服务地址（与 `API_Prepare_Service` 的公布地址一致，**UTF-8**）。
-- `appHnd`：要暴露的应用句柄；若为 `nil`，则客户端仅作为消费者。
-
-**返回值**：内部标签（可忽略）。
-
-**线程安全**：✅
-
-**注意**：客户端会在断线后自动重连，并重新注册应用。
-
----
-
-### 7.5 `API_Prepare_Done`
-
-```pascal
-function API_Prepare_Done: Integer; cdecl;
-```
-
-**功能**：启动 C4 网络框架，阻塞直到所有准备的服务/客户端初始化完成。之后才能进行远程调用。
-
-**返回值**：`1` 成功，`0` 失败。错误信息会输出到控制台（默认启用 `ConsoleOutput`），也可通过配置 `.api-tool.ini` 文件调整日志行为。
-
-**重要**：
-- 只能调用一次，除非中间调用了 `API_Exit_MainThread` 或 `API_shutdown` 重置状态。
-- 重复调用而未重置会导致未定义行为。
-- 该函数会启动一个模拟主线程，持续运行网络事件循环。
-
-**线程安全**：✅ 但建议仅从主线程调用。
-
----
-
-### 7.6 `API_Exit_MainThread`
-
-```pascal
-procedure API_Exit_MainThread; cdecl;
-```
-
-**功能**：通知模拟主线程退出，停止网络事件循环。资源不会自动释放，需继续调用 `API_shutdown`。
-
-**线程安全**：✅
-
-**建议顺序**：先 `API_Exit_MainThread`，再 `API_shutdown`，确保优雅退出。
-
----
-
-## 8. 远程调用与通知
-
-### 8.1 `API_Call`
-
-```pascal
-function API_Call(appName: PAnsiChar; Param: TDataHnd; Timeout_: UInt64): TDataHnd; cdecl;
-```
-
-**功能**：同步调用远程应用 `appName` 的 API。阻塞直到收到响应或超时。
-
-**参数**：
-- `appName`：目标应用名称（区分大小写，**UTF-8**）。
-- `Param`：输入数据句柄（API 名称和参数）。库会克隆数据，调用者仍需释放原句柄。
-- `Timeout_`：超时（毫秒），`0` 表示无限等待（慎用）。
-
-**返回值**：**新句柄，永远非 `nil`**。若调用成功，句柄大小 > 0；若超时或失败，句柄大小为 0。**调用者必须始终释放返回的句柄**（即使大小为 0）。
-
-**线程安全**：✅（完全线程安全）
+其中 `TAPI_Call_M = procedure(Input: TDataHnd; Output: TDataHnd) of object;`，`TAPI_Notify_M = procedure(Input: TDataHnd) of object;`。
 
 **注意**：
-- 支持本地优化：若目标应用在同一进程内已注册，则直接本地执行，避免网络开销。
-- 并发调用的执行顺序不保证（见 2.3 节）。
+- 非同步版本（不带 `Sync`）回调在 C 线程池执行，**不可阻塞**，但可调用 `API_Call`（需防死循环）。
+- 同步版本（带 `Sync`）将任务排队到主线程软同步队列，需定期调用 `API_Sync` 处理，适用于必须访问 UI 的场景，但会增大主线程负担。
 
-**示例**：
-```pascal
-var
-  d, res: TDataHnd;
-begin
-  d := API_Create_DataHnd('add');
-  API_WriteBuffer(d, @a, SizeOf(a));
-  API_WriteBuffer(d, @b, SizeOf(b));
-  res := API_Call('CalcService', d, 5000);
-  API_Free_DataHnd(d);
-  if API_GetSize(res) > 0 then
-  begin
-    // 处理结果
-  end;
-  API_Free_DataHnd(res); // 必须释放
-end;
-```
+#### 4.2.4 动态注销 API
+
+| 函数 | 类型 | 说明 |
+|------|------|------|
+| `API_UnReg(appHnd: TAppHnd; APIName: PAnsiChar): Integer; cdecl; external ...` | **导入** | 注销已注册的 API，本地立即生效，网络广播约 3 秒传播。返回 `1` 成功，`0` 不存在。 |
+| `API_UnReg2(appHnd; APIName: string): Integer;` | **Pascal 辅助** | UTF‑8 自动转换版本。 |
+
+#### 4.2.5 本地调用（不经过网络）
+
+| 函数 | 类型 | 说明 |
+|------|------|------|
+| `API_Local_APP_Call(appHnd: TAppHnd; Param: TDataHnd): TDataHnd; cdecl; external ...` | **导入** | 本地同步执行 `Call`，返回结果句柄（需释放）。失败时大小 = 0。 |
+| `API_Local_APP_Notify(appHnd: TAppHnd; Param: TDataHnd); cdecl; external ...` | **导入** | 本地发送通知，无返回值。 |
 
 ---
 
-### 8.2 `API_Notify`
+### 4.3 网络层准备与通信
 
-```pascal
-procedure API_Notify(appName: PAnsiChar; Param: TDataHnd); cdecl;
-```
+#### 4.3.1 重置与准备
 
-**功能**：发送单向通知，不等待响应。尽力送达。
+| 函数 | 类型 | 说明 |
+|------|------|------|
+| `API_Reset_Prepare(); cdecl; external ...` | **导入** | 清除所有已准备的服务/客户端配置，重新配置前调用。 |
+| `API_Prepare_Service(ListeningAddr_, PhysicsAddr_: PAnsiChar): Integer; cdecl; external ...` | **导入** | 准备一个服务监听器，可多次调用。`ListeningAddr_` 为绑定地址（如 `0.0.0.0:9898` 或 `ipc:my_service`），`PhysicsAddr_` 为对外公布地址（客户端连接时使用）。返回内部标签（可忽略）。 |
+| `API_Prepare_Service2(ListeningAddr_, PhysicsAddr_: string): Integer;` | **Pascal 辅助** | UTF‑8 转换版本。 |
+| `API_Prepare_Client(PhysicsAddr_: PAnsiChar; appHnd: TAppHnd): Integer; cdecl; external ...` | **导入** | 准备一个客户端连接。若 `appHnd` 非 `nil`，则暴露该应用；若为 `nil` 则纯消费。返回内部标签。 |
+| `API_Prepare_Client2(PhysicsAddr_: string; appHnd: TAppHnd): Integer;` | **Pascal 辅助** | 带应用句柄版本。 |
+| `API_Prepare_Client2(PhysicsAddr_: string): Integer;` | **Pascal 辅助** | 纯消费版本（`appHnd = nil`）。 |
 
-**参数**：
-- `appName`：目标应用名称（**UTF-8**）。
-- `Param`：输入数据句柄（库会克隆，调用者仍需释放）。
+#### 4.3.2 启动框架
 
-**线程安全**：✅
+| 函数 | 类型 | 说明 |
+|------|------|------|
+| `API_Prepare_Done: Integer; cdecl; external ...` | **导入** | 启动 C4 网络框架，**阻塞** 直到所有准备的服务/客户端初始化完成。返回 `1` 成功，`0` 失败（错误信息打印到控制台）。**只能调用一次**（除非重置）。 |
 
----
+#### 4.3.3 停止事件循环
 
-### 8.3 `API_SetOption` — 运行时动态调整全局配置（新增）
-
-```pascal
-procedure API_SetOption(Option, Value: PAnsiChar);
-```
-
-**功能**：在运行时动态调整 API Hub 框架的全局配置选项。所有更改对后续操作**立即生效**（除非另有说明）。该函数允许您在不修改 `.ini` 文件且不重启应用的情况下进行运行时调优。
-
-**参数**：
-- `Option`：配置键（**UTF-8** 编码，不区分大小写，支持别名）。
-- `Value`：新值（**UTF-8** 编码）。对于布尔选项，接受 `"True"`/`"False"`、`"1"`/`"0"`、`"Yes"`/`"No"`。
-
-**返回值**：无。未知选项被**静默忽略**（不报错，不输出日志）。
-
-**线程安全**：✅（所有选项的修改都是原子性的）
+| 函数 | 类型 | 说明 |
+|------|------|------|
+| `API_Exit_MainThread(); cdecl; external ...` | **导入** | 通知内部事件循环退出，停止网络处理。通常后接 `API_shutdown`。 |
 
 ---
 
-#### 8.3.1 支持的选项详解
+### 4.4 远程调用与通知
+
+| 函数 | 类型 | 说明 |
+|------|------|------|
+| `API_Call(appName: PAnsiChar; Param: TDataHnd; Timeout_: UInt64): TDataHnd; cdecl; external ...` | **导入** | 同步远程调用目标应用，超时毫秒。返回**新句柄**，永远非 `nil`，调用者必须释放（即使大小为 0）。支持本地优化（若目标在本地注册）。 |
+| `API_Call2(appName: string; Param: TDataHnd; Timeout_: UInt64): TDataHnd;` | **Pascal 辅助** | UTF‑8 转换版本。 |
+| `API_Notify(appName: PAnsiChar; Param: TDataHnd); cdecl; external ...` | **导入** | 单向通知，不等待响应，尽力送达。 |
+| `API_Notify2(appName: string; Param: TDataHnd);` | **Pascal 辅助** | UTF‑8 转换版本。 |
+
+**注意**：
+- `API_Call` 内部克隆参数句柄，调用者仍需释放原 `Param`。
+- 超时值 `0` 表示无限等待（慎用）。
+- 在回调中调用 `API_Call`/`API_Notify` 不会死锁，但注意防止无限递归，且不可阻塞。
+
+---
+
+### 4.5 运行时配置与关闭
+
+#### 4.5.1 `API_SetOption`
+
+```pascal
+procedure API_SetOption(Option, Value: PAnsiChar); cdecl; external libapi_hub name 'API_SetOption';
+```
+
+**功能**：动态调整全局运行时配置，无需修改 `.ini` 文件或重启应用。
+
+**支持的选项**（详见下表）：
 
 | 选项键（主名） | 别名 | 值类型 | 说明 |
 |---------------|------|--------|------|
-| `password` | `passwd` | 字符串 | **设置 C4 P2PVM 认证令牌**。该密码用于**所有新建的 P2PVM 连接**（现有连接不受影响）。**服务端和客户端必须匹配**，否则握手失败。日志中会以掩码（`*` 和 `**`）显示，避免密码泄露。 |
-| `Quiet` | — | 布尔 | 启用/禁用静默模式。`True` 时抑制大多数调试日志输出，`False` 时输出详细日志。 |
-| `External_Conf_Auto_Save` | `Conf_Auto_Save` | 布尔 | 启用/禁用程序退出时自动保存当前配置到 `.api-tool.ini` 文件。默认 `True`。设为 `False` 可防止配置被持久化（适用于测试环境）。 |
-| `Wait_Connection_ReadyOk` | `Wait_API_Prepare_Done`、`API_Prepare_Done_Wait`、`WaitConnect`、`Wait_Ready`、`WaitReady` | 布尔 | **🔴 重要：部署场景关键选项**。控制 `API_Prepare_Done` 是否**阻塞等待所有客户端连接就绪**。<br>• `True`（默认）：`API_Prepare_Done` 会轮询所有客户端，直到它们全部在线并完成应用注册，或超时（由 `Wait_Connection_Timeout` 控制）。<br>• `False`：`API_Prepare_Done` 立即返回，**不等待客户端连接**。客户端会在服务端上线后**自动重连**（断线重连机制）。<br>**部署建议**：在大型分布式部署中，服务端和客户端可能不同时启动。设置 `False` 可让服务端先行启动，客户端稍后自动接入，无需人工干预。 |
-| `Wait_Connection_Timeout` | `Wait_TimeOut`、`API_Prepare_Done_TimeOut`、`WaitTimeOut` | 整数（毫秒） | 当 `Wait_Connection_ReadyOk = True` 时的最大等待时间。超时后 `API_Prepare_Done` 返回（即使部分客户端未就绪）。默认 `30000`（30 秒）。 |
-| `ShowThreadID` | `ShowThread`、`Show_Thread` | 布尔 | 控制状态日志（`DoStatus`）是否显示线程 ID。`True` 时每条日志前显示 `[线程ID]`。 |
-| `ConsoleOutput` | `Console_Output` | 布尔 | 启用/禁用控制台（stdout/stderr）日志输出。在库模式下（DLL/共享库）默认强制为 `True`。 |
-| `IPC_Serv_ThreadCount` | `IPC_ThreadCount`、`IPC_Server_ThreadCount` | 整数 | IPC 服务线程池大小。影响 `TZNet_Server_IPC` 处理并发请求的能力。**立即生效**，影响后续创建的 IPC 连接。默认 `4`。 |
-| `IPC_Serv_MaxQueueLength` | `IPC_MaxQueueLength`、`IPC_Server_MaxQueueLength` | 整数 | IPC 消息队列最大长度。超过此阈值时，新消息可能被丢弃或阻塞。默认 `4096`。 |
-| `IPC_Serv_MaxMsgSize` | `IPC_MaxMsgSize`、`IPC_Server_MaxMsgSize` | 整数（字节） | 单条 IPC 消息的最大大小。超过此大小的消息会被拒绝，防止内存耗尽。默认 `32768`（32 KB）。 |
+| `password` | `passwd` | 字符串 | 设置 C4 P2PVM 认证令牌（新建连接生效，服务端/客户端必须匹配）。 |
+| `Quiet` | — | 布尔 | 静默模式（`True` 抑制日志）。 |
+| `External_Conf_Auto_Save` | `Conf_Auto_Save` | 布尔 | 退出时自动保存配置到 `.ini` 文件（默认 `True`）。 |
+| `Wait_Connection_ReadyOk` | `Wait_API_Prepare_Done`, `WaitConnect`, `Wait_Ready`, `WaitReady` | 布尔 | `API_Prepare_Done` 是否等待客户端就绪。`False` 适合弹性部署。 |
+| `Wait_Connection_Timeout` | `Wait_TimeOut`, `WaitTimeOut` | 整数（毫秒） | 最大等待时间，默认 30000。 |
+| `ShowThreadID` | `ShowThread`, `Show_Thread` | 布尔 | 状态日志是否显示线程 ID。 |
+| `ConsoleOutput` | `Console_Output` | 布尔 | 是否输出控制台日志。 |
+| `IPC_Serv_ThreadCount` | `IPC_ThreadCount`, `IPC_Server_ThreadCount` | 整数 | IPC 服务线程池大小，默认 4。 |
+| `IPC_Serv_MaxQueueLength` | `IPC_MaxQueueLength`, `IPC_Server_MaxQueueLength` | 整数 | IPC 消息队列最大长度，默认 4096。 |
+| `IPC_Serv_MaxMsgSize` | `IPC_MaxMsgSize`, `IPC_Server_MaxMsgSize` | 整数（字节） | IPC 单条消息最大大小，默认 32768。 |
+
+**注意事项**：
+- 未知选项静默忽略。
+- `Wait_Connection_*` 和 `password` 仅在 `API_Prepare_Done` 前设置有效。
+- 布尔值接受 `True/False`、`1/0`、`Yes/No`。
+- 无返回值，调用者需确保值合法。
+
+**示例**：
+```pascal
+API_SetOption2('Wait_Ready', 'False');          // 部署模式
+API_SetOption2('IPC_Serv_ThreadCount', '8');
+API_SetOption2('ConsoleOutput', 'False');       // 关闭日志
+```
+
+#### 4.5.2 关闭框架
+
+| 函数 | 类型 | 说明 |
+|------|------|------|
+| `API_shutdown(); cdecl; external ...` | **导入** | 完全关闭框架，停止所有服务、断开客户端、释放资源。建议先调用 `API_Exit_MainThread`，再 `API_shutdown`。 |
 
 ---
 
-#### 8.3.2 典型使用场景
+### 4.6 同步辅助
 
-**场景 1：安全加固 —— 动态更换认证密码**
+| 函数 | 类型 | 说明 |
+|------|------|------|
+| `API_Sync: Integer;` | **Pascal 实现** | 处理主线程软同步队列，返回处理的任务数。主线程需定期调用（例如在定时器或主循环中）以执行同步回调任务。 |
 
-```pascal
-// 在建立关键 P2PVM 连接前，动态设置一次性令牌
-API_SetOption('password', 'one_time_token_xyz');
-// 后续新建的连接将使用此令牌
-```
-
-**场景 2：大型部署 —— 服务端先行启动，客户端后接入**
-
-```pascal
-// 服务端：不等待客户端就绪，直接启动
-API_SetOption('Wait_Connection_ReadyOk', 'False');
-API_Prepare_Service('0.0.0.0', '192.168.1.100:9898');
-API_Prepare_Done;  // 立即返回，不阻塞
-
-// 客户端：稍后启动，自动连接
-API_SetOption('Wait_Connection_ReadyOk', 'True');
-API_Prepare_Client('192.168.1.100:9898', app);
-API_Prepare_Done;  // 等待连接就绪
-```
-
-**场景 3：运维调试 —— 临时开启详细日志**
-
-```pascal
-// 开启详细日志以排查连接问题
-API_SetOption('ConsoleOutput', 'True');
-API_SetOption('ShowThreadID', 'True');
-// 排查完毕后恢复
-API_SetOption('ConsoleOutput', 'False');
-API_SetOption('ShowThreadID', 'False');
-```
-
-**场景 4：性能调优 —— 提高 IPC 并发能力**
-
-```pascal
-// 在高并发场景下增加 IPC 线程数
-API_SetOption('IPC_Serv_ThreadCount', '8');
-API_SetOption('IPC_Serv_MaxQueueLength', '8192');
-```
+**使用场景**：当注册了 `API_Reg_Sync_Call_M` 或 `API_Reg_Sync_Notify_M` 时，必须定期调用 `API_Sync`，否则队列任务永远不会执行，导致回调阻塞。
 
 ---
 
-#### 8.3.3 注意事项
+## 5. 高级 RAII 封装 `z_api_hubtool_helper` 单元
 
-- **无返回值**：调用者无法获知选项是否被识别或值是否合法。例如传入负数给 `IPC_Serv_ThreadCount`，会被 `EStrToInt` 解析，可能导致底层库异常。
-- **密码掩码**：虽然隐藏了密码原文，但掩码长度可能暴露密码长度，存在细微信息泄露风险。
-- **选项生效时机**：
-  - `password`：仅影响**新建连接**，已建立的连接不受影响。
-  - `Wait_Connection_ReadyOk` / `Wait_Connection_Timeout`：仅在 `API_Prepare_Done` 执行前设置有效；启动后修改无影响。
-  - IPC 相关参数：影响**新创建的 IPC 服务/客户端**，已存在的连接不受影响。
-- **静默忽略**：传入未知选项不会报错，建议在代码中记录日志以便追踪。
+本单元提供了面向对象的 RAII 封装，自动管理句柄生命周期，并支持链式调用和对象方法回调。**推荐日常开发使用**。
 
----
+### 5.1 `API.TDataHandle` 类
 
-## 9. 关闭与清理
+封装 `TDataHnd`，构造时自动创建，析构时自动释放（若 `Owned`）。所有读写方法内部加锁，线程安全。
 
-### 9.1 `API_shutdown`
+#### 5.1.1 构造与析构
 
+| 方法 | 说明 |
+|------|------|
+| `constructor Create(const APIName: string);` | 新建句柄，绑定 API 名称（自动 UTF‑8）。 |
+| `constructor Create(AHandle: TDataHnd; Owned: Boolean = True);` | 包装已有句柄，`Owned` 控制是否在析构时释放。 |
+| `destructor Destroy; override;` | 自动释放（若 `Owned`）。 |
+
+#### 5.1.2 原始读写
+
+| 方法 | 说明 |
+|------|------|
+| `function WriteBuffer(const Buffer; Size: Int64): Int64;` | 写入原始字节，返回实际写入数。 |
+| `function ReadBuffer(var Buffer; Size: Int64): Int64;` | 读取原始字节，返回实际读取数。 |
+
+#### 5.1.3 类型安全写入（链式，返回 `Self`）
+
+| 方法 | 说明 |
+|------|------|
+| `WriteInt8(Value: Int8): TDataHandle;` | 写入 8 位有符号整数，支持链式调用。 |
+| `WriteUInt8, WriteInt16, WriteUInt16, WriteInt32, WriteUInt32, WriteInt64, WriteUInt64, WriteSingle, WriteDouble` | 同理。 |
+| `WriteStringNullTerminated(const Value: string): TDataHandle;` | 写入 UTF‑8 字符串并追加 `#0`。 |
+| `procedure WriteString(const Value: string); deprecated;` | 已弃用，请用 `WriteStringNullTerminated`。 |
+
+**示例**：
 ```pascal
-procedure API_shutdown; cdecl;
+h.WriteInt32(5).WriteInt32(7).WriteStringNullTerminated('hello');
 ```
 
-**功能**：彻底关闭整个框架：停止服务、断开所有客户端、释放内部资源。之后可重新调用准备函数重新初始化。
+#### 5.1.4 类型安全读取
 
-**内部行为**：它会调用 `API_Exit_MainThread` 并清理 IPC 和线程池。
+| 方法 | 说明 |
+|------|------|
+| `function ReadInt8(var Value: Int8): Boolean; overload;` | 读取并返回成功标志。 |
+| `function ReadInt8: Int8; overload;` | 直接返回，失败返回 0。 |
+| 其他类型同理（`UInt8`, `Int16`, `UInt16`, `Int32`, `UInt32`, `Int64`, `UInt64`, `Single`, `Double`, `String`）。 | 均有 `var` 和直接返回两个版本。 |
 
-**线程安全**：✅ 但通常由主线程调用。
+#### 5.1.5 位置与大小
 
-**建议**：先显式调用 `API_Exit_MainThread`，再调用 `API_shutdown`，确保顺序清理。
+| 方法 | 说明 |
+|------|------|
+| `function GetPos: Int64;` `procedure SetPos(Pos_: Int64);` | 读写位置。 |
+| `function GetSize: Int64;` `procedure SetSize(Size_: Int64);` | 获取/设置大小。 |
+| 属性 `Pos`, `Size` | 对应读写。 |
+
+#### 5.1.6 零拷贝访问
+
+| 方法 | 说明 |
+|------|------|
+| `function GetBufferEx(out Size: Int64): Pointer;` | 返回内部指针和当前大小，调用者不得释放指针。 |
+
+#### 5.1.7 属性
+
+| 属性 | 类型 | 说明 |
+|------|------|------|
+| `Handle` | `TDataHnd` | 只读，返回原始句柄。 |
 
 ---
 
-## 10. 完整示例（服务端 + 客户端）
+### 5.2 `API.TAppHandle` 类
 
-### 10.1 服务端（注册 add 和 echo）
+封装 `TAppHnd`，自动管理应用句柄生命周期。
 
+#### 5.2.1 构造与析构
+
+| 方法 | 说明 |
+|------|------|
+| `constructor Create(const AppName, Desc: string);` | 创建应用句柄（自动 UTF‑8）。 |
+| `destructor Destroy; override;` | 自动释放句柄。 |
+
+#### 5.2.2 注册 API（函数指针版本）
+
+| 方法 | 说明 |
+|------|------|
+| `function RegisterCall(const APIName, Desc: string; Trigger: Pointer; OnCall: TAPI_Call): Boolean;` | 注册 `cdecl` 函数指针 `Call`。 |
+| `function RegisterNotify(const APIName, Desc: string; Trigger: Pointer; OnNotify: TAPI_Notify): Boolean;` | 注册 `cdecl` 函数指针 `Notify`。 |
+
+#### 5.2.3 注册 API（对象方法版本，`of object`）
+
+| 方法 | 说明 |
+|------|------|
+| `function RegisterCall(const APIName, Desc: string; OnCall: TAPI_Call_M): Boolean;` | 注册对象方法 `Call`（非同步，C 线程池执行）。 |
+| `function RegisterCallSync(const APIName, Desc: string; OnCall: TAPI_Call_M): Boolean;` | 注册对象方法 `Call`（同步到主线程，需 `API.Sync`）。 |
+| `function RegisterNotify(const APIName, Desc: string; OnNotify: TAPI_Notify_M): Boolean;` | 注册对象方法 `Notify`（非同步）。 |
+| `function RegisterNotifySync(const APIName, Desc: string; OnNotify: TAPI_Notify_M): Boolean;` | 注册对象方法 `Notify`（同步到主线程）。 |
+
+#### 5.2.4 动态注销
+
+| 方法 | 说明 |
+|------|------|
+| `function Unregister(const APIName: string): Boolean;` | 注销 API，返回成功标志。 |
+
+#### 5.2.5 本地调用
+
+| 方法 | 说明 |
+|------|------|
+| `function LocalCall(Param: TDataHandle): TDataHandle;` | 本地同步执行 `Call`，返回结果句柄（需释放）。 |
+| `procedure LocalNotify(Param: TDataHandle);` | 本地发送通知。 |
+
+#### 5.2.6 属性
+
+| 属性 | 类型 | 说明 |
+|------|------|------|
+| `Handle` | `TAppHnd` | 原始句柄。 |
+| `Name` | `string` | 应用名。 |
+
+---
+
+### 5.3 `API` 静态方法
+
+提供全局网络操作，所有方法均为 `class`。
+
+| 方法 | 说明 |
+|------|------|
+| `class procedure ResetPrepare;` | 清除网络配置。 |
+| `class function PrepareService(const ListeningAddr, PhysicsAddr: string): Integer; overload;` | 准备服务监听器。 |
+| `class function PrepareService(const ListeningAddr, PhysicsAddr: string; App: TAppHandle): Integer; overload;` | 准备服务并自动准备客户端。 |
+| `class function PrepareClient(const PhysicsAddr: string; App: TAppHandle): Integer;` | 准备客户端连接。 |
+| `class function PrepareDone: Boolean;` | 启动网络框架，成功返回 `True`。 |
+| `class procedure ExitMainThread;` | 停止事件循环。 |
+| `class function CallApp(const AppName: string; Param: TDataHandle; TimeoutMs: UInt64): TDataHandle;` | 远程同步调用，返回结果句柄（需释放）。 |
+| `class procedure NotifyApp(const AppName: string; Param: TDataHandle);` | 远程通知。 |
+| `class procedure SetOption(const Option, Value: string);` | 运行时配置。 |
+| `class function Sync: Integer;` | 处理主线程同步队列，返回任务数。 |
+| `class procedure Shutdown;` | 关闭框架。 |
+
+---
+
+### 5.4 `API__` 底层静态映射
+
+`API__` 类直接映射 `z_api_hubtool_import` 中的所有 **`external` 函数**（函数名相同，无 Pascal 辅助）。**仅供高级用户绕过 RAII 封装**，常规开发应使用 `API` 容器类。
+
+---
+
+## 6. 回调函数详解与线程安全
+
+### 6.1 回调执行上下文
+
+所有回调（`TAPI_Call`、`TAPI_Notify`）均在 **C4 线程池** 中执行。这意味着：
+
+- **非同步版本**（`API_Reg_Call`、`API_Reg_Notify`、`API_Reg_Call_M`、`API_Reg_Notify_M`）的回调直接在线程池中运行。
+- **同步版本**（`API_Reg_Sync_Call_M`、`API_Reg_Sync_Notify_M`）通过 `TSoft_Synchronize_Tool` 将任务排队到主线程软同步队列，**需主线程定期调用 `API.Sync`** 执行。
+
+### 6.2 回调内的约束
+
+无论哪种版本，回调内都应遵守：
+
+- **✅ 可以**调用 `API_Call` / `API_Notify`（不会死锁），但要避免无限递归。
+- **❌ 禁止**长时间阻塞（`Sleep`、等待锁、大量循环）。
+- **❌ 禁止**直接访问 UI（必须用 `TThread.Synchronize` 或同步版本）。
+- **✅ 推荐**耗时任务异步提交到自己的工作队列。
+
+### 6.3 同步版本的使用要点
+
+- 注册 `Sync` 回调后，必须在主线程（通常为定时器或主循环）中**频繁调用 `API.Sync`**，否则队列积压，回调永不执行。
+- 同步版本虽然保证 UI 安全，但会增大主线程负担，不适合高频调用。
+
+### 6.4 线程安全总结
+
+- 所有 `external` 函数线程安全。
+- `TDataHandle` 实例内部加锁，可并发读写（写操作串行化）。
+- `TAppHandle` 无额外锁（底层已线程安全）。
+- 回调中可自由调用 `API_Call`，但注意性能。
+
+---
+
+## 7. 完整示例：服务端与客户端
+
+### 7.1 使用底层 `import` 单元（手动管理句柄）
+
+#### 服务端（`server_import.lpr`）
 ```pascal
-program CalcServer;
-
-{$APPTYPE CONSOLE}
+program server_import;
 
 uses
   SysUtils,
@@ -878,90 +536,48 @@ procedure AddCallback(Trigger: Pointer; Input, Output: Pointer); cdecl;
 var
   a, b, sum: Integer;
 begin
-  if API_ReadBuffer(Input, @a, SizeOf(a)) <> SizeOf(a) then Exit;
-  if API_ReadBuffer(Input, @b, SizeOf(b)) <> SizeOf(b) then Exit;
+  if API_ReadBuffer(TDataHnd(Input), @a, SizeOf(a)) <> SizeOf(a) then Exit;
+  if API_ReadBuffer(TDataHnd(Input), @b, SizeOf(b)) <> SizeOf(b) then Exit;
   sum := a + b;
-  API_WriteBuffer(Output, @sum, SizeOf(sum));
-end;
-
-procedure EchoCallback(Trigger: Pointer; Input, Output: Pointer); cdecl;
-var
-  sz: Int64;
-  buf: PByte;
-begin
-  sz := API_GetSize(Input);
-  if sz > 0 then
-  begin
-    buf := GetMemory(sz);
-    try
-      API_SetPos(Input, 0);
-      API_ReadBuffer(Input, buf, sz);
-      API_WriteBuffer(Output, buf, sz);
-    finally
-      FreeMemory(buf);
-    end;
-  end;
+  API_WriteBuffer(TDataHnd(Output), @sum, SizeOf(sum));
 end;
 
 var
   app: TAppHnd;
 begin
-  // 创建应用
-  app := API_Create_APPHnd('CalcService', 'Calculator');
-  if app = nil then
-  begin
-    Writeln('Create app failed');
-    Halt(1);
-  end;
+  app := API_Create_APPHnd2('CalcService', 'Calculator');
+  API_Reg_Call2(app, 'add', 'Addition', nil, @AddCallback);
 
-  // 注册 API
-  API_Reg_Call(app, 'add', 'a+b', nil, @AddCallback);
-  API_Reg_Call(app, 'echo', 'Echo', nil, @EchoCallback);
-
-  // 准备网络
   API_Reset_Prepare;
-  API_Prepare_Service('0.0.0.0', '127.0.0.1:9898');
-  API_Prepare_Service('ipc:calc_service', 'ipc:calc_service');
-  API_Prepare_Client('127.0.0.1:9898', app);
-  API_Prepare_Client('ipc:calc_service', app);
+  API_Prepare_Service2('ipc:calc_service', 'ipc:calc_service');
+  API_Prepare_Client2('ipc:calc_service', app);
 
-  // 启动
-  if API_Prepare_Done <> 1 then
+  if API_Prepare_Done = 1 then
   begin
-    Writeln('Start failed');
-    API_Free_APPHnd(app);
-    Halt(1);
+    Writeln('Service running. Press Enter to stop.');
+    Readln;
   end;
 
-  Writeln('Service running. Press Enter to stop.');
-  Readln;
-
-  // 清理
   API_Exit_MainThread;
   API_Free_APPHnd(app);
   API_shutdown;
 end.
 ```
 
-### 10.2 客户端（调用 add）
-
+#### 客户端（`client_import.lpr`）
 ```pascal
-program CalcClient;
-
-{$APPTYPE CONSOLE}
+program client_import;
 
 uses
   SysUtils,
   z_api_hubtool_import;
 
 var
-  app: TAppHnd;
-  param, result: TDataHnd;
+  param, res: TDataHnd;
   a, b, sum: Integer;
 begin
-  // 纯消费端，不暴露 API
   API_Reset_Prepare;
-  API_Prepare_Client('ipc:calc_service', nil);
+  API_Prepare_Client2('ipc:calc_service', nil);
 
   if API_Prepare_Done <> 1 then
   begin
@@ -969,144 +585,192 @@ begin
     Halt(1);
   end;
 
-  // 构造请求
-  param := API_Create_DataHnd('add');
+  param := API_Create_DataHnd2('add');
   a := 10; b := 20;
-  API_WriteBuffer(param, @a, SizeOf(a));
-  API_WriteBuffer(param, @b, SizeOf(b));
+  API_WriteInt32(param, a);
+  API_WriteInt32(param, b);
 
-  // 远程调用
-  result := API_Call('CalcService', param, 3000);
+  res := API_Call2('CalcService', param, 3000);
   API_Free_DataHnd(param);
 
-  if API_GetSize(result) >= SizeOf(Integer) then
+  if API_GetSize(res) >= SizeOf(Integer) then
   begin
-    API_SetPos(result, 0);
-    API_ReadBuffer(result, @sum, SizeOf(sum));
+    API_SetPos(res, 0);
+    sum := API_ReadInt32(res);
     Writeln('10 + 20 = ', sum);
-  end
-  else
-    Writeln('Call failed or timed out');
+  end;
 
-  API_Free_DataHnd(result);
+  API_Free_DataHnd(res);
   API_Exit_MainThread;
   API_shutdown;
 end.
 ```
 
----
+### 7.2 使用 RAII 封装（推荐）
 
-## 11. 常见问题与排错
+#### 服务端（`server_helper.lpr`）
+```pascal
+program server_helper;
 
-### 11.1 动态库加载失败
+uses
+  SysUtils,
+  z_api_hubtool_helper,
+  z_api_hubtool_import;
 
-- 确保库文件（`z_api_hub64.dll` 等）位于可执行文件目录或系统 `PATH`。
-- 检查位数（32/64）与程序匹配。
-- 库会自动搜索可执行目录和系统路径，无需额外设置。
+procedure AddCallback(Trigger: Pointer; Input, Output: Pointer); cdecl;
+var
+  a, b, sum: Integer;
+begin
+  if API_ReadBuffer(TDataHnd(Input), @a, SizeOf(a)) <> SizeOf(a) then Exit;
+  if API_ReadBuffer(TDataHnd(Input), @b, SizeOf(b)) <> SizeOf(b) then Exit;
+  sum := a + b;
+  API_WriteBuffer(TDataHnd(Output), @sum, SizeOf(sum));
+end;
 
-### 11.2 `API_Prepare_Done` 返回 0
+var
+  app: TAppHandle;
+begin
+  app := TAppHandle.Create('CalcService', 'Calculator');
+  app.RegisterCall('add', 'Addition', nil, @AddCallback);
 
-- 检查控制台输出，库会打印详细的错误信息（如端口占用、地址格式错误等）。
-- 可通过编辑 `<可执行文件名>.api-tool.ini` 中的 `ConsoleOutput` 选项控制日志输出。
-- 检查防火墙是否阻止端口。
+  ResetPrepare;
+  PrepareService('ipc:calc_service', 'ipc:calc_service');
+  PrepareClient('ipc:calc_service', app);
 
-### 11.3 回调未触发
+  if PrepareDone then
+  begin
+    Writeln('Service running. Press Enter to stop.');
+    Readln;
+  end;
 
-- 确认应用名和 API 名大小写完全一致（`CalcService` ≠ `calcservice`）。
-- 检查客户端是否成功注册（查看控制台状态日志）。
-- 确保 `API_Prepare_Done` 成功。
+  ExitMainThread;
+  Shutdown;
+  app.Free;  // 或利用 try..finally 自动释放
+end.
+```
 
-### 11.4 内存泄漏
+#### 客户端（`client_helper.lpr`）
+```pascal
+program client_helper;
 
-- 确保每个 `API_Create_DataHnd` 和 `API_Create_APPHnd` 都有对应的释放。
-- `API_Call` 返回的句柄即使大小为 0 也必须释放。
+uses
+  SysUtils,
+  z_api_hubtool_helper;
 
-### 11.5 多线程注意事项
+var
+  param, res: TDataHandle;
+  sum: Integer;
+begin
+  ResetPrepare;
+  PrepareClient('ipc:calc_service', nil);
 
-- 所有函数都可安全并发调用。
-- 同一 `TDataHnd` 的写操作应串行化，避免数据竞争。
-- 回调在线程池中执行，不可阻塞或调用 `API_Call`/`API_Notify`。
+  if not PrepareDone then
+  begin
+    Writeln('Connect failed');
+    Halt(1);
+  end;
 
-### 11.6 超时问题
+  param := TDataHandle.Create('add');
+  param.WriteInt32(10).WriteInt32(20);
 
-- 超时值为 0 表示无限等待，除非必要，否则不要使用，以免永久阻塞。
-- 若频繁超时，检查网络延迟或服务端负载，适当增加超时值。
+  res := CallApp('CalcService', param, 3000);
+  param.Free;
 
-### 11.7 性能调优建议
+  if res.GetSize >= SizeOf(Integer) then
+  begin
+    res.SetPos(0);
+    sum := res.ReadInt32;
+    Writeln('10 + 20 = ', sum);
+  end;
+  res.Free;
 
-- **使用 IPC** 进行同机通信，延迟更低。
-- **复用数据句柄**：通过 `API_SetPos(0)` 和 `API_SetSize(0)` 重置句柄，而不是反复创建/释放。
-- 调整 `.api-tool.ini` 中的 `IPC_Serv_ThreadCount` 和 `IPC_Serv_MaxQueueLength` 提高并发能力。
-- 使用 `API_GetBuffer` 进行零拷贝读取，减少数据复制。
-
-### 11.8 多实例部署
-
-- 如需负载均衡，在**不同进程**中启动多个服务端，注册**相同的应用名**。C4 服务网格会自动将客户端请求分发到负载最低的实例。
-- 每个服务端实例应使用不同的监听地址（例如不同的 TCP 端口或不同的 IPC 名称），但对外公布的 `PhysicsAddr_` 可以相同。IPC 服务需要不同的服务名（如 `ipc:my_service_1`、`ipc:my_service_2`），客户端连接任意一个即可。
-
----
-
-## 附录 A：API 速查表
-
-| 函数 | 用途 | 新增 |
-|------|------|------|
-| `API_Create_DataHnd` | 创建数据句柄（API 名称必须 UTF-8） | |
-| `API_Free_DataHnd` | 释放数据句柄 | |
-| `API_GetBuffer` | 获取内部缓冲区指针 | |
-| `API_WriteBuffer` | 写入数据 | |
-| `API_ReadBuffer` | 读取数据 | |
-| `API_GetPos` / `API_SetPos` | 获取/设置读写位置 | |
-| `API_GetSize` / `API_SetSize` | 获取/设置缓冲区大小 | |
-| `API_Create_APPHnd` | 创建应用句柄（名称和描述必须 UTF-8） | |
-| `API_Free_APPHnd` | 释放应用句柄 | |
-| `API_Reg_Call` | 注册请求-响应 API（字符串必须 UTF-8） | |
-| `API_Reg_Notify` | 注册通知 API（字符串必须 UTF-8） | |
-| `API_UnReg` | **动态注销 API（触发网络广播，约 3 秒传播）** | ✅ |
-| `API_Local_APP_Call` | 本地同步调用 | |
-| `API_Local_APP_Notify` | 本地通知 | |
-| `API_Reset_Prepare` | 重置网络准备 | |
-| `API_Prepare_Service` | 准备服务端（地址必须 UTF-8） | |
-| `API_Prepare_Client` | 准备客户端（地址必须 UTF-8） | |
-| `API_Prepare_Done` | 启动网络框架 | |
-| `API_Exit_MainThread` | 停止事件循环 | |
-| `API_Call` | 远程同步调用（应用名 UTF-8） | |
-| `API_Notify` | 远程通知（应用名 UTF-8） | |
-| `API_SetOption` | **运行时动态调整全局配置（密码、超时、IPC 等）** | ✅ |
-| `API_shutdown` | 关闭框架 | |
-
----
-
-## 更新日志
-
-| 日期 | 版本 | 变更内容 |
-|------|------|----------|
-| **2026-08-14** | **v2.0** | **新增 `API_UnReg` 动态注销 API 接口，支持热卸载和权限动态调整；新增 `API_SetOption` 运行时配置接口，支持动态调整密码、等待连接控制、IPC 参数等；更新文档目录、附录和示例。** |
-| 2026-07-xx | v1.0 | 初始版本，覆盖基础 API 绑定、数据句柄、应用句柄、网络层和远程调用。 |
+  ExitMainThread;
+  Shutdown;
+end.
+```
 
 ---
 
-*本文档基于 API Hub Tool 最新版本编写，适用于 Delphi 和 Free Pascal。所有 `PAnsiChar` 字符串参数必须使用 UTF-8 编码并以 null 结尾。如有疑问，请查阅项目文档或检查控制台输出以获取诊断信息。*
+## 8. 常见问题与排错
 
-## 📚 相关资源（其他语言指南）
-
-- [API Hub Tool C++ 使用指南](../C++/API%20Hub%20Tool%20C++%20使用指南.md)
-- [API Hub Tool C 语言使用指南](../C++/API%20Hub%20Tool%20C%20语言使用指南.md)
-- [从零到一，掌握多语言互调](../Py/从零到一，掌握多语言互调.md)
-- [API Hub for Go 从零到一掌握多语言互调](../Go/API%20Hub%20for%20Go%20从零到一掌握多语言互调.md)
-- [zAPI Rust 使用指南](../rust/zAPI%20Rust%20使用指南.md)
-- [API Hub Java 使用指南](../java/API%20Hub%20Java%20使用指南.md)
-- [API Hub Tool for C# — 完整使用指南](../C%23/API%20Hub%20Tool%20for%20C%23%20—%20完整使用指南.md)
-- [Node.js 跨语言调用方案选型：为什么我们选择 Python 网关而非 npm 原生包](../node/Node.js%20跨语言调用方案选型：为什么我们选择%20Python%20网关而非%20npm%20原生包.md)
-- [老哥别卷了,你的 VB.NET 代码今天开始全栈通杀](../VB.NET/老哥别卷了,%20你的%20VB.NET%20代码今天开始全栈通杀.md)
-- [浏览器调用 C++ 的三种方案对比：为什么我们选择了 zAPI 网关](../Py/web/浏览器调用%20C++%20的三种方案对比：为什么我们选择了%20zAPI%20网关.md)
-- [js_api.py 使用指南](../Py/web/js_api.py%20使用指南.md)
+| 问题 | 可能原因 | 解决方案 |
+|------|----------|----------|
+| 动态库加载失败 | DLL/so 不在搜索路径 | 将动态库放至可执行文件目录或系统 `PATH`。 |
+| `API_Prepare_Done` 返回 0 | 端口/IPC 名称被占用或地址格式错误 | 检查控制台错误信息，更换地址。 |
+| 回调未触发 | 应用名或 API 名大小写不一致 | 确保客户端调用名称完全匹配（区分大小写）。 |
+| 内存泄漏 | 未释放句柄 | 确保每个 `Create` 都有对应 `Free`，`API_Call` 返回的句柄必须释放。 |
+| 回调中调用 `API_Call` 死循环 | 无限递归 | 在回调中添加递归深度限制或避免循环调用。 |
+| 同步回调不执行 | 未调用 `API.Sync` | 在主循环或定时器中定期调用 `API.Sync`。 |
+| 多线程写冲突 | 同一 `TDataHnd` 并发写入 | 使用锁或不同句柄。 |
+| 乱码 | 字符串不是 UTF‑8 | 确保所有字符串参数使用 `UTF8Encode` 转换。 |
 
 ---
 
-**更新摘要**：
+## 9. 附录：函数速查表
 
-| 项目 | 内容 |
+### 9.1 底层 `import` 函数（带 `external`）
+
+| 函数 | 用途 |
 |------|------|
-| **更新日期** | 2026-08-14 |
-| **新增接口** | `API_UnReg`（5.7 节）、`API_SetOption`（8.3 节） |
-| **更新内容** | 1. 第 5 章新增 5.7 节，详细说明 `API_UnReg` 的功能、参数、返回值、网络广播机制和传播延迟<br>2. 第 8 章新增 8.3 节，详细说明 `API_SetOption` 的所有选项（包括 password、Wait_Connection_ReadyOk 等关键选项）<br>3. 附录 A 新增两个函数，并标记为新增<br>4. 目录新增 5.7 和 8.3 章节链接<br>5. 文档末尾新增更新日志表格 |
+| `API_Create_DataHnd` | 创建数据句柄 |
+| `API_Free_DataHnd` | 释放数据句柄 |
+| `API_GetBuffer` | 获取内部缓冲区指针 |
+| `API_WriteBuffer` | 写入原始字节 |
+| `API_ReadBuffer` | 读取原始字节 |
+| `API_GetPos` / `API_SetPos` | 读写位置 |
+| `API_GetSize` / `API_SetSize` | 读写大小 |
+| `API_Create_APPHnd` | 创建应用句柄 |
+| `API_Free_APPHnd` | 释放应用句柄 |
+| `API_Reg_Call` | 注册 Call（cdecl 函数） |
+| `API_Reg_Notify` | 注册 Notify（cdecl 函数） |
+| `API_UnReg` | 动态注销 API |
+| `API_Local_APP_Call` | 本地同步调用 |
+| `API_Local_APP_Notify` | 本地通知 |
+| `API_Reset_Prepare` | 重置网络准备 |
+| `API_Prepare_Service` | 准备服务监听 |
+| `API_Prepare_Client` | 准备客户端连接 |
+| `API_Prepare_Done` | 启动网络框架 |
+| `API_Exit_MainThread` | 停止事件循环 |
+| `API_Call` | 远程同步调用 |
+| `API_Notify` | 远程通知 |
+| `API_SetOption` | 运行时配置 |
+| `API_shutdown` | 关闭框架 |
+
+### 9.2 Pascal 辅助函数（不带 `external`）
+
+| 函数 | 用途 |
+|------|------|
+| `API_Create_DataHnd2` | UTF‑8 版本创建句柄 |
+| `API_GetBuffer2` | 带偏移的缓冲区指针 |
+| `API_WriteInt8` … `API_WriteDouble` | 原子写入 |
+| `API_ReadInt8` … `API_ReadDouble` | 原子读取 |
+| `API_WriteString` / `API_ReadString` | UTF‑8 字符串读写 |
+| `API_Create_APPHnd2` | UTF‑8 创建应用 |
+| `API_Reg_Call2` / `API_Reg_Notify2` | UTF‑8 注册（函数指针） |
+| `API_Reg_Call_M` / `API_Reg_Notify_M` | 注册对象方法（非同步） |
+| `API_Reg_Sync_Call_M` / `API_Reg_Sync_Notify_M` | 注册对象方法（同步） |
+| `API_UnReg2` | UTF‑8 注销 |
+| `API_Prepare_Service2` / `API_Prepare_Client2` | UTF‑8 网络准备 |
+| `API_Call2` / `API_Notify2` | UTF‑8 远程调用 |
+| `API_SetOption2` | UTF‑8 配置 |
+| `API_Sync` | 处理主线程同步队列 |
+
+### 9.3 RAII 封装 `API` 类方法
+
+| 方法 | 说明 |
+|------|------|
+| `TDataHandle.Create` | 构造 |
+| `TDataHandle.WriteXXX` / `ReadXXX` | 读写 |
+| `TDataHandle.GetPos/SetPos/GetSize/SetSize` | 位置/大小 |
+| `TDataHandle.GetBufferEx` | 零拷贝指针 |
+| `TAppHandle.Create` | 构造应用 |
+| `TAppHandle.RegisterCall/Notify` | 注册 API（函数指针/对象方法） |
+| `TAppHandle.Unregister` | 注销 |
+| `TAppHandle.LocalCall/LocalNotify` | 本地调用 |
+| `API.ResetPrepare`, `PrepareService`, `PrepareClient`, `PrepareDone` | 网络准备 |
+| `API.CallApp`, `NotifyApp` | 远程调用 |
+| `API.SetOption`, `Sync`, `Shutdown` | 配置/同步/关闭 |
+
+---
+
+**本手册涵盖了 `z_api_hubtool_import` 和 `z_api_hubtool_helper` 的全部内容，每个函数均有详细说明和示例。在实际开发中，推荐优先使用 RAII 封装以简化资源管理。如有疑问，请参考项目源码或控制台日志进行诊断。**
