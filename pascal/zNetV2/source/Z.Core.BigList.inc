@@ -1147,7 +1147,6 @@ begin
   FillPtr(@Result, SizeOf(T_), 0);
 end;
 
-{$IFDEF DELPHI}
 {$IFDEF DEBUG}
 
 
@@ -1256,7 +1255,6 @@ begin
   L.Free;
 end;
 {$ENDIF DEBUG}
-{$ENDIF DELPHI}
 
 // *****************************************************************************************************************
 
@@ -2544,7 +2542,6 @@ begin
   FillPtr(@Result, SizeOf(T_), 0);
 end;
 
-{$IFDEF DELPHI}
 {$IFDEF DEBUG}
 
 
@@ -2658,7 +2655,6 @@ begin
   L.Free;
 end;
 {$ENDIF DEBUG}
-{$ENDIF DELPHI}
 
 
 constructor TBig_Object_List<T_>.Create(AutoFreeObject_: Boolean);
