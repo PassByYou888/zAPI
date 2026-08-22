@@ -585,36 +585,40 @@ begin
   Result := StartEx(QueueName, 0, 1000, 1024); { * Use default config }
 end;
 
-function TIPCServer.StartEx(const QueueName: string; ThreadCount: Integer;
-  MaxQueueLength, MaxMsgSize: TSize_t): Boolean;
+type
+  TTempParamData = record
+    server: TIPCServer;
+    QueueName: string;
+    ThreadCount: Integer;
+    MaxQueueLength, MaxMsgSize: TSize_t;
+    Result_: Boolean;
+  end;
+
+  PTempParamData = ^TTempParamData;
+
+procedure Do_StartEx(Sender: TCompute);
 var
+  p: PTempParamData;
   tmpClient: TIPCClient;
   queueExists, isActive: Boolean;
   testReq, testResp: TMem64;
 begin
-  Result := False;
+  p := Sender.UserData;
+  p^.Result_ := False;
 
-  // 1. Stop any existing server instance
-  if FStarted then
-      Stop;
-
-  // 2. If we already hold a valid handle, consider it already started
-  if FHandle <> 0 then
-      Exit(True);
-
-  // 3. Check whether the queue already exists (maybe left by a crashed process)
+  // Check whether the queue already exists (maybe left by a crashed process)
   queueExists := False;
   isActive := False;
   tmpClient := TIPCClient.Create;
   try
-    DoStatus('[IPC] Checking if queue "%s" is already occupied...', [QueueName]);
-    queueExists := tmpClient.Connect(QueueName);
+    DoStatus('[IPC] Checking if queue "%s" is already occupied...', [p^.QueueName]);
+    queueExists := tmpClient.Connect(p^.QueueName);
 
     if queueExists then
       begin
-        DoStatus('[IPC] Found existing queue "%s" (possibly from a previous instance)', [QueueName]);
+        DoStatus('[IPC] Found existing queue "%s" (possibly from a previous instance)', [p^.QueueName]);
 
-        // 3a. Perform an echo test to determine if the queue is still alive
+        // Perform an echo test to determine if the queue is still alive
         testReq := TMem64.Create;
         testResp := TMem64.Create;
         try
@@ -637,41 +641,84 @@ begin
           DisposeObject(testResp);
         end;
 
-        // 3b. If the queue is not active, force‑clean it (zombie removal)
+        // If the queue is not active, force‑clean it (zombie removal)
         if not isActive then
           begin
-            DoStatus('[IPC] Cleaning up the zombie queue "%s" ...', [QueueName]);
-            ipc_cleanup(PAnsiChar(AnsiString(QueueName)));
+            DoStatus('[IPC] Cleaning up the zombie queue "%s" ...', [p^.QueueName]);
+            ipc_cleanup(PAnsiChar(AnsiString(p^.QueueName)));
             TCompute.Sleep(200); // allow system to finalise removal
             DoStatus('[IPC] Queue cleanup completed');
           end
         else
           begin
             // A live service is using the queue – we cannot start
-            DoStatus('[IPC] Cannot start – an active IPC service is already using queue "%s"', [QueueName]);
+            DoStatus('[IPC] Cannot start – an active IPC service is already using queue "%s"', [p^.QueueName]);
             Exit;
           end;
       end
     else
-        DoStatus('[IPC] Queue "%s" does not exist – ready to create a new service', [QueueName]);
+        DoStatus('[IPC] Queue "%s" does not exist – ready to create a new service', [p^.QueueName]);
   finally
       DisposeObject(tmpClient);
   end;
 
-  // 4. Create the new server queue (it should now be absent)
-  DoStatus('[IPC] Creating new IPC service queue "%s" ...', [QueueName]);
-  FHandle := ipc_server_create_ex(PAnsiChar(AnsiString(QueueName)), ThreadCount, MaxQueueLength, MaxMsgSize);
-  if FHandle = 0 then
+  // Create the new server queue (it should now be absent)
+  DoStatus('[IPC] Creating new IPC service queue "%s" ...', [p^.QueueName]);
+  p^.server.FHandle := ipc_server_create_ex(PAnsiChar(AnsiString(p^.QueueName)), p^.ThreadCount, p^.MaxQueueLength, p^.MaxMsgSize);
+  if p^.server.FHandle = 0 then
     begin
       DoStatus('[IPC] Failed to create server – check system logs or queue permissions');
       Exit;
     end;
 
   // 5. Server started successfully – register default echo handler
-  FStarted := True;
-  Result := True;
-  RegisterBinaryHandler('echo', IPC_echo_Handler, nil);
-  DoStatus('[IPC] Server successfully started on queue "%s"', [QueueName]);
+  p^.server.FStarted := True;
+  p^.Result_ := True;
+  p^.server.RegisterBinaryHandler('echo', IPC_echo_Handler, nil);
+  DoStatus('[IPC] Server successfully started on queue "%s"', [p^.QueueName]);
+end;
+
+function TIPCServer.StartEx(const QueueName: string; ThreadCount: Integer; MaxQueueLength, MaxMsgSize: TSize_t): Boolean;
+var
+  tmp: TTempParamData;
+  th_running: Boolean;
+  tk: TTimeTick;
+begin
+  Result := False;
+
+  // Stop any existing server instance
+  if FStarted then
+      Stop;
+
+  // If we already hold a valid handle, consider it already started
+  if FHandle <> 0 then
+      Exit(True);
+
+  tmp.server := Self;
+  tmp.QueueName := QueueName;
+  tmp.ThreadCount := ThreadCount;
+  tmp.MaxQueueLength := MaxQueueLength;
+  tmp.MaxMsgSize := MaxMsgSize;
+  tmp.Result_ := False;
+
+  TCompute.RunC(@tmp, nil, Do_StartEx, @th_running, nil);
+  tk := GetTimeTick() + 5000;
+
+  while th_running do
+    begin
+      if GetTimeTick() > tk then
+        begin
+          // If the worker thread hangs for more than 5 seconds, the Z.Core framework
+          // will forcibly discard it on exit without waiting. However, we must recover
+          // the IPC server: clean up the stale queue and restart a new instance.
+          DoStatus('[IPC] Server appears deadlocked (timeout), entering repair mode. Clearing queue "%s" and restarting...', [QueueName]);
+          ipc_cleanup(PAnsiChar(AnsiString(QueueName)));
+          Result := StartEx(QueueName, ThreadCount, MaxQueueLength, MaxMsgSize);
+          Exit;
+        end;
+      TCompute.Sleep(10);
+    end;
+  Result := tmp.Result_;
 end;
 
 procedure TIPCServer.Stop;
