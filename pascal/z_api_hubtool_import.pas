@@ -1567,7 +1567,7 @@ begin
   begin
     Wait_Signal__ := True;
     SyncQueue__.Push(TSynchronize_Data___.Init(OnSync, @Wait_Signal__));
-    while Wait_Signal__ do ;  // 忙等（谨慎使用）
+    while Wait_Signal__ do TCore_Thread.Sleep(1);
   end;
 end;
 
