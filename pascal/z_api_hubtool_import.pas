@@ -1,902 +1,926 @@
 ﻿(*
-2026-08-17 11:02
-update by.精灵 qq289161766
-unit z_api_hubtool_import 修改一处编译开关（第229行）：
+════════════════════════════════════════════════════════════════════════════════
+  z_api_hubtool_import – Pascal 核心绑定单元（所有语言绑定的权威参考）
 
-{$IFDEF MSWINDOWS}
-const
-  {$IF Defined(CPU64) or Defined(CPUX64)}
-    libapi_hub = 'z_api_hub64.dll';   // 64‑bit Windows
-  {$ELSE}
-    libapi_hub = 'z_api_hub32.dll';   // 32‑bit Windows
-  {$ENDIF}
-{$ELSE}
-  {$IFDEF DARWIN}
-    const
-      libapi_hub = 'libz_api_hub.dylib';   // macOS
-  {$ELSE}
-    // Linux, BSD, and other ELF‑based systems
-    const
-      libapi_hub = 'libz_api_hub.so';
-  {$ENDIF}
-{$ENDIF}
+  版本: 2.0 (UTF‑8 + #0 字符串协议)
+  更新: 2026-08-17
+
+  ═══════════════════════════════════════════════════════════════════════════════
+  设计哲学总览（AI 必读）
+  ═══════════════════════════════════════════════════════════════════════════════
+
+  1. 数据协议 — 字符串强制 UTF‑8 + 空终止符 (#0)
+     ──────────────────────────────────────────────
+     • 所有 PAnsiChar 参数（API 名、描述、网络地址、载荷中的字符串）
+       必须使用 UTF‑8 编码，并以 #0 结尾。
+     • 旧版“4 字节长度前缀”规范已废弃，新规范与 C ABI 完全对齐。
+     • 跨语言绑定时，字符串读写必须遵循“逐字节扫描直到 #0”的规则。
+
+  2. 线程模型与回调上下文
+     ──────────────────────────
+     • 所有导出函数（external）均为线程安全，可并发调用。
+     • 回调函数（TAPI_Call / TAPI_Notify）运行在 C 线程池中（非主线程）。
+     • 在回调中：
+         ✅ 可以调用 API_Call / API_Notify（不会死锁，但需防止死循环）。
+         ❌ 不可执行长时间阻塞操作（Sleep、等待同步对象、密集循环），
+            否则将阻塞线程池，导致其他请求超时。
+     • 若回调中需耗时任务，应将其异步提交到应用层工作队列。
+
+  3. 句柄生命周期（强制显式管理）
+     ──────────────────────────────
+     • TDataHnd 和 TAppHnd 由用户显式创建和释放。
+     • API_Call 返回的 TDataHnd 永远非 nil，但可能大小为 0，
+       调用者必须始终释放它（即使大小为 0）。
+     • 回调传入的 Input/Output 句柄由库管理，回调内不得释放。
+
+  4. 网络部署模式
+     ────────────────
+     • 使用 API_Prepare_Service 和 API_Prepare_Client 准备网络端点。
+     • API_Prepare_Done 阻塞启动，可通过 API_SetOption 控制是否等待
+       客户端就绪（Wait_Connection_ReadyOk）。
+     • 支持 TCP（跨机）和 IPC（同机，低延迟）两种地址格式。
+     • 自动服务发现、负载均衡、断线重连、NAT 穿透。
+
+  5. 动态 API 注销（热更新支持）
+     ──────────────────────────────
+     • API_UnReg 立即从本地注册表移除 API，并触发网络广播（约 3 秒传播）。
+     • 在此期间，远程请求可能仍会到达，需在应用层做版本容忍处理。
+
+  6. 配置文件
+     ──────────
+     • 首次运行生成 <可执行文件名>.api-tool.ini，可调优线程池、超时、日志。
+
+  7. 跨语言绑定映射规则（AI 翻译指南）
+     ──────────────────────────────────────
+     • 每个 external 函数对应目标语言的 FFI 声明（如 Python ctypes、C# DllImport）。
+     • Pascal 辅助函数（不带 external）是对原始 C API 的语法糖，
+       其他语言应直接调用对应的 C 函数，并自行实现等效的类型转换和错误检查。
+     • 字符串辅助（API_WriteString / API_ReadString）封装了 UTF‑8 编码
+       和 #0 终止逻辑，其他语言应使用其标准库的等效功能。
+
+  8. 错误诊断
+     ──────────
+     • 库会自动将详细日志（连接状态、注册信息、错误原因）打印到控制台。
+     • 可通过 .ini 文件控制日志级别和输出目标。
+
+  ═══════════════════════════════════════════════════════════════════════════════
+  作者：老张 (qq600585), 友情维护: 精灵 (qq289161766), 高勇 (qq120180714)
+  许可：MIT License – 自由使用、修改、分发，含商业用途。
+════════════════════════════════════════════════════════════════════════════════
 *)
-{*******************************************************************************
-  ██████  ██████  ██    ██  █████  ██████  ██ ██   ██
-  ██   ██ ██   ██ ██    ██ ██   ██ ██   ██ ██ ██   ██
-  ██████  ██████  ██    ██ ███████ ██████  ██ ███████
-  ██   ██ ██   ██ ██    ██ ██   ██ ██   ██ ██ ██   ██
-  ██   ██ ██   ██  ██████  ██   ██ ██   ██ ██ ██   ██
-
-  z_api_hubtool_import – Core Pascal Binding (Master Reference)
-
-  ═══════════════════════════════════════════════════════════════════════════════
-  Purpose
-  ═══════════════════════════════════════════════════════════════════════════════
-  This unit provides Pascal bindings to the API Hub dynamic library
-  (z_api_hub64.dll / .so / .dylib). It serves as the "master reference" for
-  all other language bindings (C++, Python, Go, Java, Rust, C#, etc.) –
-  every binding adheres to the semantics defined here.
-
-  With this unit you can:
-    • Expose any Pascal function as a cross‑language remote API (Call or Notify)
-    • Transparently call services written in C++/Python/Go/Java/Rust/C#/Node.js
-    • Perform high‑performance RPC within a process, between processes (IPC),
-      or across machines (TCP)
-    • Leverage automatic service discovery, load balancing, reconnection,
-      and NAT traversal
-
-  ═══════════════════════════════════════════════════════════════════════════════
-  Design Philosophy – "Define Once, Use Everywhere"
-  ═══════════════════════════════════════════════════════════════════════════════
-  All language bindings share exactly the same C ABI and binary data format.
-  Thus, an API registered in Pascal can be called from Python, and a Rust
-  service can be consumed by C#. There is no "first‑class" vs "second‑class"
-  language – all are equal.
-
-  This unit is the contract; any implementation that follows this contract
-  is fully interoperable.
-
-  ═══════════════════════════════════════════════════════════════════════════════
-  Core Concepts (Must Read)
-  ═══════════════════════════════════════════════════════════════════════════════
-  • TDataHnd   : Data handle – a container holding an API name and a binary
-                 payload. Used for input parameters and output results.
-                 Must be explicitly created and freed.
-  • TAppHnd    : Application handle – represents a logical application that
-                 can register multiple APIs. The application name must be
-                 unique across the network (case‑sensitive).
-  • Call       : Request‑response mode. The client blocks until the server
-                 returns a result.
-  • Notify     : One‑way notification mode. The client sends and returns
-                 immediately without waiting for a response.
-  • Callback   : A TAPI_Call / TAPI_Notify function registered by the server,
-                 invoked by the library in background thread‑pool threads.
-
-  ═══════════════════════════════════════════════════════════════════════════════
-  Threading Model & Callback Constraints (⚠️ CRITICAL)
-  ═══════════════════════════════════════════════════════════════════════════════
-  1. All exported functions (except a few deprecated logging functions) are
-     **fully thread‑safe** and may be called concurrently from any number of
-     threads.
-
-  2. Callbacks (TAPI_Call / TAPI_Notify) are executed in the library's
-     internal thread pool.
-     ⚠️ Therefore, inside a callback you MUST:
-        • NOT perform long‑blocking operations (Sleep, waiting on events,
-          heavy loops, etc.)
-        • NOT call API_Call or API_Notify – this will cause deadlocks
-        • NOT directly access UI components (use TThread.Synchronize or
-          other synchronization)
-        • Offload heavy work or remote calls to separate worker threads
-          and return quickly
-
-  3. Execution order: concurrent calls may be load‑balanced to different
-     instances – order is not guaranteed. If you need strict ordering,
-     implement your own coordination (e.g., sequence numbers or single‑thread
-     dispatching).
-
-  ═══════════════════════════════════════════════════════════════════════════════
-  String Encoding – UTF‑8 is Mandatory
-  ═══════════════════════════════════════════════════════════════════════════════
-  All PAnsiChar parameters (API names, descriptions, network addresses, etc.)
-  MUST be UTF‑8 encoded and null‑terminated (ending with #0).
-  Do NOT use the system ANSI code page (e.g., CP_ACP on Windows). This library
-  always processes byte streams as UTF‑8, regardless of platform.
-
-  In Delphi, use UTF8String or convert with UTF8Encode before passing.
-
-  ═══════════════════════════════════════════════════════════════════════════════
-  Typical Usage Flow
-  ═══════════════════════════════════════════════════════════════════════════════
-  1. Create an application handle (API_Create_APPHnd)
-  2. Register API callbacks (API_Reg_Call / API_Reg_Notify)
-  3. Prepare the network (API_Reset_Prepare → API_Prepare_Service /
-     API_Prepare_Client)
-  4. Start the framework (API_Prepare_Done) – blocks until ready
-  5. During runtime, call remote APIs (API_Call / API_Notify)
-  6. On exit: API_Exit_MainThread → API_shutdown (or rely on finalization)
-
-  ═══════════════════════════════════════════════════════════════════════════════
-  Resource Management – Handle Lifecycle
-  ═══════════════════════════════════════════════════════════════════════════════
-  • Every TDataHnd created with API_Create_DataHnd MUST be freed with
-    API_Free_DataHnd.
-  • Every TAppHnd created with API_Create_APPHnd MUST be freed with
-    API_Free_APPHnd.
-  • The TDataHnd returned by API_Call is never nil, but its size may be 0
-    on timeout/failure – you MUST still free it.
-  • The Input/Output handles passed to callbacks are managed by the library;
-    do NOT free them inside the callback.
-
-  ═══════════════════════════════════════════════════════════════════════════════
-  Configuration File
-  ═══════════════════════════════════════════════════════════════════════════════
-  On first run, the library creates <executable>.api-tool.ini. You can adjust
-  thread pool size, timeouts, logging behaviour, etc. without recompiling.
-
-  ═══════════════════════════════════════════════════════════════════════════════
-  Error Diagnosis
-  ═══════════════════════════════════════════════════════════════════════════════
-  The library prints detailed logs (connection status, registration info,
-  error causes) to stdout/stderr. Logging verbosity can be controlled via the
-  .ini file.
-
-  ═══════════════════════════════════════════════════════════════════════════════
-  License
-  ═══════════════════════════════════════════════════════════════════════════════
-  MIT License – free to use, modify, and distribute, including commercial use.
-
-  ═══════════════════════════════════════════════════════════════════════════════
-  This file is the "Absolute Correct Core" – all other language bindings
-  are derived from it. Any AI or human developer reading this file will
-  fully understand the semantics and constraints of the API Hub framework.
-  ═══════════════════════════════════════════════════════════════════════════════
-*******************************************************************************}
 
 unit z_api_hubtool_import;
 
 {$ifdef FPC}
   {$mode delphi}{$H+}
+  {$MODESWITCH AdvancedRecords}
+  {$MODESWITCH NestedProcVars}
+  {$MODESWITCH NESTEDCOMMENTS}
   {$CODEPAGE UTF8}
 {$endif}
 
 {$R-}
+{$H+}
 
 interface
 
-uses SysUtils;
+uses SysUtils, Classes;
 
 {===============================================================================
-  1. Type Definitions
+  1.  类型定义
 ===============================================================================}
 
 type
   {****************************************************************************
     TDataHnd
-    Opaque pointer to an internal binary buffer.
-    Purpose: carries an API name + payload data for input and output.
-    Create: API_Create_DataHnd
-    Free:   API_Free_DataHnd
-    Thread safety:
-      - Read operations (API_GetBuffer, API_GetPos, API_GetSize) are safe
-        as long as the handle is not being written concurrently.
-      - Write operations (API_WriteBuffer, API_SetPos, API_SetSize) must be
-        serialized for the same handle.
-      - Different handles can be used concurrently without restriction.
+    不透明指针，指向内部二进制缓冲区。
+    用途：存储“API 名称 + 载荷数据”，作为输入参数和输出结果的容器。
+    创建：API_Create_DataHnd（external 导入）
+    释放：API_Free_DataHnd（external 导入）
+    线程安全：读操作（GetBuffer/GetPos/GetSize）可并发；写操作
+              （WriteBuffer/SetPos/SetSize）对同一句柄需串行。
+    AI 翻译提示：其他语言应封装为 RAII 类（如 C++ unique_ptr、Python with 语句）。
   ****************************************************************************}
   TDataHnd = Pointer;
 
   {****************************************************************************
     TAppHnd
-    Opaque pointer to an application context.
-    An application groups a set of APIs under a unique name (case‑sensitive).
-    Clients route requests by "application name + API name".
-    Create: API_Create_APPHnd
-    Free:   API_Free_APPHnd
-    Thread safe: the handle itself is thread‑safe; registration and local
-    calls can be performed concurrently from multiple threads.
+    不透明指针，指向应用上下文。
+    用途：将一组 API 注册到一个逻辑应用下，应用名在网络中唯一（区分大小写）。
+    创建：API_Create_APPHnd（external 导入）
+    释放：API_Free_APPHnd（external 导入）
+    线程安全：句柄本身线程安全，注册和本地调用可并发执行。
+    AI 翻译提示：其他语言应封装为生命周期管理的对象。
   ****************************************************************************}
   TAppHnd = Pointer;
 
   {****************************************************************************
     TAPI_Call
-    Callback type for request‑response (Call) APIs.
-    Parameters:
-      Trigger : user pointer supplied at registration, passed back as‑is.
-      Input   : TDataHnd containing the serialized request (read‑only, do not free).
-      Output  : TDataHnd for writing the response (write‑only, do not free).
-    Calling convention: cdecl.
-    Execution context: background thread‑pool thread (not the main thread).
-    ⚠️ WARNINGS:
-      • Do NOT call API_Call or API_Notify inside this callback (deadlock risk).
-      • Do NOT perform long‑blocking operations (Sleep, waiting, heavy loops).
-      • Do NOT directly access UI components (must synchronize to main thread).
-      • Offload heavy tasks to separate worker threads and return quickly.
-    Example:
-      procedure MyAdd(Trigger: Pointer; Input, Output: Pointer); cdecl;
-      var
-        a, b, sum: Integer;
-      begin
-        API_ReadBuffer(Input, @a, SizeOf(a));
-        API_ReadBuffer(Input, @b, SizeOf(b));
-        sum := a + b;
-        API_WriteBuffer(Output, @sum, SizeOf(sum));
-      end;
+    请求-响应（Call）回调函数类型。
+    此类型必须为 cdecl 并导出，因为它将被 C 动态库直接调用。
+    参数：
+      Trigger : Pointer – 注册时传入的用户数据，回调时原样传回。
+      Input   : TDataHnd – 只读，包含请求载荷（不要释放）。
+      Output  : TDataHnd – 只写，用于写入响应载荷（不要释放）。
+    调用约定：cdecl（与 C ABI 一致）。
+    执行上下文：后台 C 线程池（非主线程）。
+    ⚠️ 重要：
+      • 可在此回调中调用 API_Call / API_Notify（不会死锁），
+        但需注意避免无限递归或死循环。
+      • 不可执行长时间阻塞操作（Sleep、等待事件、大循环），
+        否则将阻塞线程池，降低系统吞吐。
+      • 不可直接访问 UI（需通过 TThread.Synchronize 等同步到主线程）。
+      • 耗时任务应异步提交到工作队列。
+    AI 翻译提示：其他语言应使用 C 函数指针或委托（delegate），
+                  并注意调用约定的匹配（必须为 cdecl 或等效）。
+    设计意图：此类型专为 FFI 导出而设计，确保回调地址可被 C 层正确调用。
   ****************************************************************************}
-  TAPI_Call = procedure(Trigger: Pointer; Input: Pointer; Output: TDataHnd); cdecl;
+  TAPI_Call = procedure(Trigger: Pointer; Input: TDataHnd; Output: TDataHnd); cdecl; // 此回调必须导出（供 C 层调用）
+
+  {****************************************************************************
+    TAPI_Call_M
+    对象方法版本的回调类型，用于 Pascal 内部方便注册对象方法。
+    此类型不是 C ABI 兼容，不用于跨语言导出。
+    参数同 TAPI_Call，但无 Trigger 参数（用户数据在注册时通过对象实例隐含传递）。
+    设计意图：为 Pascal 开发者提供更自然的对象方法注册方式，
+              内部通过桥接函数（Do_Internal_Call__）将对象方法适配为 cdecl 回调。
+    AI 翻译提示：其他语言无需实现此类型，只需提供对应语言的函数/委托即可。
+  ****************************************************************************}
+  TAPI_Call_M = procedure(Input: TDataHnd; Output: TDataHnd) of object;
 
   {****************************************************************************
     TAPI_Notify
-    Callback type for one‑way notification (Notify) APIs.
-    Parameters:
-      Trigger : user pointer supplied at registration.
-      Input   : TDataHnd containing the notification payload (read‑only, do not free).
-    No output, no return value.
-    Calling convention: cdecl.
-    Execution context: background thread‑pool thread.
-    ⚠️ Same warnings as TAPI_Call: do NOT call API_Call/API_Notify, do NOT block.
-    Example:
-      procedure MyLogger(Trigger: Pointer; Input: Pointer); cdecl;
-      var
-        msg: PAnsiChar;
-      begin
-        msg := API_GetBuffer(Input);
-        WriteLn('Notify: ', msg);
-      end;
+    单向通知（Notify）回调函数类型。
+    此类型必须为 cdecl 并导出，因为它将被 C 动态库直接调用。
+    参数：
+      Trigger : Pointer – 注册时传入的用户数据。
+      Input   : TDataHnd – 只读，包含通知载荷（不要释放）。
+    无返回值，无输出。
+    调用约定：cdecl。
+    执行上下文：后台 C 线程池（非主线程）。
+    ⚠️ 约束同 TAPI_Call。
+    AI 翻译提示：其他语言应使用无返回值的 C 函数指针。
   ****************************************************************************}
-  TAPI_Notify = procedure(Trigger: Pointer; Input: TDataHnd); cdecl;
+  TAPI_Notify = procedure(Trigger: Pointer; Input: TDataHnd); cdecl; // 此回调必须导出（供 C 层调用）
+
+  {****************************************************************************
+    TAPI_Notify_M
+    对象方法版本的 Notify 回调，仅供 Pascal 内部使用，不跨语言导出。
+    设计意图同 TAPI_Call_M。
+  ****************************************************************************}
+  TAPI_Notify_M = procedure(Input: TDataHnd) of object;
+
 
 {===============================================================================
-  2. Dynamic Library Name (Platform Adaptive)
+  2.  动态库名称（平台自适应）
 ===============================================================================}
 
 {$IFDEF MSWINDOWS}
 const
   {$IF Defined(CPU64) or Defined(CPUX64)}
-    libapi_hub = 'z_api_hub64.dll';   // 64-bit Windows
+    libapi_hub = 'z_api_hub64.dll';   // 64‑位 Windows
   {$ELSE}
-  libapi_hub = 'z_api_hub32.dll';   // 32-bit Windows
+  libapi_hub = 'z_api_hub32.dll';   // 32‑位 Windows
   {$ENDIF}
 {$ELSE}
   {$IFDEF DARWIN}
     const
       libapi_hub = 'libz_api_hub.dylib';   // macOS
   {$ELSE}
-    // Linux, BSD, and other ELF‑based systems
+    // Linux, BSD 及其他 ELF 系统
     const
       libapi_hub = 'libz_api_hub.so';
   {$ENDIF}
 {$ENDIF}
 
+
 {===============================================================================
-  3. Data Handle Operations
+  3.  数据句柄操作
+  本节包含 external 导入的 C 函数和 Pascal 辅助函数。
+  AI 注意：所有带 external 的函数均需在其他语言中 FFI 导入；
+            不带 external 的为 Pascal 便利封装，其他语言应自行实现等效逻辑。
 ===============================================================================}
 
   {****************************************************************************
-    3.1 API_Create_DataHnd
-    Creates a data handle associated with the given API name.
-    Parameters:
-      APIName : UTF‑8 encoded API name (null‑terminated).
-    Returns:
-      New TDataHnd. Never returns nil under normal conditions.
-    Notes:
-      • The API name is copied internally; you may free the input string
-        immediately after the call.
-      • The initial payload is empty (size = 0).
-      • Must be freed with API_Free_DataHnd.
-    Thread safe: Yes.
-    Example:
+    API_Create_DataHnd
+    【external 导入】从动态库导入。
+    功能：创建数据句柄，绑定 API 名称。
+    参数：
+      APIName : PAnsiChar – UTF‑8 编码、以 #0 结尾的 API 名称。
+    返回：新 TDataHnd，正常情况永不返回 nil。
+    设计意图：句柄创建后，API 名称固定，后续所有读写只影响载荷。
+    关联：API_Free_DataHnd（external 导入）
+    注意事项：名称被内部复制，调用后可立即释放原字符串。
+    线程安全：是。
+    AI 翻译提示：其他语言应直接 FFI 调用同名 C 函数，
+                  并确保传入的字符串为 UTF‑8 + #0。
+    示例：
       var d: TDataHnd;
-      begin
-        d := API_Create_DataHnd('add');
-        API_WriteBuffer(d, @a, SizeOf(a));
-        ...
-        API_Free_DataHnd(d);
-      end;
+      d := API_Create_DataHnd('add');
+      ...
+      API_Free_DataHnd(d);
   ****************************************************************************}
 function API_Create_DataHnd(APIName: pansichar): TDataHnd; cdecl; external libapi_hub name 'API_Create_DataHnd';
-function API_Create_DataHnd2(APIName: string): TDataHnd;   // convenience overload, auto UTF‑8
 
   {****************************************************************************
-    3.2 API_Free_DataHnd
-    Destroys a data handle and releases all associated memory.
-    Parameters:
-      Hnd : handle to free (passing nil is harmless).
-    Thread safe: Yes, but the handle must not be used after being freed.
+    API_Create_DataHnd2
+    【Pascal 辅助函数】自动将 Pascal string 转为 UTF‑8 并调用 API_Create_DataHnd。
+    仅供 Pascal 便利，其他语言无需实现。
+  ****************************************************************************}
+function API_Create_DataHnd2(APIName: string): TDataHnd;
+
+  {****************************************************************************
+    API_Free_DataHnd
+    【external 导入】销毁数据句柄，释放内存。
+    参数：
+      Hnd : TDataHnd – 要释放的句柄，传 nil 无操作。
+    线程安全：是，但释放后句柄不可再用。
+    AI 翻译提示：其他语言应确保每个 Create 都有对应的 Free（或 RAII 自动释放）。
   ****************************************************************************}
 procedure API_Free_DataHnd(Hnd: TDataHnd); cdecl; external libapi_hub name 'API_Free_DataHnd';
 
   {****************************************************************************
-    3.3 API_GetBuffer
-    Returns a direct pointer to the internal buffer (zero‑copy access).
-    Parameters:
-      Hnd : data handle.
-    Returns:
-      Pointer to the internal buffer, or nil if the handle has no data.
-    Notes:
-      • The pointer is valid until the handle is freed or the buffer is resized.
-      • You may read and write, but must NOT exceed the size returned by
-        API_GetSize.
-      • Do NOT free this pointer.
-    Thread safe: read‑only access is safe; concurrent writes must be serialized.
-    Example:
-      var p: PByte; sz: Int64;
-      begin
-        sz := API_GetSize(h);
-        p := API_GetBuffer(h);
-        // process p[0..sz-1]
-      end;
+    API_GetBuffer
+    【external 导入】返回内部缓冲区的直接指针（零拷贝访问）。
+    参数：
+      Hnd : TDataHnd – 数据句柄。
+    返回：Pointer – 缓冲区起始地址，若无数据则返回 nil。
+    设计意图：高性能场景下直接读写原始内存，避免复制。
+    注意事项：
+      • 指针有效期至句柄释放或调整大小。
+      • 读写范围不得超过 API_GetSize 返回的大小。
+      • 不要释放此指针。
+    线程安全：读安全，写需串行化。
+    AI 翻译提示：其他语言可通过 FFI 获取指针，然后用 Unsafe 操作访问。
   ****************************************************************************}
 function API_GetBuffer(Hnd: TDataHnd): Pointer; cdecl; external libapi_hub name 'API_GetBuffer';
-function API_GetBuffer2(Hnd: TDataHnd; Offset: nativeint): Pointer;   // returns pointer with offset
 
   {****************************************************************************
-    3.4 API_WriteBuffer
-    Writes binary data into the handle's buffer at the current position.
-    The position advances, and the buffer is automatically enlarged if needed.
-    Parameters:
-      Hnd  : data handle.
-      Buff : source data pointer.
-      Size : number of bytes to write.
-    Returns:
-      Number of bytes actually written (normally equals Size).
-    Thread safe: write operations on the same handle must be serialized;
-      different handles can be written concurrently.
-    Example:
-      var i: Integer;
-      begin
-        i := 12345;
-        API_WriteBuffer(d, @i, SizeOf(i));
-      end;
+    API_GetBuffer2
+    【Pascal 辅助函数】返回带偏移的缓冲区指针，便于索引访问。
+    基于 API_GetBuffer 实现，仅供 Pascal 便利。
+  ****************************************************************************}
+function API_GetBuffer2(Hnd: TDataHnd; Offset: nativeint): Pointer;
+
+  {****************************************************************************
+    API_WriteBuffer
+    【external 导入】向句柄缓冲区写入原始字节（从当前位置开始）。
+    参数：
+      Hnd  : TDataHnd – 数据句柄。
+      Buff : Pointer – 源数据指针。
+      Size : int64   – 要写入的字节数。
+    返回：实际写入字节数（通常等于 Size）。
+    设计意图：底层字节写入，所有高级写入函数（如 WriteInt32）均基于此。
+    注意事项：缓冲区自动扩容，位置自动后移。
+    线程安全：同一句柄的写操作需串行化。
+    AI 翻译提示：其他语言应直接调用同名 C 函数，传递字节数组指针。
   ****************************************************************************}
 function API_WriteBuffer(Hnd: TDataHnd; Buff: Pointer; Size: int64): int64; cdecl; external libapi_hub name 'API_WriteBuffer';
 
-// ========================== ATOMIC WRITE HELPERS ==========================
-// All write helpers return True if the full number of bytes was written.
-// They use little‑endian byte order and operate at the current read/write position.
-
-{****************************************************************************
-  3.4a API_WriteInt8
-  Writes a signed 8‑bit integer (1 byte) to the buffer at the current position.
-  Parameters:
-    Hnd   : data handle.
-    Value : signed 8‑bit value.
-  Returns:
-    True if the byte was successfully written.
-  Thread safe: write operations on the same handle must be serialized.
-  Example:
-    if API_WriteInt8(d, 127) then ...
-****************************************************************************}
-function API_WriteInt8(Hnd: TDataHnd; Value: int8): boolean;
-
-{****************************************************************************
-  3.4b API_WriteUInt8
-  Writes an unsigned 8‑bit integer (1 byte) to the buffer.
-****************************************************************************}
-function API_WriteUInt8(Hnd: TDataHnd; Value: uint8): boolean;
-
-{****************************************************************************
-  3.4c API_WriteInt16
-  Writes a signed 16‑bit integer (2 bytes, little‑endian) to the buffer.
-****************************************************************************}
-function API_WriteInt16(Hnd: TDataHnd; Value: int16): boolean;
-
-{****************************************************************************
-  3.4d API_WriteUInt16
-  Writes an unsigned 16‑bit integer (2 bytes, little‑endian) to the buffer.
-****************************************************************************}
-function API_WriteUInt16(Hnd: TDataHnd; Value: uint16): boolean;
-
-{****************************************************************************
-  3.4e API_WriteInt32
-  Writes a signed 32‑bit integer (4 bytes, little‑endian) to the buffer.
-****************************************************************************}
-function API_WriteInt32(Hnd: TDataHnd; Value: int32): boolean;
-
-{****************************************************************************
-  3.4f API_WriteUInt32
-  Writes an unsigned 32‑bit integer (4 bytes, little‑endian) to the buffer.
-****************************************************************************}
-function API_WriteUInt32(Hnd: TDataHnd; Value: uint32): boolean;
-
-{****************************************************************************
-  3.4g API_WriteInt64
-  Writes a signed 64‑bit integer (8 bytes, little‑endian) to the buffer.
-****************************************************************************}
-function API_WriteInt64(Hnd: TDataHnd; Value: int64): boolean;
-
-{****************************************************************************
-  3.4h API_WriteUInt64
-  Writes an unsigned 64‑bit integer (8 bytes, little‑endian) to the buffer.
-****************************************************************************}
-function API_WriteUInt64(Hnd: TDataHnd; Value: uint64): boolean;
-
-{****************************************************************************
-  3.4i API_WriteSingle
-  Writes a 32‑bit IEEE 754 single‑precision float (4 bytes, little‑endian).
-****************************************************************************}
-function API_WriteSingle(Hnd: TDataHnd; Value: single): boolean;
-
-{****************************************************************************
-  3.4j API_WriteDouble
-  Writes a 64‑bit IEEE 754 double‑precision float (8 bytes, little‑endian).
-****************************************************************************}
-function API_WriteDouble(Hnd: TDataHnd; Value: double): boolean;
-
-{****************************************************************************
-  3.4k API_WriteString
-  Writes a UTF‑8 encoded Pascal string, followed by a null terminator (#0).
-  This matches the standard "UTF‑8 + #0" format used across all languages.
-  Parameters:
-    Hnd   : data handle.
-    Value : Pascal string (will be encoded as UTF‑8 internally).
-  Returns:
-    True if the string (including the trailing null) was fully written.
-  Thread safe: write operations on the same handle must be serialized.
-  Example:
-    if API_WriteString(d, 'Hello') then ...
-  Note: The position is advanced by Length(UTF8String(Value)) + 1 bytes.
-****************************************************************************}
-function API_WriteString(Hnd: TDataHnd; const Value: string): boolean;
-
   {****************************************************************************
-    3.5 API_ReadBuffer
-    Reads binary data from the current position into the caller's buffer.
-    The position advances.
-    Parameters:
-      Hnd  : data handle.
-      Buff : destination buffer pointer.
-      Size : maximum bytes to read.
-    Returns:
-      Number of bytes actually read (may be less than Size if the buffer end
-      is reached).
-    Thread safe: reads and writes on the same handle must not be concurrent;
-      multiple reads can be concurrent.
-    Example:
-      var i: Integer;
-      begin
-        API_SetPos(d, 0);
-        if API_ReadBuffer(d, @i, SizeOf(i)) = SizeOf(i) then ...
-      end;
+    API_ReadBuffer
+    【external 导入】从当前位置读取原始字节到调用者缓冲区。
+    参数：
+      Hnd  : TDataHnd – 数据句柄。
+      Buff : Pointer – 目标缓冲区指针。
+      Size : int64   – 最大读取字节数。
+    返回：实际读取字节数（可能小于 Size，若到达缓冲区尾部）。
+    设计意图：底层字节读取，与 WriteBuffer 对称。
+    线程安全：同一句柄的读与写不可并发；多读可并发。
+    AI 翻译提示：其他语言直接调用同名 C 函数。
   ****************************************************************************}
 function API_ReadBuffer(Hnd: TDataHnd; Buff: Pointer; Size: int64): int64; cdecl; external libapi_hub name 'API_ReadBuffer';
 
-// ========================== ATOMIC READ HELPERS ==========================
-// All read helpers return True if the full number of bytes was read.
-// They use little‑endian byte order and operate at the current read/write position.
+// ---------- 原子写入辅助（Pascal 实现，非 external） ----------
+// 这些函数是对 API_WriteBuffer 的类型安全包装，方便读写基本类型。
+// 所有整数按小端序存储，浮点按 IEEE 754。
+// AI 翻译提示：其他语言应直接使用其标准库的二进制写入函数，注意字节序。
+// 以下每个函数均返回 Boolean 表示是否写入成功。
 
-{****************************************************************************
-  3.5a API_ReadInt8
-  Reads a signed 8‑bit integer (1 byte) from the current position.
-  Parameters:
-    Hnd   : data handle.
-    out Value : the read value (only valid if function returns True).
-  Returns:
-    True if the byte was successfully read.
-  Thread safe: reads on the same handle are safe as long as no concurrent write.
-  Example:
-    var v: Int8;
-    if API_ReadInt8(d, v) then ...
-****************************************************************************}
+  {****************************************************************************
+    API_WriteInt8
+    【Pascal 辅助】写入有符号 8 位整数。
+  ****************************************************************************}
+function API_WriteInt8(Hnd: TDataHnd; Value: int8): boolean;
+  {****************************************************************************
+    API_WriteUInt8
+    【Pascal 辅助】写入无符号 8 位整数。
+  ****************************************************************************}
+function API_WriteUInt8(Hnd: TDataHnd; Value: uint8): boolean;
+  {****************************************************************************
+    API_WriteInt16
+    【Pascal 辅助】写入有符号 16 位整数（小端）。
+  ****************************************************************************}
+function API_WriteInt16(Hnd: TDataHnd; Value: int16): boolean;
+  {****************************************************************************
+    API_WriteUInt16
+    【Pascal 辅助】写入无符号 16 位整数（小端）。
+  ****************************************************************************}
+function API_WriteUInt16(Hnd: TDataHnd; Value: uint16): boolean;
+  {****************************************************************************
+    API_WriteInt32
+    【Pascal 辅助】写入有符号 32 位整数（小端）。
+  ****************************************************************************}
+function API_WriteInt32(Hnd: TDataHnd; Value: int32): boolean;
+  {****************************************************************************
+    API_WriteUInt32
+    【Pascal 辅助】写入无符号 32 位整数（小端）。
+  ****************************************************************************}
+function API_WriteUInt32(Hnd: TDataHnd; Value: uint32): boolean;
+  {****************************************************************************
+    API_WriteInt64
+    【Pascal 辅助】写入有符号 64 位整数（小端）。
+  ****************************************************************************}
+function API_WriteInt64(Hnd: TDataHnd; Value: int64): boolean;
+  {****************************************************************************
+    API_WriteUInt64
+    【Pascal 辅助】写入无符号 64 位整数（小端）。
+  ****************************************************************************}
+function API_WriteUInt64(Hnd: TDataHnd; Value: uint64): boolean;
+  {****************************************************************************
+    API_WriteSingle
+    【Pascal 辅助】写入 32 位浮点数（小端 IEEE 754）。
+  ****************************************************************************}
+function API_WriteSingle(Hnd: TDataHnd; Value: single): boolean;
+  {****************************************************************************
+    API_WriteDouble
+    【Pascal 辅助】写入 64 位浮点数（小端 IEEE 754）。
+  ****************************************************************************}
+function API_WriteDouble(Hnd: TDataHnd; Value: double): boolean;
+
+  {****************************************************************************
+    API_WriteString
+    【Pascal 辅助】写入 Pascal 字符串，自动转换为 UTF‑8 字节，并追加一个 #0 终止符。
+    参数：
+      Hnd   : TDataHnd – 数据句柄。
+      Value : string   – Pascal 字符串（将按 UTF‑8 编码）。
+    返回：Boolean – 写入成功（含终止符）返回 True。
+    设计意图：统一跨语言字符串协议（UTF‑8 + #0）。
+    注意事项：空字符串只写入一个 #0。
+    线程安全：同一句柄写操作需串行。
+    AI 翻译提示：其他语言应写入 UTF‑8 字节序列后显式追加一个 0 字节。
+  ****************************************************************************}
+function API_WriteString(Hnd: TDataHnd; const Value: string): boolean;
+
+// ---------- 原子读取辅助（Pascal 实现，非 external） ----------
+// 这些函数从当前位置读取基本类型，并自动前进位置。
+// 若读取字节数不足，返回 False，输出变量保持原值。
+
+  {****************************************************************************
+    API_ReadInt8 (out 版本)
+    【Pascal 辅助】读取有符号 8 位整数。
+  ****************************************************************************}
 function API_ReadInt8(Hnd: TDataHnd; out Value: int8): boolean; overload;
-
-{****************************************************************************
-  3.5b API_ReadUInt8
-  Reads an unsigned 8‑bit integer (1 byte).
-****************************************************************************}
+  {****************************************************************************
+    API_ReadUInt8 (out 版本)
+    【Pascal 辅助】读取无符号 8 位整数。
+  ****************************************************************************}
 function API_ReadUInt8(Hnd: TDataHnd; out Value: uint8): boolean; overload;
-
-{****************************************************************************
-  3.5c API_ReadInt16
-  Reads a signed 16‑bit integer (2 bytes, little‑endian).
-****************************************************************************}
+  {****************************************************************************
+    API_ReadInt16 (out 版本)
+    【Pascal 辅助】读取有符号 16 位整数（小端）。
+  ****************************************************************************}
 function API_ReadInt16(Hnd: TDataHnd; out Value: int16): boolean; overload;
-
-{****************************************************************************
-  3.5d API_ReadUInt16
-  Reads an unsigned 16‑bit integer (2 bytes, little‑endian).
-****************************************************************************}
+  {****************************************************************************
+    API_ReadUInt16 (out 版本)
+    【Pascal 辅助】读取无符号 16 位整数（小端）。
+  ****************************************************************************}
 function API_ReadUInt16(Hnd: TDataHnd; out Value: uint16): boolean; overload;
-
-{****************************************************************************
-  3.5e API_ReadInt32
-  Reads a signed 32‑bit integer (4 bytes, little‑endian).
-****************************************************************************}
+  {****************************************************************************
+    API_ReadInt32 (out 版本)
+    【Pascal 辅助】读取有符号 32 位整数（小端）。
+  ****************************************************************************}
 function API_ReadInt32(Hnd: TDataHnd; out Value: int32): boolean; overload;
-
-{****************************************************************************
-  3.5f API_ReadUInt32
-  Reads an unsigned 32‑bit integer (4 bytes, little‑endian).
-****************************************************************************}
+  {****************************************************************************
+    API_ReadUInt32 (out 版本)
+    【Pascal 辅助】读取无符号 32 位整数（小端）。
+  ****************************************************************************}
 function API_ReadUInt32(Hnd: TDataHnd; out Value: uint32): boolean; overload;
-
-{****************************************************************************
-  3.5g API_ReadInt64
-  Reads a signed 64‑bit integer (8 bytes, little‑endian).
-****************************************************************************}
+  {****************************************************************************
+    API_ReadInt64 (out 版本)
+    【Pascal 辅助】读取有符号 64 位整数（小端）。
+  ****************************************************************************}
 function API_ReadInt64(Hnd: TDataHnd; out Value: int64): boolean; overload;
-
-{****************************************************************************
-  3.5h API_ReadUInt64
-  Reads an unsigned 64‑bit integer (8 bytes, little‑endian).
-****************************************************************************}
+  {****************************************************************************
+    API_ReadUInt64 (out 版本)
+    【Pascal 辅助】读取无符号 64 位整数（小端）。
+  ****************************************************************************}
 function API_ReadUInt64(Hnd: TDataHnd; out Value: uint64): boolean; overload;
-
-{****************************************************************************
-  3.5i API_ReadSingle
-  Reads a 32‑bit IEEE 754 single‑precision float (4 bytes, little‑endian).
-****************************************************************************}
+  {****************************************************************************
+    API_ReadSingle (out 版本)
+    【Pascal 辅助】读取 32 位浮点数（小端 IEEE 754）。
+  ****************************************************************************}
 function API_ReadSingle(Hnd: TDataHnd; out Value: single): boolean; overload;
-
-{****************************************************************************
-  3.5j API_ReadDouble
-  Reads a 64‑bit IEEE 754 double‑precision float (8 bytes, little‑endian).
-****************************************************************************}
+  {****************************************************************************
+    API_ReadDouble (out 版本)
+    【Pascal 辅助】读取 64 位浮点数（小端 IEEE 754）。
+  ****************************************************************************}
 function API_ReadDouble(Hnd: TDataHnd; out Value: double): boolean; overload;
 
-{****************************************************************************
-  Overload: direct return version for each read function.
-  Returns the value read, or 0 (0.0 for floats) if reading fails.
-****************************************************************************}
+// 直接返回版本（若读取失败则返回 0 或 0.0）
+  {****************************************************************************
+    API_ReadInt8 (直接返回)
+    【Pascal 辅助】读取有符号 8 位整数，失败返回 0。
+  ****************************************************************************}
 function API_ReadInt8(Hnd: TDataHnd): int8; overload;
+  {****************************************************************************
+    API_ReadUInt8 (直接返回)
+    【Pascal 辅助】读取无符号 8 位整数，失败返回 0。
+  ****************************************************************************}
 function API_ReadUInt8(Hnd: TDataHnd): uint8; overload;
+  {****************************************************************************
+    API_ReadInt16 (直接返回)
+    【Pascal 辅助】读取有符号 16 位整数，失败返回 0。
+  ****************************************************************************}
 function API_ReadInt16(Hnd: TDataHnd): int16; overload;
+  {****************************************************************************
+    API_ReadUInt16 (直接返回)
+    【Pascal 辅助】读取无符号 16 位整数，失败返回 0。
+  ****************************************************************************}
 function API_ReadUInt16(Hnd: TDataHnd): uint16; overload;
+  {****************************************************************************
+    API_ReadInt32 (直接返回)
+    【Pascal 辅助】读取有符号 32 位整数，失败返回 0。
+  ****************************************************************************}
 function API_ReadInt32(Hnd: TDataHnd): int32; overload;
+  {****************************************************************************
+    API_ReadUInt32 (直接返回)
+    【Pascal 辅助】读取无符号 32 位整数，失败返回 0。
+  ****************************************************************************}
 function API_ReadUInt32(Hnd: TDataHnd): uint32; overload;
+  {****************************************************************************
+    API_ReadInt64 (直接返回)
+    【Pascal 辅助】读取有符号 64 位整数，失败返回 0。
+  ****************************************************************************}
 function API_ReadInt64(Hnd: TDataHnd): int64; overload;
+  {****************************************************************************
+    API_ReadUInt64 (直接返回)
+    【Pascal 辅助】读取无符号 64 位整数，失败返回 0。
+  ****************************************************************************}
 function API_ReadUInt64(Hnd: TDataHnd): uint64; overload;
+  {****************************************************************************
+    API_ReadSingle (直接返回)
+    【Pascal 辅助】读取 32 位浮点数，失败返回 0.0。
+  ****************************************************************************}
 function API_ReadSingle(Hnd: TDataHnd): single; overload;
+  {****************************************************************************
+    API_ReadDouble (直接返回)
+    【Pascal 辅助】读取 64 位浮点数，失败返回 0.0。
+  ****************************************************************************}
 function API_ReadDouble(Hnd: TDataHnd): double; overload;
 
-{****************************************************************************
-  3.5k API_ReadString
-  Reads a UTF‑8 encoded string terminated by a null byte (#0) from the current
-  position. The read position is advanced past the terminating null.
-  Parameters:
-    Hnd   : data handle.
-    out Value : the decoded Pascal string (empty if no data or invalid UTF‑8).
-  Returns:
-    True if at least one byte was read and a null terminator was found.
-    False if the end of the buffer is reached without a null terminator.
-  Thread safe: reads on the same handle are safe as long as no concurrent write.
-  Example:
-    var s: string;
-    if API_ReadString(d, s) then ...
-  Note: This function reads until a null byte (#0) is encountered. If the buffer
-        contains no null byte within the current size, it returns False and
-        Value is set to empty string. The position is moved to the byte after
-        the null terminator.
-****************************************************************************}
+  {****************************************************************************
+    API_ReadString (out 版本)
+    【Pascal 辅助】从当前位置读取 UTF‑8 字符串，直到遇到 #0 终止符。
+    参数：
+      Hnd   : TDataHnd – 数据句柄。
+      out Value : string – 返回解码后的 Pascal 字符串。
+    返回：Boolean – 成功读取到终止符返回 True，否则 False（Value 置空）。
+    设计意图：与 WriteString 对称，实现跨语言字符串传输。
+    注意事项：位置将移动到终止符之后。若缓冲区无 #0，则返回 False。
+    线程安全：同一句柄读与写不可并发。
+    AI 翻译提示：其他语言应实现“逐个字节扫描直到 0”的读取逻辑。
+  ****************************************************************************}
 function API_ReadString(Hnd: TDataHnd; out Value: string): boolean; overload;
+  {****************************************************************************
+    API_ReadString (直接返回)
+    【Pascal 辅助】读取字符串，失败返回空字符串。
+  ****************************************************************************}
 function API_ReadString(Hnd: TDataHnd): string; overload;
 
   {****************************************************************************
-    3.6 API_GetPos / API_SetPos
-    Gets/Sets the current read/write position (byte offset, 0‑based).
-    If SetPos exceeds the current size, the buffer is extended with zero bytes.
-    Thread safe: GetPos is read‑only safe; SetPos must be serialized.
+    API_GetPos
+    【external 导入】获取当前读写位置（字节偏移，0‑起始）。
   ****************************************************************************}
 function API_GetPos(Hnd: TDataHnd): int64; cdecl; external libapi_hub name 'API_GetPos';
+  {****************************************************************************
+    API_SetPos
+    【external 导入】设置读写位置，若超出大小则扩展缓冲区（填充零）。
+  ****************************************************************************}
 procedure API_SetPos(Hnd: TDataHnd; Pos_: int64); cdecl; external libapi_hub name 'API_SetPos';
 
   {****************************************************************************
-    3.7 API_GetSize / API_SetSize
-    Gets/Sets the total buffer size in bytes.
-    If SetSize shrinks the buffer, data is truncated; if it enlarges, new
-    space is uninitialized.
-    Thread safe: GetSize is read‑only safe; SetSize must be serialized.
+    API_GetSize
+    【external 导入】获取缓冲区总大小（字节）。
   ****************************************************************************}
 function API_GetSize(Hnd: TDataHnd): int64; cdecl; external libapi_hub name 'API_GetSize';
+  {****************************************************************************
+    API_SetSize
+    【external 导入】调整缓冲区大小（截断或扩展）。
+  ****************************************************************************}
 procedure API_SetSize(Hnd: TDataHnd; Size_: int64); cdecl; external libapi_hub name 'API_SetSize';
 
+
 {===============================================================================
-  4. Application Handle Operations
+  4.  应用句柄操作
+  本节同样包含 external 导入的 C 函数和 Pascal 辅助函数。
 ===============================================================================}
 
   {****************************************************************************
-    4.1 API_Create_APPHnd
-    Creates an application context.
-    Parameters:
-      appName : application name (case‑sensitive, UTF‑8, must be unique
-                across the network).
-      Desc    : human‑readable description (UTF‑8, may be empty).
-    Returns:
-      New TAppHnd. Never returns nil under normal conditions.
-    Note: must be freed with API_Free_APPHnd.
-    Thread safe: Yes.
+    API_Create_APPHnd
+    【external 导入】创建应用上下文。
+    参数：
+      appName : PAnsiChar – 应用名称（UTF‑8 + #0，区分大小写，网络唯一）。
+      Desc    : PAnsiChar – 描述（UTF‑8 + #0，可为空）。
+    返回：新 TAppHnd，正常情况下不返回 nil。
+    设计意图：应用是 API 的容器，一个应用可注册多个 API。
+    关联：API_Free_APPHnd（external 导入）
+    线程安全：是。
+    AI 翻译提示：其他语言直接调用 C 函数，应用名需全局唯一。
   ****************************************************************************}
 function API_Create_APPHnd(appName, Desc: pansichar): TAppHnd; cdecl; external libapi_hub name 'API_Create_APPHnd';
-function API_Create_APPHnd2(appName, Desc: string): TAppHnd;  // convenience overload, auto UTF‑8
 
   {****************************************************************************
-    4.2 API_Free_APPHnd
-    Destroys an application handle, freeing all registered APIs and resources.
-    Parameters:
-      appHnd : application handle.
-    Thread safe: Yes, but ensure no other thread is using the handle.
+    API_Create_APPHnd2
+    【Pascal 辅助】自动 UTF‑8 转换的便利版本。
+  ****************************************************************************}
+function API_Create_APPHnd2(appName, Desc: string): TAppHnd;
+
+  {****************************************************************************
+    API_Free_APPHnd
+    【external 导入】销毁应用句柄，释放所有注册的 API 和资源。
+    参数：
+      appHnd : TAppHnd – 应用句柄。
+    线程安全：是，但确保其他线程不再使用。
   ****************************************************************************}
 procedure API_Free_APPHnd(appHnd: TAppHnd); cdecl; external libapi_hub name 'API_Free_APPHnd';
 
   {****************************************************************************
-    4.3 API_Reg_Call
-    Registers a request‑response (Call) API within the application.
-    Parameters:
-      appHnd   : application handle.
-      APIName  : API name (unique inside the app, case‑sensitive, UTF‑8).
-      Desc     : description (UTF‑8, optional).
-      Trigger  : user data that will be passed to the callback.
-      OnCall   : callback function pointer (cdecl).
-    Returns:
-      1 on success, 0 if the API name already exists.
-    Thread safe: Yes.
-    Note: see TAPI_Call for callback constraints.
+    API_Reg_Call
+    【external 导入】在应用中注册一个请求-响应（Call）API。
+    参数：
+      appHnd   : TAppHnd – 应用句柄。
+      APIName  : PAnsiChar – API 名称（UTF‑8 + #0，应用内唯一）。
+      Desc     : PAnsiChar – 描述（UTF‑8 + #0，可选）。
+      Trigger  : Pointer – 用户数据，回调时原样传回。
+      OnCall   : TAPI_Call – 回调函数指针（cdecl）。
+    返回：1 成功，0 失败（名称重复）。
+    设计意图：暴露业务逻辑给远程调用者。
+    线程安全：是。
+    回调约束：见 TAPI_Call 说明。
+    AI 翻译提示：其他语言使用对应的注册函数，并确保回调函数遵循 C ABI。
   ****************************************************************************}
 function API_Reg_Call(appHnd: TAppHnd; APIName, Desc: pansichar; Trigger: Pointer; OnCall: TAPI_Call): integer; cdecl; external libapi_hub name 'API_Reg_Call';
-function API_Reg_Call2(appHnd: TAppHnd; APIName, Desc: string; Trigger: Pointer; OnCall: TAPI_Call): integer;  // convenience overload
 
   {****************************************************************************
-    4.4 API_Reg_Notify
-    Registers a one‑way notification (Notify) API within the application.
-    Parameters and return same as API_Reg_Call, but callback type is TAPI_Notify
-    (no output).
-    Thread safe: Yes.
+    API_Reg_Call2
+    【Pascal 辅助】自动 UTF‑8 转换的便利版本，参数同 API_Reg_Call。
+  ****************************************************************************}
+function API_Reg_Call2(appHnd: TAppHnd; APIName, Desc: string; Trigger: Pointer; OnCall: TAPI_Call): integer;
+
+  {****************************************************************************
+    API_Reg_Call_M
+    【Pascal 辅助】注册对象方法版本的 Call API，内部通过桥接适配为 cdecl 回调。
+    仅供 Pascal 便利，不跨语言导出。
+  ****************************************************************************}
+function API_Reg_Call_M(appHnd: TAppHnd; APIName, Desc: string; OnCall: TAPI_Call_M): integer;
+
+  {****************************************************************************
+    API_Reg_Sync_Call_M
+    【Pascal 辅助】注册对象方法版本的 Call API，并将回调同步到主线程执行。
+    内部使用 TSoft_Synchronize_Tool 实现。
+    仅供 Pascal 内部测试/特殊场景使用。
+  ****************************************************************************}
+function API_Reg_Sync_Call_M(appHnd: TAppHnd; APIName, Desc: string; OnCall: TAPI_Call_M): integer;
+
+  {****************************************************************************
+    API_Reg_Notify
+    【external 导入】注册单向通知（Notify）API。
+    参数：同 API_Reg_Call，但回调类型为 TAPI_Notify（无输出）。
+    返回：1 成功，0 失败。
+    注意事项：回调中可调用 API_Notify，但应避免长时间执行。
+    AI 翻译提示：其他语言使用对应的无返回值回调函数。
   ****************************************************************************}
 function API_Reg_Notify(appHnd: TAppHnd; APIName, Desc: pansichar; Trigger: Pointer; OnNotify: TAPI_Notify): integer; cdecl; external libapi_hub name 'API_Reg_Notify';
-function API_Reg_Notify2(appHnd: TAppHnd; APIName, Desc: string; Trigger: Pointer; OnNotify: TAPI_Notify): integer;  // convenience overload
 
-{ * --------------------------------------------------------------------------
-  * API_UnReg: Removes a previously registered API from the application.
-  * This function also triggers a network update broadcast. After calling
-  * API_UnReg, the change is propagated to all connected C4 services and
-  * clients within approximately 3 seconds (depending on network latency
-  * and the C4 update interval). Once propagated, the API will no longer
-  * be discoverable or callable by remote peers.
-  *
-  * @param appHnd   The application handle.
-  * @param APIName  The name of the API to unregister (UTF‑8).
-  * @return 1 on success, 0 if the API name does not exist.
-  *
-  * @Note The application's internal API registry is updated immediately,
-  *       but the network broadcast is asynchronous. Subsequent remote
-  *       calls may still be delivered for a short window (up to ~3 seconds)
-  *       until all peers have received the update.
-  * @SeeAlso API_Reg_Call, API_Reg_Notify
-  * -------------------------------------------------------------------------- }
+  {****************************************************************************
+    API_Reg_Notify2
+    【Pascal 辅助】自动 UTF‑8 转换的便利版本。
+  ****************************************************************************}
+function API_Reg_Notify2(appHnd: TAppHnd; APIName, Desc: string; Trigger: Pointer; OnNotify: TAPI_Notify): integer;
+
+  {****************************************************************************
+    API_Reg_Notify_M
+    【Pascal 辅助】注册对象方法版本的 Notify API。
+  ****************************************************************************}
+function API_Reg_Notify_M(appHnd: TAppHnd; APIName, Desc: string; OnNotify: TAPI_Notify_M): integer;
+
+  {****************************************************************************
+    API_Reg_Sync_Notify_M
+    【Pascal 辅助】注册对象方法版本的 Notify API，并同步到主线程执行。
+  ****************************************************************************}
+function API_Reg_Sync_Notify_M(appHnd: TAppHnd; APIName, Desc: string; OnNotify: TAPI_Notify_M): integer;
+
+  {****************************************************************************
+    API_Sync
+    【Pascal 实现】处理主线程同步队列，用于软同步机制。
+    此函数暴露给外部，允许主线程定期调用以处理排队到主线程的回调任务。
+    返回值：处理的任务数量。
+    设计意图：配合 TSoft_Synchronize_Tool 使用，实现用户态线程同步。
+    AI 翻译提示：其他语言若需要类似机制，应使用其平台的原生同步原语。
+  ****************************************************************************}
+function API_Sync(): integer;
+
+  {****************************************************************************
+    API_UnReg
+    【external 导入】动态注销已注册的 API。
+    参数：
+      appHnd   : TAppHnd – 应用句柄。
+      APIName  : PAnsiChar – 要注销的 API 名称（UTF‑8 + #0）。
+    返回：1 成功（API 存在并移除），0 失败（名称不存在）。
+    设计意图：支持热更新、插件卸载、权限动态调整。
+    注意事项：
+      • 本地立即生效，后续本地调用将失败。
+      • 网络广播异步传播，约 3 秒后所有对等节点不再路由该 API。
+      • 正在执行中的回调不受影响（正常完成）。
+    AI 翻译提示：其他语言应提供对应注销函数，并理解最终一致性延迟。
+  ****************************************************************************}
 function API_UnReg(appHnd: TAppHnd; APIName: pansichar): integer; cdecl; external libapi_hub name 'API_UnReg';
+
+  {****************************************************************************
+    API_UnReg2
+    【Pascal 辅助】自动 UTF‑8 转换的便利版本。
+  ****************************************************************************}
 function API_UnReg2(appHnd: TAppHnd; APIName: string): integer;
 
   {****************************************************************************
-    4.5 API_Local_APP_Call
-    Executes a Call API locally (within the same process), bypassing the network.
-    Parameters:
-      appHnd : application handle.
-      Param  : input data handle (must contain API name and payload).
-    Returns:
-      New TDataHnd containing the result; if the API is not found or an error
-      occurs, the handle size will be 0.
-    Notes:
-      • The returned handle must be freed by the caller.
-      • The input handle is not freed by this function; the caller must free it.
-    Thread safe: Yes.
+    API_Local_APP_Call
+    【external 导入】在本地（同一进程）同步执行 Call API，绕过网络。
+    参数：
+      appHnd : TAppHnd – 应用句柄。
+      Param  : TDataHnd – 输入句柄（包含 API 名称和参数）。
+    返回：新 TDataHnd – 结果句柄（需释放）。若 API 未找到或出错，大小 = 0。
+    设计意图：用于单元测试、调试或内部调用，无网络开销。
+    注意事项：输入句柄不被释放，调用者需负责释放。
+    线程安全：是。
+    AI 翻译提示：其他语言应提供类似的本地调用方法，用于测试。
   ****************************************************************************}
 function API_Local_APP_Call(appHnd: TAppHnd; Param: TDataHnd): TDataHnd; cdecl; external libapi_hub name 'API_Local_APP_Call';
 
   {****************************************************************************
-    4.6 API_Local_APP_Notify
-    Sends a notification locally (no result).
-    Parameters:
-      appHnd : application handle.
-      Param  : input data handle.
-    Thread safe: Yes.
+    API_Local_APP_Notify
+    【external 导入】本地发送通知，无结果。
+    参数：同 API_Local_APP_Call，但无返回。
+    线程安全：是。
   ****************************************************************************}
 procedure API_Local_APP_Notify(appHnd: TAppHnd; Param: TDataHnd); cdecl; external libapi_hub name 'API_Local_APP_Notify';
 
+
 {===============================================================================
-  5. Network Layer – Preparation & Communication
+  5.  网络层准备与通信
 ===============================================================================}
 
   {****************************************************************************
-    5.1 API_Prepare_Service
-    Prepares a service listener. Can be called multiple times to start
-    multiple services.
-    Parameters:
-      ListeningAddr_ : local address to bind (UTF‑8).
-                       TCP example: "0.0.0.0:9898" or "127.0.0.1"
-                       IPC example: "ipc:my_service"
-                       If no port is given, default 9898 is used (IPC ignores port).
-      PhysicsAddr_   : public address advertised to clients (UTF‑8).
-                       Must match the address provided by clients.
-    Returns:
-      An internal tag (informational, may be ignored).
-    Note: services and clients can be prepared in any order; clients will
-          wait for services to appear.
-    Thread safe: Yes (usually called from the main thread).
-  ****************************************************************************}
-function API_Prepare_Service(ListeningAddr_, PhysicsAddr_: pansichar): integer; cdecl; external libapi_hub name 'API_Prepare_Service';
-function API_Prepare_Service2(ListeningAddr_, PhysicsAddr_: string): integer;  // convenience overload
-
-  {****************************************************************************
-    5.2 API_Prepare_Client
-    Prepares a client connection.
-    Parameters:
-      PhysicsAddr_ : remote service address (UTF‑8), must match the service's
-                     public address.
-      appHnd       : optional application handle. If provided, the client will
-                     automatically register this app's APIs with the service
-                     (exposing the app). If nil, the client acts as a pure
-                     consumer.
-    Returns:
-      An internal tag (informational).
-    Note: the client automatically reconnects if the connection is lost,
-          and re‑registers the application if provided.
-    Thread safe: Yes.
-  ****************************************************************************}
-function API_Prepare_Client(PhysicsAddr_: pansichar; appHnd: TAppHnd): integer; cdecl; external libapi_hub name 'API_Prepare_Client';
-function API_Prepare_Client2(PhysicsAddr_: string; appHnd: TAppHnd): integer; overload;  // convenience overload
-function API_Prepare_Client2(PhysicsAddr_: string): integer; overload;                  // convenience overload (no app)
-
-  {****************************************************************************
-    5.3 API_Reset_Prepare
-    Clears all previously prepared services and clients.
-    Call this before preparing a new set to avoid conflicts.
-    Thread safe: Yes.
+    API_Reset_Prepare
+    【external 导入】清除所有已准备的服务/客户端配置。
+    设计意图：在重新配置前调用，避免旧配置干扰。
+    线程安全：是。
   ****************************************************************************}
 procedure API_Reset_Prepare(); cdecl; external libapi_hub name 'API_Reset_Prepare';
 
   {****************************************************************************
-    5.4 API_Prepare_Done
-    Starts the C4 framework with all prepared services and clients.
-    This function blocks until the framework is fully initialized and running.
-    Returns:
-      1 on success, 0 on failure (error details are printed to the console).
-    Notes:
-      • Must be called only once per preparation session (unless you reset
-        with API_Exit_MainThread or API_shutdown).
-      • After this call, remote calls can be made.
-    Thread safe: Yes, but recommended to call from the main thread.
+    API_Prepare_Service
+    【external 导入】准备一个服务监听器（可多次调用启动多个服务）。
+    参数：
+      ListeningAddr_ : PAnsiChar – 本地绑定地址（UTF‑8 + #0）。
+                                    TCP  示例：'0.0.0.0:9898'
+                                    IPV6 示例：'[ipv6]:9898'
+                                    IPC  示例：'ipc:my_service'
+                                    若只给主机名（无端口），默认使用 9898。
+      PhysicsAddr_   : PAnsiChar – 对外公布的地址（UTF‑8 + #0）。
+                                    客户端必须使用此地址连接。
+    返回：内部标签（可忽略）。
+    设计意图：启动服务并广播自身存在，供服务发现。
+    线程安全：是。
+    AI 翻译提示：其他语言应提供等价方法，地址字符串需为 UTF‑8。
+  ****************************************************************************}
+function API_Prepare_Service(ListeningAddr_, PhysicsAddr_: pansichar): integer; cdecl; external libapi_hub name 'API_Prepare_Service';
+
+  {****************************************************************************
+    API_Prepare_Service2
+    【Pascal 辅助】自动 UTF‑8 转换的便利版本。
+  ****************************************************************************}
+function API_Prepare_Service2(ListeningAddr_, PhysicsAddr_: string): integer;
+
+  {****************************************************************************
+    API_Prepare_Client
+    【external 导入】准备一个客户端连接。
+    参数：
+      PhysicsAddr_ : PAnsiChar – 远程服务地址（必须与服务的公布地址一致）。
+      appHnd       : TAppHnd – 可选应用句柄。若提供，客户端会将该应用注册
+                                到服务网格（暴露 API）；若为 nil，则纯消费。
+    返回：内部标签。
+    设计意图：建立连接并自动注册应用，支持断线重连。
+    线程安全：是。
+  ****************************************************************************}
+function API_Prepare_Client(PhysicsAddr_: pansichar; appHnd: TAppHnd): integer; cdecl; external libapi_hub name 'API_Prepare_Client';
+
+  {****************************************************************************
+    API_Prepare_Client2 (带 appHnd)
+    【Pascal 辅助】自动 UTF‑8 转换的便利版本。
+  ****************************************************************************}
+function API_Prepare_Client2(PhysicsAddr_: string; appHnd: TAppHnd): integer; overload;
+
+  {****************************************************************************
+    API_Prepare_Client2 (不带 appHnd)
+    【Pascal 辅助】纯消费客户端。
+  ****************************************************************************}
+function API_Prepare_Client2(PhysicsAddr_: string): integer; overload;
+
+  {****************************************************************************
+    API_Prepare_Done
+    【external 导入】启动 C4 网络框架，阻塞直到所有准备的服务/客户端初始化完成。
+    返回：1 成功，0 失败（错误信息会打印到控制台）。
+    设计意图：调用后方可进行远程调用。
+    注意事项：
+      • 只能调用一次（除非重置）。
+      • 可通过 API_SetOption 控制是否等待客户端就绪（Wait_Connection_ReadyOk）。
+    线程安全：是，但建议主线程调用。
+    AI 翻译提示：其他语言应提供等价的启动函数，通常阻塞。
   ****************************************************************************}
 function API_Prepare_Done: integer; cdecl; external libapi_hub name 'API_Prepare_Done';
 
   {****************************************************************************
-    5.5 API_Exit_MainThread
-    Signals the internal event loop to exit (stops network processing).
-    Resources are not automatically freed; usually followed by API_shutdown.
-    Recommended order: call this first, then API_shutdown.
-    Thread safe: Yes.
+    API_Exit_MainThread
+    【external 导入】通知内部事件循环退出，停止网络处理。
+    设计意图：优雅关闭的第一步，通常后接 API_shutdown。
+    线程安全：是。
   ****************************************************************************}
 procedure API_Exit_MainThread; cdecl; external libapi_hub name 'API_Exit_MainThread';
 
   {****************************************************************************
-    5.6 API_Call
-    Performs a remote (or local) synchronous call to the target application.
-    Parameters:
-      appName   : target application name (case‑sensitive, UTF‑8).
-      Param     : input data handle (cloned internally; caller must still free
-                  the original).
-      Timeout_  : timeout in milliseconds. 0 means infinite wait (use with care).
-    Returns:
-      New TDataHnd containing the result. The handle is never nil; if the call
-      times out or fails, its size will be 0. The caller MUST free the returned
-      handle (even if size is 0).
-    Thread safe: Fully thread‑safe; can be called concurrently.
-    Notes:
-      • The function first attempts a local call if the target app is
-        registered in the same process.
-      • Order of concurrent calls is not guaranteed (load balancing may
-        reorder them).
-      • Lightweight calls achieve ~3000 per second (depending on network and
-        hardware).
-    Example:
-      var d, res: TDataHnd;
-      begin
-        d := API_Create_DataHnd('add');
-        API_WriteBuffer(d, @a, SizeOf(a));
-        API_WriteBuffer(d, @b, SizeOf(b));
-        res := API_Call('CalcApp', d, 5000);
-        if API_GetSize(res) > 0 then ...
-        API_Free_DataHnd(d);
-        API_Free_DataHnd(res);   // always free result
-      end;
+    API_Call
+    【external 导入】同步远程调用（或本地优化）。
+    参数：
+      appName   : PAnsiChar – 目标应用名（UTF‑8 + #0）。
+      Param     : TDataHnd – 输入句柄（内部克隆，调用者仍负责释放原句柄）。
+      Timeout_  : UInt64 – 超时毫秒数，0 表示无限等待（慎用）。
+    返回：新 TDataHnd – 结果句柄，永远非 nil。若超时或失败，大小 = 0。
+    设计意图：主要 RPC 入口，自动路由、负载均衡、重试。
+    注意事项：
+      • 调用者必须释放返回的句柄（即使大小为 0）。
+      • 在回调中调用此函数不会死锁，但需防死循环，且不可阻塞。
+    线程安全：完全线程安全。
+    AI 翻译提示：其他语言应提供同步调用方法，注意超时参数和句柄释放。
   ****************************************************************************}
 function API_Call(appName: pansichar; Param: TDataHnd; Timeout_: uint64): TDataHnd; cdecl; external libapi_hub name 'API_Call';
-function API_Call2(appName: string; Param: TDataHnd; Timeout_: uint64): TDataHnd;  // convenience overload
 
   {****************************************************************************
-    5.7 API_Notify
-    Sends a one‑way notification (fire‑and‑forget).
-    Parameters:
-      appName : target application name (UTF‑8).
-      Param   : input data handle (cloned internally; caller must still free).
-    Thread safe: Yes.
-    Note: order of notifications is not guaranteed; no response is expected.
+    API_Call2
+    【Pascal 辅助】自动 UTF‑8 转换的便利版本。
+  ****************************************************************************}
+function API_Call2(appName: string; Param: TDataHnd; Timeout_: uint64): TDataHnd;
+
+  {****************************************************************************
+    API_Notify
+    【external 导入】单向通知（fire‑and‑forget）。
+    参数：
+      appName : PAnsiChar – 目标应用名（UTF‑8 + #0）。
+      Param   : TDataHnd – 输入句柄（内部克隆，调用者释放原句柄）。
+    设计意图：用于日志、事件等无需响应的场景。
+    线程安全：是。
+    AI 翻译提示：其他语言提供异步发送方法，无返回值。
   ****************************************************************************}
 procedure API_Notify(appName: pansichar; Param: TDataHnd); cdecl; external libapi_hub name 'API_Notify';
-procedure API_Notify2(appName: string; Param: TDataHnd);   // convenience overload
 
-{ * --------------------------------------------------------------------------
-  * API_SetOption: Dynamically adjusts global runtime options of the API Hub
-  * framework. All changes take effect immediately for subsequent operations
-  * (except where noted). This function is intended for runtime tuning
-  * without restarting the application or modifying the .ini file.
-  *
-  * @param Option  Configuration key (UTF‑8, case‑insensitive). The following
-  *                keys are supported (aliases are accepted):
-  *                - "password" / "passwd"   : Sets the C4 P2PVM authentication
-  *                  token. This password is used for all new P2PVM connections
-  *                  (existing connections are unaffected). It is crucial for
-  *                  secure inter‑communication between zAPI components.
-  *                  **IMPORTANT**: This must match on both service and client
-  *                  sides for successful handshake.
-  *
-  *                - "Quiet"                : Enable/disable quiet mode (True/False).
-  *                  Suppresses most debug logs.
-  *
-  *                - "External_Conf_Auto_Save" / "Conf_Auto_Save" : Enable/disable
-  *                  automatic saving of the current configuration to the .ini file
-  *                  on program exit (True/False). Default is True.
-  *
-  *                - "Wait_Connection_ReadyOk" / "Wait_API_Prepare_Done" /
-  *                  "API_Prepare_Done_Wait" / "WaitConnect" / "Wait_Ready" /
-  *                  "WaitReady" : Control whether API_Prepare_Done blocks
-  *                  until all prepared clients have successfully connected and
-  *                  registered their applications. **This is particularly
-  *                  important for deployment scenarios**: when set to False,
-  *                  the library starts immediately without waiting, and clients
-  *                  will automatically connect later when the server becomes
-  *                  available (auto‑reconnection). This allows services to
-  *                  start independently of the network topology.
-  *
-  *                - "Wait_Connection_Timeout" / "Wait_TimeOut" / ... : Sets the
-  *                  maximum waiting time (in milliseconds) when
-  *                  Wait_Connection_ReadyOk is True. Default is 30000.
-  *
-  *                - "ShowThreadID" / "ShowThread" / "Show_Thread" : Toggle
-  *                  display of thread IDs in log messages (True/False).
-  *
-  *                - "ConsoleOutput" / "Console_Output" : Toggle console
-  *                  (stdout/stderr) logging (True/False).
-  *
-  *                - "IPC_Serv_ThreadCount" / "IPC_ThreadCount" / "IPC_Server_ThreadCount":
-  *                  Number of threads in the IPC service thread pool.
-  *
-  *                - "IPC_Serv_MaxQueueLength" / "IPC_MaxQueueLength" / "IPC_Server_MaxQueueLength":
-  *                  Maximum length of the IPC message queue.
-  *
-  *                - "IPC_Serv_MaxMsgSize" / "IPC_MaxMsgSize" / "IPC_Server_MaxMsgSize":
-  *                  Maximum size (in bytes) of a single IPC message.
-  *
-  * @param Value   New value (UTF‑8). For boolean options, accepted values are
-  *                "True"/"False", "1"/"0", "Yes"/"No".
-  *
-  * @Note This function has no return value; unknown options are silently ignored.
-  *       Changes to the password and wait‑control options are critical for
-  *       secure and flexible deployment. See the comments in the implementation
-  *       for detailed internal behaviour.
-  * -------------------------------------------------------------------------- }
+  {****************************************************************************
+    API_Notify2
+    【Pascal 辅助】自动 UTF‑8 转换的便利版本。
+  ****************************************************************************}
+procedure API_Notify2(appName: string; Param: TDataHnd);
+
+{****************************************************************************
+  API_SetOption
+  【external 导入】动态调整全局运行时配置。
+
+  功能：
+    在运行时修改 API Hub 框架的全局配置参数，无需修改 .ini 文件或重启应用。
+    调用后，对后续操作立即生效（除非另有说明）。
+
+  参数：
+    Option : PAnsiChar – 配置键（UTF‑8 + #0，不区分大小写，支持别名）。
+    Value  : PAnsiChar – 新值（UTF‑8 + #0）。布尔值接受 "True"/"False"、
+             "1"/"0"、"Yes"/"No"；整数接受十进制数字字符串。
+
+  支持的配置键（按功能分组）：
+    ┌───────────────────────────────────────────────────────────────────┐
+    │ 1. 安全认证                                                       │
+    ├───────────────────────────────────────────────────────────────────┤
+    │ • "password" / "passwd"                                           │
+    │   设置 C4 P2PVM 认证令牌。所有新建的 P2PVM 连接将使用此密码       │
+    │   进行握手。服务端和客户端必须匹配，否则连接失败。                │
+    │   ⚠️ 仅影响新建连接，已有连接不受影响。                           │
+    │   ⚠️ 日志中密码会以掩码（* 和 **）显示，防止泄露。                │
+    ├───────────────────────────────────────────────────────────────────┤
+    │ 2. 日志与调试                                                     │
+    ├───────────────────────────────────────────────────────────────────┤
+    │ • "Quiet"                                                         │
+    │   启用/禁用静默模式（True/False）。True 时抑制大多数调试日志。    │
+    │ • "ConsoleOutput" / "Console_Output"                              │
+    │   启用/禁用控制台（stdout/stderr）日志输出（True/False）。        │
+    │ • "ShowThreadID" / "ShowThread" / "Show_Thread"                   │
+    │   控制状态日志是否显示线程 ID（True/False）。                     │
+    ├───────────────────────────────────────────────────────────────────┤
+    │ 3. 网络启动与部署                                                 │
+    ├───────────────────────────────────────────────────────────────────┤
+    │ • "Wait_Connection_ReadyOk" / "Wait_API_Prepare_Done" /           │
+    │   "API_Prepare_Done_Wait" / "WaitConnect" / "Wait_Ready" /        │
+    │   "WaitReady"                                                     │
+    │   控制 API_Prepare_Done 是否阻塞等待所有客户端连接就绪。          │
+    │   True（默认）：阻塞直到所有客户端完成连接和注册。                │
+    │   False：立即返回，客户端将自动重连（适用于弹性部署）。           │
+    │   ⚠️ 此选项仅在 API_Prepare_Done 调用前设置有效。                 │
+    │ • "Wait_Connection_Timeout" / "Wait_TimeOut" /                    │
+    │   "API_Prepare_Done_TimeOut" / "WaitTimeOut"                      │
+    │   当 Wait_Connection_ReadyOk=True 时的最大等待时间（毫秒）。      │
+    │   默认 30000。仅 API_Prepare_Done 前设置有效。                    │
+    ├───────────────────────────────────────────────────────────────────┤
+    │ 4. IPC（进程间通信）调优                                          │
+    ├───────────────────────────────────────────────────────────────────┤
+    │ • "IPC_Serv_ThreadCount" / "IPC_ThreadCount" /                    │
+    │   "IPC_Server_ThreadCount"                                        │
+    │   IPC 服务线程池大小（整数）。影响后续新建的 IPC 服务。           │
+    │   默认 4。                                                        │
+    │ • "IPC_Serv_MaxQueueLength" / "IPC_MaxQueueLength" /              │
+    │   "IPC_Server_MaxQueueLength"                                     │
+    │   IPC 消息队列最大长度（整数）。默认 4096。                       │
+    │ • "IPC_Serv_MaxMsgSize" / "IPC_MaxMsgSize" /                      │
+    │   "IPC_Server_MaxMsgSize"                                         │
+    │   单条 IPC 消息最大大小（字节）。默认 32768。                     │
+    ├───────────────────────────────────────────────────────────────────┤
+    │ 5. 配置文件保存                                                   │
+    ├───────────────────────────────────────────────────────────────────┤
+    │ • "External_Conf_Auto_Save" / "Conf_Auto_Save"                    │
+    │   程序退出时自动保存当前配置到 .api-tool.ini 文件                 │
+    │   （True/False）。默认 True。                                     │
+    └───────────────────────────────────────────────────────────────────┘
+
+  返回值：
+    无。未知 Option 被静默忽略（不报错，不输出日志）。
+
+  设计意图：
+    提供运行时调优能力，避免因修改 .ini 文件而重启服务。
+    特别适用于：
+      - 大型分布式部署中调整部署模式（Wait_Connection_ReadyOk）。
+      - 动态更换认证密钥（password）而不中断已有连接。
+      - 根据负载动态调整 IPC 线程池大小。
+
+  注意事项：
+    • 字符串必须为 UTF‑8 编码并 #0 结尾。
+    • 布尔值不区分大小写，接受 "True"/"False"、"1"/"0"、"Yes"/"No"。
+    • 数字仅接受十进制字符串（如 "8"）。
+    • 部分选项（如 Wait_Connection_*）只在 API_Prepare_Done 前生效。
+    • 密码变更仅在新建连接时生效，已有连接仍用旧密码。
+    • IPC 参数仅影响后续创建的 IPC 服务/客户端，已存在的连接不受影响。
+    • 若选项值非法（如负数给线程数），可能被底层解析为错误值，
+      但此函数不返回错误，调用者需自行确保值合法。
+
+  线程安全：
+    是（所有选项的修改是原子操作）。
+
+  关联函数：
+    API_Prepare_Done  — 读取 Wait_Connection_* 选项并应用。
+
+  AI 翻译提示：
+    其他语言 FFI 调用时，需传递 UTF‑8 编码、#0 终止的 PAnsiChar 字符串。
+    参数名称和值遵循相同规范。此函数无返回值，错误被静默处理，
+    故调用前应验证参数合法性。
+
+  示例：
+    // 1. 设置认证密码
+    API_SetOption('password', 'my_secure_token');
+    // 2. 让服务端不等待客户端（适合 Kubernetes 环境）
+    API_SetOption('Wait_Connection_ReadyOk', 'False');
+    // 3. 增加 IPC 线程数以提升并发能力
+    API_SetOption('IPC_Serv_ThreadCount', '8');
+    // 4. 关闭控制台日志（生产环境）
+    API_SetOption('ConsoleOutput', 'False');
+****************************************************************************}
 procedure API_SetOption(Option, Value: pansichar); cdecl; external libapi_hub name 'API_SetOption';
+
+  {****************************************************************************
+    API_SetOption2
+    【Pascal 辅助】自动 UTF‑8 转换的便利版本。
+  ****************************************************************************}
 procedure API_SetOption2(Option, Value: string);
 
   {****************************************************************************
-    5.8 API_shutdown
-    Gracefully shuts down the entire framework: stops all services, disconnects
-    all clients, and releases internal resources.
-    After this call, the state is reset and you can re‑initialize.
-    This function internally calls API_Exit_MainThread, but it is recommended
-    to call that explicitly first for a clean shutdown.
-    Thread safe: Yes, but usually called from the main thread.
+    API_shutdown
+    【external 导入】完全关闭框架，停止所有服务、断开客户端、释放资源。
+    设计意图：清理后状态重置，可重新初始化。
+    建议顺序：先 API_Exit_MainThread，再 API_shutdown。
+    线程安全：是，但通常主线程调用。
   ****************************************************************************}
 procedure API_shutdown; cdecl; external libapi_hub name 'API_shutdown';
 
-{===============================================================================
-  6. Implementation – Convenience Wrappers
-  These are thin wrappers around the raw API calls; they do not change
-  behaviour and only handle UTF‑8 conversion.
-===============================================================================}
 
 implementation
 
+uses SyncObjs;
+
+{-------------------------------------------------------------------------------
+  6.1  便利重载（UTF‑8 自动转换）
+-------------------------------------------------------------------------------}
 function API_Create_DataHnd2(APIName: string): TDataHnd;
 begin
   Result := API_Create_DataHnd(pansichar(UTF8Encode(APIName)));
@@ -913,9 +937,9 @@ begin
     Result := Pointer(nativeuint(base) + Offset);
 end;
 
-{===============================================================================
-  6a. Implementation of atomic write helpers
-===============================================================================}
+{-------------------------------------------------------------------------------
+  6.2  原子写入辅助（基于 API_WriteBuffer）
+-------------------------------------------------------------------------------}
 function API_WriteInt8(Hnd: TDataHnd; Value: int8): boolean;
 begin
   Result := API_WriteBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
@@ -966,34 +990,32 @@ begin
   Result := API_WriteBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
 end;
 
+{-------------------------------------------------------------------------------
+  API_WriteString – 写入 UTF‑8 字节 + #0 终止符
+-------------------------------------------------------------------------------}
 function API_WriteString(Hnd: TDataHnd; const Value: string): boolean;
 var
   utf8: TBytes;
-  len: Integer;
-  written: Int64;
+  len: integer;
 begin
-  // Empty string: write only a null terminator.
   if Value = '' then
   begin
     Result := API_WriteUInt8(Hnd, 0);
     Exit;
   end;
-
-  utf8 := TEncoding.UTF8.GetBytes(Value);
+  utf8 := TEncoding.utf8.GetBytes(Value);
   len := Length(utf8);
-  written := API_WriteBuffer(Hnd, @utf8[0], len);
-  if written <> len then
+  if API_WriteBuffer(Hnd, @utf8[0], len) <> len then
   begin
     Result := False;
     Exit;
   end;
-  // Write the null terminator and ensure it succeeds.
   Result := API_WriteUInt8(Hnd, 0);
 end;
 
-{===============================================================================
-  6b. Implementation of atomic read helpers
-===============================================================================}
+{-------------------------------------------------------------------------------
+  6.3  原子读取辅助（基于 API_ReadBuffer）
+-------------------------------------------------------------------------------}
 function API_ReadInt8(Hnd: TDataHnd; out Value: int8): boolean;
 begin
   Result := API_ReadBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
@@ -1044,9 +1066,9 @@ begin
   Result := API_ReadBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
 end;
 
-{===============================================================================
-  6c. Direct‑return overloads for read helpers (return 0 on failure)
-===============================================================================}
+{-------------------------------------------------------------------------------
+  直接返回版本（失败返回 0）
+-------------------------------------------------------------------------------}
 function API_ReadInt8(Hnd: TDataHnd): int8;
 var v: int8;
 begin
@@ -1107,6 +1129,9 @@ begin
   if API_ReadDouble(Hnd, v) then Result := v else Result := 0.0;
 end;
 
+{-------------------------------------------------------------------------------
+  API_ReadString – 扫描 #0 终止符并解码 UTF‑8
+-------------------------------------------------------------------------------}
 function API_ReadString(Hnd: TDataHnd; out Value: string): boolean;
 type
   TByteArray = array [0..0] of byte;
@@ -1114,19 +1139,16 @@ type
 var
   p: PByteArray;
   b, e, sz: int64;
-  buff: TBytes;
+  Buff: TBytes;
 begin
   p := API_GetBuffer(Hnd);
   sz := API_GetSize(Hnd);
-
-  // Handle null or empty buffer.
   if (p = nil) or (sz = 0) then
   begin
     Value := '';
     Result := False;
     Exit;
   end;
-
   b := API_GetPos(Hnd);
   if b >= sz then
   begin
@@ -1134,41 +1156,31 @@ begin
     Result := False;
     Exit;
   end;
-
   e := b;
-  // Search for the null terminator with correct bounds check first.
   while (e < sz) and (p^[e] <> 0) do
     Inc(e);
-
-  // If we reached the end without finding a null, fail.
-  if e = sz then
+  if e = sz then  // 未找到终止符
   begin
     Value := '';
     Result := False;
     Exit;
   end;
-
-  // Copy bytes from b to e-1 (excluding the null terminator).
-  SetLength(buff, e - b);
+  SetLength(Buff, e - b);
   if e > b then
-    Move(p^[b], buff[0], e - b)
-  else
-    buff := nil;  // empty string
-
-  // Advance position past the null terminator.
+    Move(p^[b], Buff[0], e - b);
   API_SetPos(Hnd, e + 1);
-
-  // Decode UTF-8.
-  Value := TEncoding.UTF8.GetString(buff);
+  Value := TEncoding.utf8.GetString(Buff);
   Result := True;
 end;
 
 function API_ReadString(Hnd: TDataHnd): string;
 begin
-  // Call the out-version; on failure it returns empty string.
   API_ReadString(Hnd, Result);
 end;
 
+{-------------------------------------------------------------------------------
+  应用句柄便利重载
+-------------------------------------------------------------------------------}
 function API_Create_APPHnd2(appName, Desc: string): TAppHnd;
 begin
   Result := API_Create_APPHnd(pansichar(UTF8Encode(appName)), pansichar(UTF8Encode(Desc)));
@@ -1219,10 +1231,506 @@ begin
   API_SetOption(pansichar(UTF8Encode(Option)), pansichar(UTF8Encode(Value)));
 end;
 
+
+{-------------------------------------------------------------------------------
+  6.4  内部工具：线程安全队列、软同步等（从 Z.Core 移植的迷你内核）
+  以下类型和工具是从作者自有的 Z.Core 库中提取的轻量级内核代码，
+  用于支持对象方法回调的桥接（将对象方法适配为 cdecl 回调）以及
+  用户态软同步（仅供测试或特定场景使用）。
+  AI 注意：这些工具是 Pascal 特有的实现，其他语言无需移植。
+-------------------------------------------------------------------------------}
+type
+  // 迷你临界区封装
+  TCritical = class(TCriticalSection)
+  public
+    procedure Lock; inline;
+    procedure UnLock; inline;
+  end;
+
+  {****************************************************************************
+    TCriticalOrderStruct<T_>
+    线程安全的先进先出（FIFO）链表，用于存储任意类型数据。
+    提供 Push、Next、Clear 等操作，内部使用 TCritical 保护。
+    源自 Z.Core 的 TCriticalOrderStruct，用于构建消息队列。
+  ****************************************************************************}
+  TCriticalOrderStruct<T_> = class(TObject)
+  public type
+      POrderStruct = ^TOrderStruct_;
+      TOrderStruct_ = record
+        Data: T_;
+        Next: POrderStruct;
+      end;
+      TOnFreeCriticalOrderStruct = procedure(var p: T_) of object;
+  private
+    FCritical__: TCritical;
+    FFirst: POrderStruct;
+    FLast: POrderStruct;
+    FNum: nativeint;
+    FOnFreeCriticalOrderStruct: TOnFreeCriticalOrderStruct;
+    procedure DoInternalFree(const p: POrderStruct); public
+    property Critical__: TCritical read FCritical__;
+    constructor Create; virtual;
+    destructor Destroy; override;
+    procedure DoFree(var Data: T_); virtual;
+    procedure Clear;
+    function GetCurrent: POrderStruct;
+    property Current: POrderStruct read GetCurrent;
+    property First: POrderStruct read GetCurrent;
+    procedure Next;
+    function Push(const Data: T_): POrderStruct;
+    function Push_Null: POrderStruct;
+    function GetNum: nativeint;
+    property Num: nativeint read GetNum;
+    property OnFree: TOnFreeCriticalOrderStruct read FOnFreeCriticalOrderStruct write FOnFreeCriticalOrderStruct;
+  end;
+
+  TPair2<T1, T2> = packed record
+    Primary: T1;
+    Second: T2;  class function Init(Primary_: T1; Second_: T2): TPair2<T1, T2>; static;
+  end;
+
+  TCore_Thread = TThread;
+
+  {$IFDEF FPC}
+    TOnSynchronize_P_NP = procedure() is nested;
+  {$ELSE FPC}
+  TOnSynchronize_P_NP = reference to procedure();
+  {$ENDIF FPC}
+
+  {****************************************************************************
+    TSoft_Synchronize_Tool
+    用户态软同步工具，使用忙等待队列实现线程同步。
+    此工具源自 Z.Core 的 TSoft_Synchronize_Tool，设计用于低延迟场景，
+    通过避免内核对象来减少上下文切换，但会消耗 CPU 周期。
+    仅供测试或特定场景使用，生产环境建议使用操作系统原生同步原语。
+  ****************************************************************************}
+  TSoft_Synchronize_Tool = class
+  private type
+      TSynchronize_Data___ = TPair2<TOnSynchronize_P_NP, PBoolean>;
+      TSynchronize_Queue___ = TCriticalOrderStruct<TSynchronize_Data___>;
+  private
+    SyncQueue__: TSynchronize_Queue___;
+  public
+    Soft_Synchronize_Main_Thread: TCore_Thread;
+    constructor Create;
+    destructor Destroy; override;
+    function Check_Synchronize(): nativeint;
+    procedure Synchronize(OnSync: TOnSynchronize_P_NP); overload;
+    procedure Synchronize_P(Thread_: TCore_Thread; OnSync: TOnSynchronize_P_NP);
+  end;
+
+{-------------------------------------------------------------------------------
+  工具函数 FillPtr – 用指定字节填充内存块
+-------------------------------------------------------------------------------}
+procedure FillPtr(const dest: Pointer; Size: nativeuint; const Value: byte);
+var
+  d: pbyte;
+  v: uint64;
+begin
+  if Size = 0 then Exit;
+  v := Value or (Value shl 8) or (Value shl 16) or (Value shl 24);
+  v := v or (v shl 32);
+  d := dest;
+  while Size >= 8 do
+  begin
+    PUInt64(d)^ := v;
+    Dec(Size, 8);
+    Inc(d, 8);
+  end;
+  if Size >= 4 then
+  begin
+    PCardinal(d)^ := PCardinal(@v)^;
+    Dec(Size, 4);
+    Inc(d, 4);
+  end;
+  if Size >= 2 then
+  begin
+    PWORD(d)^ := PWORD(@v)^;
+    Dec(Size, 2);
+    Inc(d, 2);
+  end;
+  if Size > 0 then
+    d^ := Value;
+end;
+
+{-------------------------------------------------------------------------------
+  TCritical 方法实现
+-------------------------------------------------------------------------------}
+procedure TCritical.Lock;
+begin
+  Acquire;
+end;
+
+procedure TCritical.UnLock;
+begin
+  Release;
+end;
+
+{-------------------------------------------------------------------------------
+  TCriticalOrderStruct 实现
+-------------------------------------------------------------------------------}
+procedure TCriticalOrderStruct<T_>.DoInternalFree(const p: POrderStruct);
+begin
+  try
+    DoFree(p^.Data);
+    Dispose(p);
+  except
+  end;
+end;
+
+constructor TCriticalOrderStruct<T_>.Create;
+begin
+  inherited Create;
+  FCritical__ := TCritical.Create;
+  FFirst := nil;
+  FLast := nil;
+  FNum := 0;
+  FOnFreeCriticalOrderStruct := nil;
+end;
+
+destructor TCriticalOrderStruct<T_>.Destroy;
+begin
+  Clear;
+  FCritical__.Free;
+  inherited Destroy;
+end;
+
+procedure TCriticalOrderStruct<T_>.DoFree(var Data: T_);
+begin
+  if Assigned(FOnFreeCriticalOrderStruct) then
+    FOnFreeCriticalOrderStruct(Data);
+end;
+
+procedure TCriticalOrderStruct<T_>.Clear;
+var
+  p, N_P: POrderStruct;
+begin
+  FCritical__.Lock;
+  p := FFirst;
+  while p <> nil do
+  begin
+    N_P := p^.Next;
+    try
+      DoInternalFree(p);
+    except
+    end;
+    p := N_P;
+  end;
+  FFirst := nil;
+  FLast := nil;
+  FNum := 0;
+  FCritical__.UnLock;
+end;
+
+function TCriticalOrderStruct<T_>.GetCurrent: POrderStruct;
+begin
+  FCritical__.Lock;
+  Result := FFirst;
+  FCritical__.UnLock;
+end;
+
+procedure TCriticalOrderStruct<T_>.Next;
+var
+  N_P: POrderStruct;
+begin
+  FCritical__.Lock;
+  if FFirst <> nil then
+  begin
+    N_P := FFirst^.Next;
+    try
+      DoInternalFree(FFirst);
+    except
+    end;
+    FFirst := N_P;
+    if FFirst = nil then
+      FLast := nil;
+    Dec(FNum);
+  end;
+  FCritical__.UnLock;
+end;
+
+function TCriticalOrderStruct<T_>.Push(const Data: T_): POrderStruct;
+var
+  p: POrderStruct;
+begin
+  new(p);
+  p^.Data := Data;
+  p^.Next := nil;
+  FCritical__.Lock;
+  Inc(FNum);
+  if (FFirst = nil) and (FLast = nil) then
+  begin
+    FFirst := p;
+    FLast := p;
+  end
+  else if FLast <> nil then
+    begin
+      FLast^.Next := p;
+      FLast := p;
+    end;
+  FCritical__.UnLock;
+  Result := p;
+end;
+
+function TCriticalOrderStruct<T_>.Push_Null: POrderStruct;
+var
+  p: POrderStruct;
+begin
+  new(p);
+  FillPtr(p, SizeOf(TOrderStruct_), 0);
+  p^.Next := nil;
+  FCritical__.Lock;
+  Inc(FNum);
+  if (FFirst = nil) and (FLast = nil) then
+  begin
+    FFirst := p;
+    FLast := p;
+  end
+  else if FLast <> nil then
+    begin
+      FLast^.Next := p;
+      FLast := p;
+    end;
+  FCritical__.UnLock;
+  Result := p;
+end;
+
+function TCriticalOrderStruct<T_>.GetNum: nativeint;
+begin
+  FCritical__.Lock;
+  Result := FNum;
+  FCritical__.UnLock;
+end;
+
+{-------------------------------------------------------------------------------
+  TPair2 实现
+-------------------------------------------------------------------------------}
+class function TPair2<T1, T2>.Init(Primary_: T1; Second_: T2): TPair2<T1, T2>;
+begin
+  Result.Primary := Primary_;
+  Result.Second := Second_;
+end;
+
+{-------------------------------------------------------------------------------
+  TSoft_Synchronize_Tool 实现
+-------------------------------------------------------------------------------}
+constructor TSoft_Synchronize_Tool.Create;
+begin
+  inherited Create;
+  SyncQueue__ := TSynchronize_Queue___.Create;
+  Soft_Synchronize_Main_Thread := nil;
+end;
+
+destructor TSoft_Synchronize_Tool.Destroy;
+begin
+  SyncQueue__.Free;
+  inherited Destroy;
+end;
+
+function TSoft_Synchronize_Tool.Check_Synchronize(): nativeint;
+var
+  sync_: TSynchronize_Data___;
+begin
+  Result := 0;
+  Soft_Synchronize_Main_Thread := TCore_Thread.CurrentThread;
+  while SyncQueue__.Num > 0 do
+  begin
+    sync_ := SyncQueue__.First^.Data;
+    SyncQueue__.Next;
+    try
+      if Assigned(sync_.Primary) then
+        sync_.Primary();
+    except
+    end;
+    sync_.Second^ := False;
+    Inc(Result);
+  end;
+end;
+
+procedure TSoft_Synchronize_Tool.Synchronize(OnSync: TOnSynchronize_P_NP);
+begin
+  Synchronize_P(TCore_Thread.CurrentThread, OnSync);
+end;
+
+procedure TSoft_Synchronize_Tool.Synchronize_P(Thread_: TCore_Thread; OnSync: TOnSynchronize_P_NP);
+var
+  Wait_Signal__: boolean;
+begin
+  if Thread_ = Soft_Synchronize_Main_Thread then
+  begin
+    try
+      OnSync();
+    except
+    end;
+  end
+  else
+  begin
+    Wait_Signal__ := True;
+    SyncQueue__.Push(TSynchronize_Data___.Init(OnSync, @Wait_Signal__));
+    while Wait_Signal__ do ;  // 忙等（谨慎使用）
+  end;
+end;
+
+{-------------------------------------------------------------------------------
+  6.5  对象方法回调桥接
+  这些函数将 Pascal 对象方法（TAPI_Call_M / TAPI_Notify_M）适配为
+  cdecl 回调，以便注册到 C 动态库。
+  非同步版本直接在 C 线程池执行，同步版本则通过 TSoft_Synchronize_Tool
+  排队到主线程（需外部定期调用 API_Sync 处理）。
+-------------------------------------------------------------------------------}
+const
+  max_API_Event = $FFFF;
+var
+  API_Event_Arry: array [0..max_API_Event] of TMethod;
+  API_Event_Index: integer;
+  Soft_Sync: TSoft_Synchronize_Tool;  // 需在初始化时创建
+
+type
+  PM = ^TMethod;
+
+// 非同步版本（直接在 C 线程池执行）
+procedure Do_Internal_Call__(Trigger: Pointer; Input: TDataHnd; Output: TDataHnd); cdecl;
+var
+  p: PM;
+  ev: TAPI_Call_M;
+begin
+  p := Trigger;
+  ev := TAPI_Call_M(p^);
+  ev(Input, Output);
+end;
+
+// 同步到主线程版本（通过 Soft_Sync）
+procedure Do_Internal_Sync_Call__(Trigger: Pointer; Input: TDataHnd; Output: TDataHnd); cdecl;
+var
+  p: PM;
+  ev: TAPI_Call_M;
+  procedure DoSync();
+  begin
+    ev(Input, Output);
+  end;
+begin
+  p := Trigger;
+  ev := TAPI_Call_M(p^);
+  {$IFDEF FPC}
+  Soft_Sync.Synchronize(DoSync);
+  {$ELSE FPC}
+  Soft_Sync.Synchronize(procedure begin
+    ev(Input, Output);
+  end);
+  {$ENDIF FPC}
+end;
+
+procedure Do_Internal_Notify__(Trigger: Pointer; Input: TDataHnd); cdecl;
+var
+  p: PM;
+  ev: TAPI_Notify_M;
+begin
+  p := Trigger;
+  ev := TAPI_Notify_M(p^);
+  ev(Input);
+end;
+
+procedure Do_Internal_Sync_Notify__(Trigger: Pointer; Input: TDataHnd); cdecl;
+var
+  p: PM;
+  ev: TAPI_Notify_M;
+  procedure DoSync();
+  begin
+    ev(Input);
+  end;
+begin
+  p := Trigger;
+  ev := TAPI_Notify_M(p^);
+  {$IFDEF FPC}
+  Soft_Sync.Synchronize(DoSync);
+  {$ELSE FPC}
+  Soft_Sync.Synchronize(procedure begin
+    ev(Input);
+  end);
+  {$ENDIF FPC}
+end;
+
+function API_Reg_Call_M(appHnd: TAppHnd; APIName, Desc: string; OnCall: TAPI_Call_M): integer;
+begin
+  if API_Event_Index > max_API_Event then
+  begin
+    Result := 0;
+    Exit;
+  end;
+  API_Event_Arry[API_Event_Index] := TMethod(OnCall);
+  Result := API_Reg_Call2(appHnd, APIName, Desc, @API_Event_Arry[API_Event_Index], Do_Internal_Call__);
+  Inc(API_Event_Index);
+end;
+
+function API_Reg_Sync_Call_M(appHnd: TAppHnd; APIName, Desc: string; OnCall: TAPI_Call_M): integer;
+begin
+  if API_Event_Index > max_API_Event then
+  begin
+    Result := 0;
+    Exit;
+  end;
+  API_Event_Arry[API_Event_Index] := TMethod(OnCall);
+  Result := API_Reg_Call2(appHnd, APIName, Desc, @API_Event_Arry[API_Event_Index], Do_Internal_Sync_Call__);
+  Inc(API_Event_Index);
+end;
+
+function API_Reg_Notify_M(appHnd: TAppHnd; APIName, Desc: string; OnNotify: TAPI_Notify_M): integer;
+begin
+  if API_Event_Index > max_API_Event then
+  begin
+    Result := 0;
+    Exit;
+  end;
+  API_Event_Arry[API_Event_Index] := TMethod(OnNotify);
+  Result := API_Reg_Notify2(appHnd, APIName, Desc, @API_Event_Arry[API_Event_Index], Do_Internal_Notify__);
+  Inc(API_Event_Index);
+end;
+
+function API_Reg_Sync_Notify_M(appHnd: TAppHnd; APIName, Desc: string; OnNotify: TAPI_Notify_M): integer;
+begin
+  if API_Event_Index > max_API_Event then
+  begin
+    Result := 0;
+    Exit;
+  end;
+  API_Event_Arry[API_Event_Index] := TMethod(OnNotify);
+  Result := API_Reg_Notify2(appHnd, APIName, Desc, @API_Event_Arry[API_Event_Index], Do_Internal_Sync_Notify__);
+  Inc(API_Event_Index);
+end;
+
+{-------------------------------------------------------------------------------
+  6.6  主线程同步处理
+  API_Sync 由外部主线程周期性调用，以处理排队到主线程的回调任务。
+-------------------------------------------------------------------------------}
+function API_Sync(): integer;
+begin
+  Result := Soft_Sync.Check_Synchronize();
+end;
+
+{-------------------------------------------------------------------------------
+  6.7  初始化与终结
+-------------------------------------------------------------------------------}
+procedure Do_Init();
+begin
+  FillChar(API_Event_Arry, SizeOf(API_Event_Arry), #0);
+  API_Event_Index := 0;
+  // 注意：Soft_Sync 在此处未创建，需用户自行在主线程创建并赋值。
+  // 若需使用 Sync_* 系列函数，请务必创建 Soft_Sync。
+  Soft_Sync := TSoft_Synchronize_Tool.Create;
+end;
+
+procedure Do_Free;
+begin
+  FillChar(API_Event_Arry, SizeOf(API_Event_Arry), #0);
+  Soft_Sync.Free;
+  Soft_Sync := nil;
+end;
+
 initialization
-  // Nothing to initialize
+  Do_Init();
 
 finalization
+  Do_Free();
   if not IsLibrary then
-    API_shutdown();   // automatic cleanup
+    API_shutdown();   // 自动清理网络资源
 end.
