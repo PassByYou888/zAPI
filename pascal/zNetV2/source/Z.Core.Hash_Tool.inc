@@ -558,7 +558,7 @@ begin
   p^.Instance___.Push_To_Recycle_Pool(p);
 end;
 
-procedure TBig_Hash_Pair_Pool<TKey_, TValue_>.Push_To_Recycle_Pool(p: TPool_Queue_Ptr___);
+procedure TBig_Hash_Pair_Pool<TKey_, TValue_>.Push_To_Recycle_Pool2(p: TPool_Queue_Ptr___);
 begin
   p^.Data.Instance___.Push_To_Recycle_Pool(p^.Data);
 end;
@@ -1458,7 +1458,7 @@ begin
   p^.Instance___.Push_To_Recycle_Pool(p);
 end;
 
-procedure TCritical_Big_Hash_Pair_Pool<TKey_, TValue_>.Push_To_Recycle_Pool(p: TPool_Queue_Ptr___);
+procedure TCritical_Big_Hash_Pair_Pool<TKey_, TValue_>.Push_To_Recycle_Pool2(p: TPool_Queue_Ptr___);
 begin
   p^.Data.Instance___.Push_To_Recycle_Pool(p^.Data);
 end;
