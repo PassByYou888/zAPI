@@ -661,57 +661,51 @@ type
   TBigList<T_> = class(TCore_Object_Intermediate)
   public type
 
-    P_ = ^T_;
-    PQueueStruct = ^TQueueStruct;
-    PPQueueStruct = ^PQueueStruct;
-    T___ = TBigList<T_>;
+    P_ = ^T_;                                                      // Pointer to the element type
+    PQueueStruct = ^TQueueStruct;                                  // Pointer to a list node
+    PPQueueStruct = ^PQueueStruct;                                 // Pointer to a node pointer (used for index buffers)
+    T___ = TBigList<T_>;                                           // Self-reference for nested types
 
     TQueueStruct = record
-      Data: T_;
-      Next: PQueueStruct;
-      Prev: PQueueStruct;
-      Instance___: T___;
-      Recycle___: Boolean;
+      Data: T_;                                                    // User data stored in the node
+      Next: PQueueStruct;                                          // Pointer to the next node in the circular list
+      Prev: PQueueStruct;                                          // Pointer to the previous node
+      Instance___: T___;                                           // Back-reference to the owning list
+      Recycle___: Boolean;                                         // True if this node is currently in the recycle pool
     end;
 
-    TRepeat___ = record
+    TRepeat___ = record                                            // Forward iterator over a range of nodes
     private
-      // Begin Index
-      BI___: NativeInt;
-      // End Index
-      EI___: NativeInt;
-      // Current index
-      I___: NativeInt;
-      Instance___: T___;
-      p___: PQueueStruct;
-      Is_Discard___: Boolean;
-      procedure Init_(Instance_: T___); overload;
-      procedure Init_(Instance_: T___; BI_, EI_: NativeInt); overload;
+      BI___: NativeInt;                                            // Starting index (inclusive)
+      EI___: NativeInt;                                            // Ending index (inclusive)
+      I___: NativeInt;                                             // Current position index
+      Instance___: T___;                                           // The list being iterated
+      p___: PQueueStruct;                                          // Current node pointer
+      Is_Discard___: Boolean;                                      // True if the current node should be removed on next move
+      procedure Init_(Instance_: T___); overload;                  // Initialize to iterate the whole list
+      procedure Init_(Instance_: T___; BI_, EI_: NativeInt); overload; // Initialize for a specific index range
     public
-      property Work: T___ read Instance___;
-      property BI: NativeInt read BI___;
-      property EI: NativeInt read EI___;
-      property I__: NativeInt read I___;
-      property Queue: PQueueStruct read p___;
-      procedure Discard;
-      function Next: Boolean;
-      property Right: Boolean read Next;
+      property Work: T___ read Instance___;                        // The list being iterated
+      property BI: NativeInt read BI___;                           // Start index
+      property EI: NativeInt read EI___;                           // End index
+      property I__: NativeInt read I___;                           // Current index
+      property Queue: PQueueStruct read p___;                      // Current node
+      procedure Discard;                                           // Mark current node for removal on the next call to Next
+      function Next: Boolean;                                      // Advance to the next node; returns False when iteration ends
+      property Right: Boolean read Next;                           // Alias for Next
       property Instance: T___ read Instance___;
     end;
 
-    TInvert_Repeat___ = record
+    TInvert_Repeat___ = record                                     // Reverse iterator over a range
     private
-      // Begin Index
-      BI___: NativeInt;
-      // End Index
-      EI___: NativeInt;
-      // Current index
-      I___: NativeInt;
-      Instance___: T___;
-      p___: PQueueStruct;
-      Is_Discard___: Boolean;
-      procedure Init_(Instance_: T___); overload;
-      procedure Init_(Instance_: T___; BI_, EI_: NativeInt); overload;
+      BI___: NativeInt;                                            // Start index (in forward order, inclusive)
+      EI___: NativeInt;                                            // End index (in forward order, inclusive)
+      I___: NativeInt;                                             // Current position (in reverse order)
+      Instance___: T___;                                           // The list being iterated
+      p___: PQueueStruct;                                          // Current node pointer
+      Is_Discard___: Boolean;                                      // True if current node should be removed on next move
+      procedure Init_(Instance_: T___); overload;                  // Initialize to iterate the whole list in reverse
+      procedure Init_(Instance_: T___; BI_, EI_: NativeInt); overload; // Initialize for a specific index range (reverse)
     public
       property Work: T___ read Instance___;
       property BI: NativeInt read BI___;
@@ -719,115 +713,116 @@ type
       property I__: NativeInt read I___;
       property Queue: PQueueStruct read p___;
       procedure Discard;
-      function Prev: Boolean;
+      function Prev: Boolean;                                      // Move to the previous node; returns False when done
       property Left: Boolean read Prev;
       property Instance: T___ read Instance___;
     end;
 
-    TArray_T_ = array of T_;
-    TOrder_Data_Pool = TOrderStruct<T_>;
-    TRecycle_Pool__ = TOrderStruct<PQueueStruct>;
-    TQueueArrayStruct = array [0 .. (MaxInt div SizeOf(Pointer) - 1)] of PQueueStruct;
-    PQueueArrayStruct = ^TQueueArrayStruct;
-    TOnStruct_Event = procedure(var p: T_) of object;
-    TSort_C = function(var L, R: T_): Integer;
-    TQueneStructFor_C = procedure(Index_: NativeInt; p: PQueueStruct; var Aborted: Boolean);
-    TSort_M = function(var L, R: T_): Integer of object;
-    TQueneStructFor_M = procedure(Index_: NativeInt; p: PQueueStruct; var Aborted: Boolean) of object;
+    TArray_T_ = array of T_;                                       // Dynamic array of elements
+    TOrder_Data_Pool = TOrderStruct<T_>;                           // FIFO queue of elements
+    TRecycle_Pool__ = TOrderStruct<PQueueStruct>;                  // Recycle pool storing node pointers for later reuse
+    TQueueArrayStruct = array [0 .. (MaxInt div SizeOf(Pointer) - 1)] of PQueueStruct; // Static array type for index cache
+    PQueueArrayStruct = ^TQueueArrayStruct;                        // Pointer to the index cache array
+    TOnStruct_Event = procedure(var p: T_) of object;              // Event handler for add/free operations
+    TSort_C = function(var L, R: T_): Integer;                     // Sort comparator (C-style plain function)
+    TQueneStructFor_C = procedure(Index_: NativeInt; p: PQueueStruct; var Aborted: Boolean); // For-each callback (C)
+    TSort_M = function(var L, R: T_): Integer of object;           // Sort comparator (M-style method)
+    TQueneStructFor_M = procedure(Index_: NativeInt; p: PQueueStruct; var Aborted: Boolean) of object; // For-each (M)
 {$IFDEF FPC}
-    TQueneStructFor_P = procedure(Index_: NativeInt; p: PQueueStruct; var Aborted: Boolean) is nested;
-    TSort_P = function(var L, R: T_): Integer is nested;
+    TQueneStructFor_P = procedure(Index_: NativeInt; p: PQueueStruct; var Aborted: Boolean) is nested; // For-each (P – nested)
+    TSort_P = function(var L, R: T_): Integer is nested;           // Sort comparator (P – nested)
 {$ELSE FPC}
-    TQueneStructFor_P = reference to procedure(Index_: NativeInt; p: PQueueStruct; var Aborted: Boolean);
-    TSort_P = reference to function(var L, R: T_): Integer;
+    TQueneStructFor_P = reference to procedure(Index_: NativeInt; p: PQueueStruct; var Aborted: Boolean); // For-each (P – anonymous)
+    TSort_P = reference to function(var L, R: T_): Integer;        // Sort comparator (P – anonymous)
 {$ENDIF FPC}
   private
-    FCritical__: TCritical;
-    FRecycle_Pool__: TRecycle_Pool__;
-    FFirst: PQueueStruct;
-    FLast: PQueueStruct;
-    FNum: NativeInt;
-    FOnAdd: TOnStruct_Event;
-    FOnFree: TOnStruct_Event;
-    FOnFree_For_Pair_Tool: TOnStruct_Event;
-    FEnabled_Sort: Boolean;
-    FChanged: Boolean;
-    FList: Pointer;
-    procedure DoInternalFree(p: PQueueStruct);
-    function Get_Critical__: TCritical;
+    FCritical__: TCritical;                                        // Lock for thread safety (created on first use)
+    FRecycle_Pool__: TRecycle_Pool__;                              // Pool of nodes that have been removed but not yet freed
+    FFirst: PQueueStruct;                                          // Head of the circular list (first element)
+    FLast: PQueueStruct;                                           // Tail of the circular list (last element)
+    FNum: NativeInt;                                               // Number of elements currently in the list
+    FOnAdd: TOnStruct_Event;                                       // Event triggered after an element is added
+    FOnFree: TOnStruct_Event;                                      // Event triggered before an element is freed
+    FOnFree_For_Pair_Tool: TOnStruct_Event;                        // Internal event used by pair tools for cleanup
+    FEnabled_Sort: Boolean;                                        // Master switch for sorting operations (default True)
+    FChanged: Boolean;                                             // Set to True whenever the list structure changes; invalidates index cache
+    FList: Pointer;                                                // Cached index array (PQueueArrayStruct), rebuilt on demand
+    procedure DoInternalFree(p: PQueueStruct);                     // Actually frees a node: calls DoFree and Dispose
+    function Get_Critical__: TCritical;                            // Returns the lock, creating it if it does not exist
   public
-    property Critical__: TCritical read Get_Critical__;
-    constructor Create;
-    destructor Destroy; override;
-    procedure DoFree(var Data: T_); virtual;
-    procedure DoAdd(var Data: T_); virtual;
-    function CompareData(const Data_1, Data_2: T_): Boolean; virtual;
-    procedure Lock;
-    procedure UnLock;
-    function Get_Recycle_Pool_Num: NativeInt;
-    procedure Push_To_Recycle_Pool(p: PQueueStruct);
-    procedure Free_Recycle_Pool;
-    procedure Clear;
-    property First: PQueueStruct read FFirst;
-    property Last: PQueueStruct read FLast;
-    procedure Next; // queue support
-    function Add(const Data: T_): PQueueStruct;
-    procedure AddL(L_: T___);
-    function Add_Null(): PQueueStruct;
-    function Insert(const Data: T_; To_: PQueueStruct): PQueueStruct;
-    function CopyFrom(Source_: T___): NativeInt;
-    procedure Remove_P(p: PQueueStruct);
-    procedure Remove_T(const Data: T_);
-    procedure Move_Before(p, To_: PQueueStruct);
-    procedure MoveToFirst(p: PQueueStruct);
-    procedure MoveToLast(p: PQueueStruct);
-    procedure Exchange(p1, p2: PQueueStruct);
-    function Found(p1: PQueueStruct): NativeInt;
-    function Find_Data(const Data: T_): PQueueStruct;
-    function Find_Data_Ptr(const Data_Ptr: P_): PQueueStruct;
-    function Search_Data_As_Array(const Data: T_): TArray_T_;
-    function Search_Data_As_Order(const Data: T_): TOrder_Data_Pool;
-    function Remove_Data(const Data: T_): Integer;
-    function Repeat_(): TRepeat___; overload;
-    function Repeat_(BI_, EI_: NativeInt): TRepeat___; overload;
-    function Invert_Repeat_(): TInvert_Repeat___; overload;
-    function Invert_Repeat_(BI_, EI_: NativeInt): TInvert_Repeat___; overload;
-    procedure For_C(BP_, EP_: PQueueStruct; OnFor: TQueneStructFor_C); overload;
-    procedure For_M(BP_, EP_: PQueueStruct; OnFor: TQueneStructFor_M); overload;
-    procedure For_P(BP_, EP_: PQueueStruct; OnFor: TQueneStructFor_P); overload;
-    procedure For_C(OnFor: TQueneStructFor_C); overload;
-    procedure For_M(OnFor: TQueneStructFor_M); overload;
-    procedure For_P(OnFor: TQueneStructFor_P); overload;
-    function ToArray(): TArray_T_;
-    function ToOrder(): TOrder_Data_Pool;
-    property Enabled_Sort: Boolean read FEnabled_Sort write FEnabled_Sort;
-    procedure Sort_C(Arry_: PQueueArrayStruct; L, R: NativeInt; OnSort: TSort_C); overload;
-    procedure Sort_C(OnSort: TSort_C); overload;
-    procedure Sort_M(Arry_: PQueueArrayStruct; L, R: NativeInt; OnSort: TSort_M); overload;
-    procedure Sort_M(OnSort: TSort_M); overload;
-    procedure Sort_P(Arry_: PQueueArrayStruct; L, R: NativeInt; OnSort: TSort_P); overload;
-    procedure Sort_P(OnSort: TSort_P); overload;
-    function BuildArrayMemory: PQueueArrayStruct;
-    function CheckList: PQueueArrayStruct;
-    function GetList(const Index: NativeInt): PQueueStruct;
-    procedure SetList(const Index: NativeInt; const Value: PQueueStruct);
-    property List[const Index: NativeInt]: PQueueStruct read GetList write SetList;
-    function GetItems(const Index: NativeInt): T_;
-    procedure SetItems(const Index: NativeInt; const Value: T_);
-    property Items[const Index: NativeInt]: T_ read GetItems write SetItems; default;
-    property Num: NativeInt read FNum;
-    property Count: NativeInt read FNum;
-    property OnFree: TOnStruct_Event read FOnFree write FOnFree;
-    property OnAdd: TOnStruct_Event read FOnAdd write FOnAdd;
-    class function Null_Data: T_;
-{$IFDEF DELPHI}
+    property Critical__: TCritical read Get_Critical__;            // Provides external access to the internal lock
+    constructor Create;                                            // Default constructor
+    destructor Destroy; override;                                  // Destructor: clears all nodes and frees the lock
+    procedure DoFree(var Data: T_); virtual;                       // Virtual method to free a single data element (invokes OnFree)
+    procedure DoAdd(var Data: T_); virtual;                        // Virtual method to notify when an element is added (invokes OnAdd)
+    function CompareData(const Data_1, Data_2: T_): Boolean; virtual; // Compares two elements; default uses memory compare
+    procedure Lock;                                                // Acquires the internal lock
+    procedure UnLock;                                              // Releases the internal lock
+    function Get_Recycle_Pool_Num: NativeInt;                      // Returns the number of nodes currently in the recycle pool
+    procedure Push_To_Recycle_Pool(p: PQueueStruct);               // Moves a node to the recycle pool (marks it as recycled)
+    procedure Free_Recycle_Pool;                                   // Frees all nodes currently in the recycle pool
+    procedure Clear;                                               // Removes all elements from the list and empties the recycle pool
+    property First: PQueueStruct read FFirst;                      // Direct access to the first node (nil if list is empty)
+    property Last: PQueueStruct read FLast;                        // Direct access to the last node (nil if list is empty)
+    procedure Next;                                                // Removes and frees the first node (queue-style pop)
+    function Add(const Data: T_): PQueueStruct;                    // Appends a new element to the end; returns the new node
+    procedure AddL(L_: T___);                                      // Appends all elements from another list into this list
+    function Add_Null(): PQueueStruct;                             // Appends a node with uninitialized data; returns the new node
+    function Insert(const Data: T_; To_: PQueueStruct): PQueueStruct; // Inserts a new element before the given node; returns new node
+    function CopyFrom(Source_: T___): NativeInt;                   // Copies all elements from Source_ into this list; returns count
+    procedure Remove_P(p: PQueueStruct);                           // Removes and frees the given node immediately
+    procedure Remove_T(const Data: T_);                            // Removes the first occurrence of Data (alias for Remove_Data)
+    procedure Move_Before(p, To_: PQueueStruct);                   // Moves node p so that it is placed immediately before node To_
+    procedure MoveToFirst(p: PQueueStruct);                        // Moves node p to the front of the list
+    procedure MoveToLast(p: PQueueStruct);                         // Moves node p to the back of the list
+    procedure Exchange(p1, p2: PQueueStruct);                      // Swaps the data of two nodes
+    function Found(p1: PQueueStruct): NativeInt;                   // Returns the index of the given node, or -1 if not found
+    function Find_Data(const Data: T_): PQueueStruct;              // Finds the first node whose data matches; returns nil if none
+    function Find_Data_Ptr(const Data_Ptr: P_): PQueueStruct;      // Finds a node by comparing the address of its data field
+    function Search_Data_As_Array(const Data: T_): TArray_T_;      // Finds all matching elements and returns them as a dynamic array
+    function Search_Data_As_Order(const Data: T_): TOrder_Data_Pool; // Finds all matching elements and returns them as a FIFO queue
+    function Remove_Data(const Data: T_): Integer;                 // Removes all occurrences of Data; returns the number removed
+    function Repeat_(): TRepeat___; overload;                      // Returns a forward iterator over the entire list
+    function Repeat_(BI_, EI_: NativeInt): TRepeat___; overload;   // Returns a forward iterator for a specific index range
+    function Invert_Repeat_(): TInvert_Repeat___; overload;        // Returns a reverse iterator over the entire list
+    function Invert_Repeat_(BI_, EI_: NativeInt): TInvert_Repeat___; overload; // Returns a reverse iterator for a specific index range
+    procedure For_C(BP_, EP_: PQueueStruct; OnFor: TQueneStructFor_C); overload; // Iterates a node range with C-style callback
+    procedure For_M(BP_, EP_: PQueueStruct; OnFor: TQueneStructFor_M); overload; // Iterates a node range with M-style callback
+    procedure For_P(BP_, EP_: PQueueStruct; OnFor: TQueneStructFor_P); overload; // Iterates a node range with P-style callback
+    procedure For_C(OnFor: TQueneStructFor_C); overload;           // Iterates the entire list with C-style callback
+    procedure For_M(OnFor: TQueneStructFor_M); overload;           // Iterates the entire list with M-style callback
+    procedure For_P(OnFor: TQueneStructFor_P); overload;           // Iterates the entire list with P-style callback
+    function ToArray(): TArray_T_;                                 // Copies all elements into a dynamic array (order = forward)
+    function ToOrder(): TOrder_Data_Pool;                          // Copies all elements into a FIFO queue (order = forward)
+    property Enabled_Sort: Boolean read FEnabled_Sort write FEnabled_Sort; // Enables or disables sorting operations
+    procedure Sort_C(Arry_: PQueueArrayStruct; L, R: NativeInt; OnSort: TSort_C); overload; // Quicksort on an index range (C comparator)
+    procedure Sort_C(OnSort: TSort_C); overload;                   // Quicksort the entire list (C comparator)
+    procedure Sort_M(Arry_: PQueueArrayStruct; L, R: NativeInt; OnSort: TSort_M); overload; // Quicksort on a range (M comparator)
+    procedure Sort_M(OnSort: TSort_M); overload;                   // Quicksort the entire list (M comparator)
+    procedure Sort_P(Arry_: PQueueArrayStruct; L, R: NativeInt; OnSort: TSort_P); overload; // Quicksort on a range (P comparator)
+    procedure Sort_P(OnSort: TSort_P); overload;                   // Quicksort the entire list (P comparator)
+    function BuildArrayMemory: PQueueArrayStruct;                  // Allocates and builds an index cache array; caller must free with FreeMemory
+    function CheckList: PQueueArrayStruct;                         // Returns the index cache, rebuilding it if the list has changed
+    function GetList(const Index: NativeInt): PQueueStruct;        // Returns the node at the given index (O(1) using cache)
+    procedure SetList(const Index: NativeInt; const Value: PQueueStruct); // Replaces the node pointer in the index cache (for internal use)
+    property List[const Index: NativeInt]: PQueueStruct read GetList write SetList; // Indexed node access (by pointer)
+    function GetItems(const Index: NativeInt): T_;                 // Returns the data element at the given index
+    procedure SetItems(const Index: NativeInt; const Value: T_);   // Sets the data element at the given index
+    property Items[const Index: NativeInt]: T_ read GetItems write SetItems; default; // Indexed element access
+    property Num: NativeInt read FNum;                             // Number of elements in the list
+    property Count: NativeInt read FNum;                           // Alias for Num
+    property OnFree: TOnStruct_Event read FOnFree write FOnFree;   // Event fired before an element is freed
+    property OnAdd: TOnStruct_Event read FOnAdd write FOnAdd;      // Event fired after an element is added
+    class function Null_Data: T_;                                  // Returns a zero-initialized instance of T_
 {$IFDEF DEBUG}
-    function Test_Check__: Boolean;
-    class procedure Test;
+    function Test_Check__: Boolean;                                // Debug: verifies the integrity of the circular list links
+    class procedure Test;                                          // Debug: runs a self-test on the list implementation
 {$ENDIF DEBUG}
-{$ENDIF DELPHI}
   end;
 
+  // ==========================================================================
+  // Thread-safe version – all public methods are guarded by FCritical__.
+  // ==========================================================================
   TCritical_BigList<T_> = class(TCore_Object_Intermediate)
   public type
     P_ = ^T_;
@@ -845,11 +840,8 @@ type
 
     TRepeat___ = record
     private
-      // Begin Index
       BI___: NativeInt;
-      // End Index
       EI___: NativeInt;
-      // Current index
       I___: NativeInt;
       Instance___: T___;
       p___: PQueueStruct;
@@ -870,11 +862,8 @@ type
 
     TInvert_Repeat___ = record
     private
-      // Begin Index
       BI___: NativeInt;
-      // End Index
       EI___: NativeInt;
-      // Current index
       I___: NativeInt;
       Instance___: T___;
       p___: PQueueStruct;
@@ -911,107 +900,109 @@ type
     TSort_P = reference to function(var L, R: T_): Integer;
 {$ENDIF FPC}
   private
-    FCritical__: TCritical;
-    FRecycle_Pool__: TRecycle_Pool__;
-    FFirst: PQueueStruct;
-    FLast: PQueueStruct;
-    FNum: NativeInt;
-    FOnAdd: TOnStruct_Event;
-    FOnFree: TOnStruct_Event;
-    FOnFree_For_Pair_Tool: TOnStruct_Event;
-    FEnabled_Sort: Boolean;
-    FChanged: Boolean;
-    FList: Pointer;
-    procedure DoInternalFree(p: PQueueStruct);
-    function Get_Critical__: TCritical;
+    FCritical__: TCritical;                                        // Lock – created in the constructor (always available)
+    FRecycle_Pool__: TRecycle_Pool__;                              // Recycle pool for removed nodes
+    FFirst: PQueueStruct;                                          // Head of the list (first element)
+    FLast: PQueueStruct;                                           // Tail of the list (last element)
+    FNum: NativeInt;                                               // Current element count
+    FOnAdd: TOnStruct_Event;                                       // Add event handler
+    FOnFree: TOnStruct_Event;                                      // Free event handler
+    FOnFree_For_Pair_Tool: TOnStruct_Event;                        // Internal free event
+    FEnabled_Sort: Boolean;                                        // Sorting enabled flag
+    FChanged: Boolean;                                             // Invalidation flag for index cache
+    FList: Pointer;                                                // Cached index array
+    procedure DoInternalFree(p: PQueueStruct);                     // Internal free of a node (calls DoFree and Dispose)
+    function Get_Critical__: TCritical;                            // Returns the lock (always non-nil)
   public
-    property Critical__: TCritical read Get_Critical__;
-    constructor Create;
-    destructor Destroy; override;
-    procedure DoFree(var Data: T_); virtual;
-    procedure DoAdd(var Data: T_); virtual;
-    function CompareData(const Data_1, Data_2: T_): Boolean; virtual;
-    procedure Lock;
-    procedure UnLock;
-    function Get_Recycle_Pool_Num: NativeInt;
-    procedure Push_To_Recycle_Pool(p: PQueueStruct);
-    procedure Free_Recycle_Pool(Lock_: Boolean); overload;
-    procedure Free_Recycle_Pool; overload;
-    procedure Clear;
-    property First: PQueueStruct read FFirst;
-    property Last: PQueueStruct read FLast;
-    procedure Next(Lock_: Boolean); overload; // queue support
-    procedure Next; overload; // queue support
-    function Add(const Data: T_): PQueueStruct;
-    procedure AddL(L_: T___);
-    function Add_Null(Lock_: Boolean): PQueueStruct; overload;
-    function Add_Null(): PQueueStruct; overload;
-    function Insert(const Data: T_; To_: PQueueStruct): PQueueStruct;
-    function CopyFrom(Source_: T___): NativeInt;
-    procedure Remove_P(p: PQueueStruct; Lock_: Boolean); overload;
-    procedure Remove_P(p: PQueueStruct); overload;
-    procedure Remove_T(const Data: T_);
-    procedure Move_Before(p, To_: PQueueStruct);
-    procedure MoveToFirst(p: PQueueStruct);
-    procedure MoveToLast(p: PQueueStruct);
-    procedure Exchange(p1, p2: PQueueStruct);
-    function Found(p1: PQueueStruct): NativeInt;
-    function Find_Data(const Data: T_): PQueueStruct;
-    function Find_Data_Ptr(const Data_Ptr: P_): PQueueStruct;
-    function Search_Data_As_Array(const Data: T_): TArray_T_;
-    function Search_Data_As_Order(const Data: T_): TOrder_Data_Pool;
-    function Remove_Data(const Data: T_): Integer;
-    function Repeat_(): TRepeat___; overload;
-    function Repeat_(BI_, EI_: NativeInt): TRepeat___; overload;
-    function Invert_Repeat_(): TInvert_Repeat___; overload;
-    function Invert_Repeat_(BI_, EI_: NativeInt): TInvert_Repeat___; overload;
-    procedure For_C(BP_, EP_: PQueueStruct; OnFor: TQueneStructFor_C); overload;
-    procedure For_M(BP_, EP_: PQueueStruct; OnFor: TQueneStructFor_M); overload;
-    procedure For_P(BP_, EP_: PQueueStruct; OnFor: TQueneStructFor_P); overload;
-    procedure For_C(OnFor: TQueneStructFor_C); overload;
-    procedure For_M(OnFor: TQueneStructFor_M); overload;
-    procedure For_P(OnFor: TQueneStructFor_P); overload;
-    function ToArray(): TArray_T_;
-    function ToOrder(): TOrder_Data_Pool;
-    property Enabled_Sort: Boolean read FEnabled_Sort write FEnabled_Sort;
-    procedure Sort_C(Arry_: PQueueArrayStruct; L, R: NativeInt; OnSort: TSort_C); overload;
-    procedure Sort_C(OnSort: TSort_C); overload;
-    procedure Sort_M(Arry_: PQueueArrayStruct; L, R: NativeInt; OnSort: TSort_M); overload;
-    procedure Sort_M(OnSort: TSort_M); overload;
-    procedure Sort_P(Arry_: PQueueArrayStruct; L, R: NativeInt; OnSort: TSort_P); overload;
-    procedure Sort_P(OnSort: TSort_P); overload;
-    function BuildArrayMemory: PQueueArrayStruct;
-    function CheckList: PQueueArrayStruct;
-    function GetList(const Index: NativeInt): PQueueStruct;
-    procedure SetList(const Index: NativeInt; const Value: PQueueStruct);
-    property List[const Index: NativeInt]: PQueueStruct read GetList write SetList;
-    function GetItems(const Index: NativeInt): T_;
-    procedure SetItems(const Index: NativeInt; const Value: T_);
-    property Items[const Index: NativeInt]: T_ read GetItems write SetItems; default;
-    property Num: NativeInt read FNum;
-    property Count: NativeInt read FNum;
-    property OnFree: TOnStruct_Event read FOnFree write FOnFree;
-    property OnAdd: TOnStruct_Event read FOnAdd write FOnAdd;
-    class function Null_Data: T_;
-{$IFDEF DELPHI}
+    property Critical__: TCritical read Get_Critical__;            // Exposes the internal lock
+    constructor Create;                                            // Creates the list and initializes the lock
+    destructor Destroy; override;                                  // Cleans up all resources
+    procedure DoFree(var Data: T_); virtual;                       // Virtual free method (triggers OnFree)
+    procedure DoAdd(var Data: T_); virtual;                        // Virtual add method (triggers OnAdd)
+    function CompareData(const Data_1, Data_2: T_): Boolean; virtual; // Element comparison (default memory compare)
+    procedure Lock;                                                // Acquires the lock
+    procedure UnLock;                                              // Releases the lock
+    function Get_Recycle_Pool_Num: NativeInt;                      // Returns number of nodes in recycle pool
+    procedure Push_To_Recycle_Pool(p: PQueueStruct);               // Moves a node to recycle pool
+    procedure Free_Recycle_Pool(Lock_: Boolean); overload;         // Frees recycle pool, optionally acquiring the lock
+    procedure Free_Recycle_Pool; overload;                         // Frees recycle pool (no extra lock)
+    procedure Clear;                                               // Clears all elements and recycle pool
+    property First: PQueueStruct read FFirst;                      // First node (nil if empty)
+    property Last: PQueueStruct read FLast;                        // Last node (nil if empty)
+    procedure Next(Lock_: Boolean); overload;                     // Removes first node, optionally with lock
+    procedure Next; overload;                                     // Removes first node (acquires lock)
+    function Add(const Data: T_): PQueueStruct;                    // Appends an element; returns new node
+    procedure AddL(L_: T___);                                      // Appends all elements from another list
+    function Add_Null(Lock_: Boolean): PQueueStruct; overload;    // Appends an uninitialized node, optionally with lock
+    function Add_Null(): PQueueStruct; overload;                  // Appends an uninitialized node (acquires lock)
+    function Insert(const Data: T_; To_: PQueueStruct): PQueueStruct; // Inserts before a given node; returns new node
+    function CopyFrom(Source_: T___): NativeInt;                   // Copies all elements from another list; returns count
+    procedure Remove_P(p: PQueueStruct; Lock_: Boolean); overload; // Removes node, optionally with lock
+    procedure Remove_P(p: PQueueStruct); overload;                // Removes node (acquires lock)
+    procedure Remove_T(const Data: T_);                            // Removes first matching data (alias for Remove_Data)
+    procedure Move_Before(p, To_: PQueueStruct);                   // Moves node p before node To_
+    procedure MoveToFirst(p: PQueueStruct);                        // Moves node to front
+    procedure MoveToLast(p: PQueueStruct);                         // Moves node to back
+    procedure Exchange(p1, p2: PQueueStruct);                      // Swaps data of two nodes
+    function Found(p1: PQueueStruct): NativeInt;                   // Returns index of node, or -1
+    function Find_Data(const Data: T_): PQueueStruct;              // Finds first matching node by data
+    function Find_Data_Ptr(const Data_Ptr: P_): PQueueStruct;      // Finds node by data address
+    function Search_Data_As_Array(const Data: T_): TArray_T_;      // Finds all matches as dynamic array
+    function Search_Data_As_Order(const Data: T_): TOrder_Data_Pool; // Finds all matches as FIFO queue
+    function Remove_Data(const Data: T_): Integer;                 // Removes all occurrences of Data; returns count
+    function Repeat_(): TRepeat___; overload;                      // Forward iterator over entire list
+    function Repeat_(BI_, EI_: NativeInt): TRepeat___; overload;   // Forward iterator over index range
+    function Invert_Repeat_(): TInvert_Repeat___; overload;        // Reverse iterator over entire list
+    function Invert_Repeat_(BI_, EI_: NativeInt): TInvert_Repeat___; overload; // Reverse iterator over range
+    procedure For_C(BP_, EP_: PQueueStruct; OnFor: TQueneStructFor_C); overload; // Iterate range with C callback
+    procedure For_M(BP_, EP_: PQueueStruct; OnFor: TQueneStructFor_M); overload; // Iterate range with M callback
+    procedure For_P(BP_, EP_: PQueueStruct; OnFor: TQueneStructFor_P); overload; // Iterate range with P callback
+    procedure For_C(OnFor: TQueneStructFor_C); overload;           // Iterate whole list with C callback
+    procedure For_M(OnFor: TQueneStructFor_M); overload;           // Iterate whole list with M callback
+    procedure For_P(OnFor: TQueneStructFor_P); overload;           // Iterate whole list with P callback
+    function ToArray(): TArray_T_;                                 // Copy all elements to a dynamic array
+    function ToOrder(): TOrder_Data_Pool;                          // Copy all elements to a FIFO queue
+    property Enabled_Sort: Boolean read FEnabled_Sort write FEnabled_Sort; // Enable/disable sorting
+    procedure Sort_C(Arry_: PQueueArrayStruct; L, R: NativeInt; OnSort: TSort_C); overload; // Quicksort on range (C)
+    procedure Sort_C(OnSort: TSort_C); overload;                   // Quicksort whole list (C)
+    procedure Sort_M(Arry_: PQueueArrayStruct; L, R: NativeInt; OnSort: TSort_M); overload; // Quicksort on range (M)
+    procedure Sort_M(OnSort: TSort_M); overload;                   // Quicksort whole list (M)
+    procedure Sort_P(Arry_: PQueueArrayStruct; L, R: NativeInt; OnSort: TSort_P); overload; // Quicksort on range (P)
+    procedure Sort_P(OnSort: TSort_P); overload;                   // Quicksort whole list (P)
+    function BuildArrayMemory: PQueueArrayStruct;                  // Builds index cache (caller frees)
+    function CheckList: PQueueArrayStruct;                         // Returns index cache, rebuilds if needed
+    function GetList(const Index: NativeInt): PQueueStruct;        // Returns node at index (O(1) via cache)
+    procedure SetList(const Index: NativeInt; const Value: PQueueStruct); // Replaces node pointer in cache
+    property List[const Index: NativeInt]: PQueueStruct read GetList write SetList; // Indexed node access
+    function GetItems(const Index: NativeInt): T_;                 // Returns element at index
+    procedure SetItems(const Index: NativeInt; const Value: T_);   // Sets element at index
+    property Items[const Index: NativeInt]: T_ read GetItems write SetItems; default; // Indexed element access
+    property Num: NativeInt read FNum;                             // Number of elements
+    property Count: NativeInt read FNum;                           // Alias for Num
+    property OnFree: TOnStruct_Event read FOnFree write FOnFree;   // Event fired when element is freed
+    property OnAdd: TOnStruct_Event read FOnAdd write FOnAdd;      // Event fired when element is added
+    class function Null_Data: T_;                                  // Returns zeroed T_
 {$IFDEF DEBUG}
-    function Test_Check__: Boolean;
-    class procedure Test;
+    function Test_Check__: Boolean;                                // Debug: verifies circular list integrity
+    class procedure Test;                                          // Debug: runs unit tests
 {$ENDIF DEBUG}
-{$ENDIF DELPHI}
   end;
 
-  TC_BigList<T_> = class(TCritical_BigList<T_>);
+  TC_BigList<T_> = class(TCritical_BigList<T_>);                  // Short alias for the thread‑safe version
 
+  // ==========================================================================
+  // Object‑specialized version – automatically frees objects when removed.
+  // ==========================================================================
   TBig_Object_List<T_: class> = class(TBigList<T_>)
   public
-    AutoFreeObject: Boolean;
-    constructor Create(AutoFreeObject_: Boolean);
-    procedure DoFree(var Data: T_); override;
+    AutoFreeObject: Boolean;                                      // If True, the object is freed when the node is removed
+    constructor Create(AutoFreeObject_: Boolean);                 // Constructor with autofree flag
+    procedure DoFree(var Data: T_); override;                     // Override: frees the object if AutoFreeObject is True
   end;
 
-  TObject_BigList<T_: class> = class(TBig_Object_List<T_>);
+  TObject_BigList<T_: class> = class(TBig_Object_List<T_>);      // Alias
 
+  // Thread‑safe object list
   TCritical_Big_Object_List<T_: class> = class(TCritical_BigList<T_>)
   public
     AutoFreeObject: Boolean;
@@ -1019,7 +1010,7 @@ type
     procedure DoFree(var Data: T_); override;
   end;
 
-  TC_Big_Object_List<T_: class> = class(TCritical_Big_Object_List<T_>);
+  TC_Big_Object_List<T_: class> = class(TCritical_Big_Object_List<T_>); // Alias
 
 {$ENDREGION 'BigList'}
 {$REGION 'Pair'}
@@ -1173,145 +1164,160 @@ type
 }
   TBig_Hash_Pair_Pool<TKey_, TValue_> = class(TCore_Object_Intermediate)
   public type
-    PKey_ = ^TKey_;
-    PValue_ = ^TValue_;
-    PKey = PKey_;
-    PValue = PValue_;
-    T___ = TBig_Hash_Pair_Pool<TKey_, TValue_>;
-    TValue_Pair_Pool__ = TPair4_Tool<TKey_, TValue_, Pointer, THash>;
-    PPair_Pool_Value__ = TValue_Pair_Pool__.PPair__;
-    TPair = TValue_Pair_Pool__.TPair;
-    TKey_Hash_Buffer = TGenericsList<TValue_Pair_Pool__>;
-    TPool___ = TBigList<PPair_Pool_Value__>;
-    TPool_Queue_Ptr___ = TPool___.PQueueStruct;
-    TRepeat___ = TPool___.TRepeat___;
-    TInvert_Repeat___ = TPool___.TInvert_Repeat___;
-    TArray_Key = array of TKey_;
-    TOrder_Key = TOrderStruct<TKey_>;
-    TArray_Value = array of TValue_;
-    TOrder_Value = TOrderStruct<TValue_>;
+    PKey_ = ^TKey_;                                              // Pointer to key type
+    PValue_ = ^TValue_;                                          // Pointer to value type
+    PKey = PKey_;                                                // Alias for pointer to key
+    PValue = PValue_;                                            // Alias for pointer to value
+    T___ = TBig_Hash_Pair_Pool<TKey_, TValue_>;                  // Self-reference for nested types
+    TValue_Pair_Pool__ = TPair4_Tool<TKey_, TValue_, Pointer, THash>; // Internal storage: key, value, queue node pointer, hash
+    PPair_Pool_Value__ = TValue_Pair_Pool__.PPair__;             // Pointer to a stored entry (pair)
+    TPair = TValue_Pair_Pool__.TPair;                            // The actual pair record (key, value, ptr, hash)
+    TKey_Hash_Buffer = TGenericsList<TValue_Pair_Pool__>;        // Bucket array: each slot is a list of pairs
+    TPool___ = TBigList<PPair_Pool_Value__>;                     // Global queue pool for iteration (all entries)
+    TPool_Queue_Ptr___ = TPool___.PQueueStruct;                  // Node pointer within the global queue
+    TRepeat___ = TPool___.TRepeat___;                            // Forward iterator over the global queue
+    TInvert_Repeat___ = TPool___.TInvert_Repeat___;              // Reverse iterator over the global queue
+    TArray_Key = array of TKey_;                                 // Dynamic array of keys
+    TOrder_Key = TOrderStruct<TKey_>;                            // FIFO queue of keys
+    TArray_Value = array of TValue_;                             // Dynamic array of values
+    TOrder_Value = TOrderStruct<TValue_>;                        // FIFO queue of values
+
     // event
-    TOn_Event = procedure(var Key: TKey_; var Value: TValue_) of object;
-    TOn_Get_Key = procedure(const Key_: PKey_; var Hash:THash) of object;
-    TOn_Compare_Key = procedure(const Key_1, Key_2: PKey_; var IsSame:Boolean) of object;
-    TOn_Compare_Value = procedure(const Value_1, Value_2: PValue_; var IsSame:Boolean) of object;
-    TOn_Sort_Key_C = function(var L, R: TKey_): Integer;
-    TOn_Sort_Key_M = function(var L, R: TKey_): Integer of object;
-    TOn_Sort_Value_C = function(var L, R: TValue_): Integer;
-    TOn_Sort_Value_M = function(var L, R: TValue_): Integer of object;
-    TBig_Hash_Pool_For_C = procedure(p: PPair_Pool_Value__; var Aborted: Boolean);
-    TBig_Hash_Pool_For_M = procedure(p: PPair_Pool_Value__; var Aborted: Boolean) of object;
+    TOn_Event = procedure(var Key: TKey_; var Value: TValue_) of object; // Called on add/free
+    TOn_Get_Key = procedure(const Key_: PKey_; var Hash:THash) of object; // Custom hash computation
+    TOn_Compare_Key = procedure(const Key_1, Key_2: PKey_; var IsSame:Boolean) of object; // Custom key equality
+    TOn_Compare_Value = procedure(const Value_1, Value_2: PValue_; var IsSame:Boolean) of object; // Custom value equality
+    TOn_Sort_Key_C = function(var L, R: TKey_): Integer;         // Sort comparator for keys (C-style)
+    TOn_Sort_Key_M = function(var L, R: TKey_): Integer of object; // Sort comparator for keys (M-style)
+    TOn_Sort_Value_C = function(var L, R: TValue_): Integer;     // Sort comparator for values (C-style)
+    TOn_Sort_Value_M = function(var L, R: TValue_): Integer of object; // Sort comparator for values (M-style)
+    TBig_Hash_Pool_For_C = procedure(p: PPair_Pool_Value__; var Aborted: Boolean); // Iterator callback (C)
+    TBig_Hash_Pool_For_M = procedure(p: PPair_Pool_Value__; var Aborted: Boolean) of object; // Iterator callback (M)
 {$IFDEF FPC}
-    TBig_Hash_Pool_For_P = procedure(p: PPair_Pool_Value__; var Aborted: Boolean) is nested;
-    TOn_Sort_Key_P = function(var L, R: TKey_): Integer is nested;
-    TOn_Sort_Value_P = function(var L, R: TValue_): Integer is nested;
+    TBig_Hash_Pool_For_P = procedure(p: PPair_Pool_Value__; var Aborted: Boolean) is nested; // Iterator callback (P – nested)
+    TOn_Sort_Key_P = function(var L, R: TKey_): Integer is nested; // Sort comparator for keys (P – nested)
+    TOn_Sort_Value_P = function(var L, R: TValue_): Integer is nested; // Sort comparator for values (P – nested)
 {$ELSE FPC}
-    TBig_Hash_Pool_For_P = reference to procedure(p: PPair_Pool_Value__; var Aborted: Boolean);
-    TOn_Sort_Key_P = reference to function(var L, R: TKey_): Integer;
-    TOn_Sort_Value_P = reference to function(var L, R: TValue_): Integer;
+    TBig_Hash_Pool_For_P = reference to procedure(p: PPair_Pool_Value__; var Aborted: Boolean); // Iterator callback (P – anonymous)
+    TOn_Sort_Key_P = reference to function(var L, R: TKey_): Integer; // Sort comparator for keys (P – anonymous)
+    TOn_Sort_Value_P = reference to function(var L, R: TValue_): Integer; // Sort comparator for values (P – anonymous)
 {$ENDIF FPC}
   private
-    FCritical__: TCritical;
-    FQueue_Pool: TPool___;
-    FHash_Buffer: TKey_Hash_Buffer;
-    FNULL_VALUE: TValue_;
-    FOnAdd: TOn_Event;
-    FOnFree: TOn_Event;
-    FOn_Get_Key: TOn_Get_Key;
-    FOn_Compare_Key: TOn_Compare_Key;
-    FOn_Compare_Value: TOn_Compare_Value;
-    function Get_Critical__: TCritical;
-    function Get_Value_List(const Key_: TKey_; var Key_Hash_: THash): TValue_Pair_Pool__;
-    procedure Free_Value_List(Key_Hash_: THash);
-    procedure Get_Key_Data_Ptr(const Key_P: PKey_; var p: PByte; var Size: NativeInt);
-    procedure Internal_Do_Queue_Pool_Free(var Data: PPair_Pool_Value__);
-    procedure Internal_Do_Free(var Data: TPair);
+    FCritical__: TCritical;                                      // Lock for thread safety (lazy-created)
+    FQueue_Pool: TPool___;                                       // Global list of all entries (for iteration)
+    FHash_Buffer: TKey_Hash_Buffer;                              // Bucket array of collision lists
+    FNULL_VALUE: TValue_;                                        // Default value returned for missing keys
+    FOnAdd: TOn_Event;                                           // User hook on add
+    FOnFree: TOn_Event;                                          // User hook on free
+    FOn_Get_Key: TOn_Get_Key;                                    // Custom key hash function
+    FOn_Compare_Key: TOn_Compare_Key;                            // Custom key comparison
+    FOn_Compare_Value: TOn_Compare_Value;                        // Custom value comparison
+
+    function Get_Critical__: TCritical;                          // Returns the lock, creating it if nil
+    function Get_Value_List(const Key_: TKey_; var Key_Hash_: THash): TValue_Pair_Pool__; // Locates the bucket list for a key (creates if missing)
+    procedure Free_Value_List(Key_Hash_: THash);                 // Frees an empty bucket list
+    procedure Get_Key_Data_Ptr(const Key_P: PKey_; var p: PByte; var Size: NativeInt); // Default key raw data pointer for hashing
+    procedure Internal_Do_Queue_Pool_Free(var Data: PPair_Pool_Value__); // Called when an entry is removed from the global queue
+    procedure Internal_Do_Free(var Data: TPair);                 // Called when a pair is freed from a bucket list
   public
-    class function Null_Key: TKey_;
-    class function NULL_VALUE: TValue_;
-    property Critical__: TCritical read Get_Critical__;
-    property Queue_Pool: TPool___ read FQueue_Pool;
-    property OnAdd: TOn_Event read FOnAdd write FOnAdd;
-    property OnFree: TOn_Event read FOnFree write FOnFree;
-    property On_Get_Key: TOn_Get_Key read FOn_Get_Key write FOn_Get_Key;
-    property On_Compare_Key: TOn_Compare_Key read FOn_Compare_Key write FOn_Compare_Key;
-    property On_Compare_Value: TOn_Compare_Value read FOn_Compare_Value write FOn_Compare_Value;
-    constructor Create(const HashSize_: integer; const NULL_VALUE_: TValue_); overload;
-    constructor Create(const HashSize_: integer); overload;
-    destructor Destroy; override;
-    procedure CreateBefore; virtual;
-    procedure CreateAfter; virtual;
-    procedure DoFree(var Key: TKey_; var Value: TValue_); virtual;
-    procedure DoAdd(var Key: TKey_; var Value: TValue_); virtual;
-    function Get_Key_Hash(const Key_: TKey_): THash; virtual;
-    function Compare_Key(const Key_1, Key_2: TKey_): Boolean; virtual;
-    function Compare_Value(const Value_1, Value_2: TValue_): Boolean; virtual;
-    procedure Lock;
-    procedure UnLock;
-    procedure Extract_Queue_Pool_Third;
-    function GetHashSize: Integer;
-    procedure Clear;
-    function Exists_Key(const Key: TKey_): Boolean;
-    function Exists_Value(const Data: TValue_): Boolean;
-    function Exists(const Key: TKey_): Boolean;
-    function Add(const Key: TKey_; const Value: TValue_; Overwrite_: Boolean): PPair_Pool_Value__;
-    function Get_Key_Value(const Key: TKey_): TValue_;
-    procedure Set_Key_Value(const Key: TKey_; const Value: TValue_);
-    property Key_Value[const Key: TKey_]: TValue_ read Get_Key_Value write Set_Key_Value; default;
-    procedure Delete(const Key: TKey_);
-    procedure Remove(p: PPair_Pool_Value__); overload;
-    procedure Remove(p: PPair_Pool_Value__; Do_Free_Recycle_Pool_:Boolean); overload;
-    function Num: NativeInt;
-    property Count: NativeInt read Num;
-    function GetSum: NativeInt;
-    property Sum: NativeInt read GetSum;
-    function Get_Value_Ptr(const Key: TKey_): PValue_; overload;
-    function Get_Value_Ptr(const Key: TKey_; const Default_: TValue_): PValue_; overload;
-    function Get_Default_Value(const Key: TKey_; const Default_: TValue_): TValue_;
-    procedure Set_Default_Value(const Key: TKey_; const Default_: TValue_);
-    function Repeat_(): TRepeat___; overload;
-    function Repeat_(BI_, EI_: NativeInt): TRepeat___; overload;
-    function Invert_Repeat_(): TInvert_Repeat___; overload;
-    function Invert_Repeat_(BI_, EI_: NativeInt): TInvert_Repeat___; overload;
-    procedure For_C(OnFor: TBig_Hash_Pool_For_C); overload;
-    procedure For_M(OnFor: TBig_Hash_Pool_For_M); overload;
-    procedure For_P(OnFor: TBig_Hash_Pool_For_P); overload;
-    procedure Push_To_Recycle_Pool(p: PPair_Pool_Value__); overload;
-    procedure Push_To_Recycle_Pool(p: TPool_Queue_Ptr___); overload;
-    procedure Free_Recycle_Pool;
-    procedure Sort_Key_C(OnSort: TOn_Sort_Key_C);
-    procedure Sort_Key_M(OnSort: TOn_Sort_Key_M);
-    procedure Sort_Key_P(OnSort: TOn_Sort_Key_P);
-    procedure Sort_Value_C(OnSort: TOn_Sort_Value_C);
-    procedure Sort_Value_M(OnSort: TOn_Sort_Value_M);
-    procedure Sort_Value_P(OnSort: TOn_Sort_Value_P);
-    function ToPool(): TPool___;
-    function ToArray_Key(): TArray_Key;
-    function ToOrder_Key(): TOrder_Key;
-    function ToArray_Value(): TArray_Value;
-    function ToOrder_Value(): TOrder_Value;
+    class function Null_Key: TKey_;                              // Returns a zero-initialized key
+    class function NULL_VALUE: TValue_;                          // Returns a zero-initialized value
+    property Critical__: TCritical read Get_Critical__;          // Access to the internal lock
+    property Queue_Pool: TPool___ read FQueue_Pool;              // Direct access to the global entry list
+    property OnAdd: TOn_Event read FOnAdd write FOnAdd;          // Hook for add events
+    property OnFree: TOn_Event read FOnFree write FOnFree;       // Hook for free events
+    property On_Get_Key: TOn_Get_Key read FOn_Get_Key write FOn_Get_Key; // Custom key hashing
+    property On_Compare_Key: TOn_Compare_Key read FOn_Compare_Key write FOn_Compare_Key; // Custom key equality
+    property On_Compare_Value: TOn_Compare_Value read FOn_Compare_Value write FOn_Compare_Value; // Custom value equality
+
+    constructor Create(const HashSize_: integer; const NULL_VALUE_: TValue_); overload; // Constructor with specified null value
+    constructor Create(const HashSize_: integer); overload;      // Constructor with default null value (zeroed)
+    destructor Destroy; override;                                // Cleans up all resources
+    procedure CreateBefore; virtual;                             // Pre-initialization hook (called in constructor)
+    procedure CreateAfter; virtual;                              // Post-initialization hook
+    procedure DoFree(var Key: TKey_; var Value: TValue_); virtual; // Internal free handler (calls OnFree)
+    procedure DoAdd(var Key: TKey_; var Value: TValue_); virtual; // Internal add handler (calls OnAdd)
+    function Get_Key_Hash(const Key_: TKey_): THash; virtual;    // Computes hash for a key (uses custom hook or default CRC32)
+    function Compare_Key(const Key_1, Key_2: TKey_): Boolean; virtual; // Compares two keys (custom or memory compare)
+    function Compare_Value(const Value_1, Value_2: TValue_): Boolean; virtual; // Compares two values (custom or memory compare)
+    procedure Lock;                                              // Acquires the internal lock
+    procedure UnLock;                                            // Releases the internal lock
+    procedure Extract_Queue_Pool_Third;                          // Rebuilds the `Third` pointer of each queue node (after sorting)
+    function GetHashSize: Integer;                               // Returns the number of buckets
+    procedure Clear;                                             // Removes all entries
+    function Exists_Key(const Key: TKey_): Boolean;              // Checks if a key exists (moves it to front on hit)
+    function Exists_Value(const Data: TValue_): Boolean;         // Checks if any entry has the given value (linear scan)
+    function Exists(const Key: TKey_): Boolean;                  // Alias for Exists_Key
+    function Add(const Key: TKey_; const Value: TValue_; Overwrite_: Boolean): PPair_Pool_Value__; // Inserts or updates an entry; returns pointer to the pair
+    function Get_Key_Value(const Key: TKey_): TValue_;           // Retrieves value for a key; returns FNULL_VALUE if not found
+    procedure Set_Key_Value(const Key: TKey_; const Value: TValue_); // Sets value for a key (overwrites if exists)
+    property Key_Value[const Key: TKey_]: TValue_ read Get_Key_Value write Set_Key_Value; default; // Indexed access by key
+    procedure Delete(const Key: TKey_);                          // Removes an entry by key
+    procedure Remove(p: PPair_Pool_Value__); overload;           // Removes an entry by its pair pointer (with recycling)
+    procedure Remove(p: PPair_Pool_Value__; Do_Free_Recycle_Pool_:Boolean); overload; // Removes with option to immediately free recycle pool
+    function Num: NativeInt;                                     // Returns number of entries (O(1) via queue pool count)
+    property Count: NativeInt read Num;                          // Alias for Num
+    function GetSum: NativeInt;                                  // Returns total count across all buckets (linear scan – O(buckets))
+    property Sum: NativeInt read GetSum;                         // Alias for GetSum
+    function Get_Value_Ptr(const Key: TKey_): PValue_; overload; // Returns pointer to value for a key; inserts default if missing
+    function Get_Value_Ptr(const Key: TKey_; const Default_: TValue_): PValue_; overload; // Returns pointer; inserts given default if missing
+    function Get_Default_Value(const Key: TKey_; const Default_: TValue_): TValue_; // Returns value or default if missing (does not insert)
+    procedure Set_Default_Value(const Key: TKey_; const Default_: TValue_); // Same as Add with overwrite=true
+    function Repeat_(): TRepeat___; overload;                    // Forward iterator over all entries
+    function Repeat_(BI_, EI_: NativeInt): TRepeat___; overload; // Forward iterator over a range (by global queue indices)
+    function Invert_Repeat_(): TInvert_Repeat___; overload;      // Reverse iterator
+    function Invert_Repeat_(BI_, EI_: NativeInt): TInvert_Repeat___; overload; // Reverse iterator over a range
+    procedure For_C(OnFor: TBig_Hash_Pool_For_C); overload;      // Iterate with C-style callback (abortable)
+    procedure For_M(OnFor: TBig_Hash_Pool_For_M); overload;      // Iterate with M-style callback
+    procedure For_P(OnFor: TBig_Hash_Pool_For_P); overload;      // Iterate with P-style callback
+
+    // These two methods are intentionally NOT overloaded with the same name,
+    // because FPC's overload resolution rules differ from Delphi's and can
+    // cause ambiguous calls when both parameters are pointers (which they are
+    // here: PPair_Pool_Value__ and TPool_Queue_Ptr___ are both pointer types).
+    // Using distinct names ensures correct compilation under both compilers
+    // without relying on overload selection heuristics that may vary.
+    procedure Push_To_Recycle_Pool(p: PPair_Pool_Value__);       // Moves an entry to the recycle pool of its bucket list
+    procedure Push_To_Recycle_Pool2(p: TPool_Queue_Ptr___);      // Moves an entry to recycle pool by its queue node pointer
+
+    procedure Free_Recycle_Pool;                                 // Frees all recycled entries and removes empty buckets
+    procedure Sort_Key_C(OnSort: TOn_Sort_Key_C);                // Sorts the global queue by key (C comparator)
+    procedure Sort_Key_M(OnSort: TOn_Sort_Key_M);                // Sorts by key (M comparator)
+    procedure Sort_Key_P(OnSort: TOn_Sort_Key_P);                // Sorts by key (P comparator)
+    procedure Sort_Value_C(OnSort: TOn_Sort_Value_C);            // Sorts by value (C comparator)
+    procedure Sort_Value_M(OnSort: TOn_Sort_Value_M);            // Sorts by value (M comparator)
+    procedure Sort_Value_P(OnSort: TOn_Sort_Value_P);            // Sorts by value (P comparator)
+    function ToPool(): TPool___;                                 // Creates a new BigList containing all entry pointers
+    function ToArray_Key(): TArray_Key;                          // Returns all keys as a dynamic array (order of global queue)
+    function ToOrder_Key(): TOrder_Key;                          // Returns all keys as a FIFO queue
+    function ToArray_Value(): TArray_Value;                      // Returns all values as a dynamic array
+    function ToOrder_Value(): TOrder_Value;                      // Returns all values as a FIFO queue
   end;
 
+  // ========================================================================
+  // Thread-safe version – every public method is protected by FCritical__
+  // ========================================================================
   TCritical_Big_Hash_Pair_Pool<TKey_, TValue_> = class(TCore_Object_Intermediate)
   public type
-    PKey_ = ^TKey_;
-    PValue_ = ^TValue_;
-    PKey = PKey_;
-    PValue = PValue_;
-    T___ = TCritical_Big_Hash_Pair_Pool<TKey_, TValue_>;
-    TValue_Pair_Pool__ = TPair4_Tool<TKey_, TValue_, Pointer, THash>;
-    PPair_Pool_Value__ = TValue_Pair_Pool__.PPair__;
-    TPair = TValue_Pair_Pool__.TPair;
-    TKey_Hash_Buffer = TGenericsList<TValue_Pair_Pool__>;
-    TPool___ = TBigList<PPair_Pool_Value__>;
-    TPool_Queue_Ptr___ = TPool___.PQueueStruct;
-    TRepeat___ = TPool___.TRepeat___;
-    TInvert_Repeat___ = TPool___.TInvert_Repeat___;
-    TArray_Key = array of TKey_;
-    TOrder_Key = TOrderStruct<TKey_>;
-    TArray_Value = array of TValue_;
-    TOrder_Value = TOrderStruct<TValue_>;
-    // event
+    PKey_ = ^TKey_;                                              // Pointer to key type
+    PValue_ = ^TValue_;                                          // Pointer to value type
+    PKey = PKey_;                                                // Alias for pointer to key
+    PValue = PValue_;                                            // Alias for pointer to value
+    T___ = TCritical_Big_Hash_Pair_Pool<TKey_, TValue_>;         // Self-reference
+    TValue_Pair_Pool__ = TPair4_Tool<TKey_, TValue_, Pointer, THash>; // Internal pair storage
+    PPair_Pool_Value__ = TValue_Pair_Pool__.PPair__;             // Pointer to pair entry
+    TPair = TValue_Pair_Pool__.TPair;                            // The pair record
+    TKey_Hash_Buffer = TGenericsList<TValue_Pair_Pool__>;        // Bucket array
+    TPool___ = TBigList<PPair_Pool_Value__>;                     // Global queue for iteration
+    TPool_Queue_Ptr___ = TPool___.PQueueStruct;                  // Node in global queue
+    TRepeat___ = TPool___.TRepeat___;                            // Forward iterator
+    TInvert_Repeat___ = TPool___.TInvert_Repeat___;              // Reverse iterator
+    TArray_Key = array of TKey_;                                 // Dynamic key array
+    TOrder_Key = TOrderStruct<TKey_>;                            // FIFO key queue
+    TArray_Value = array of TValue_;                             // Dynamic value array
+    TOrder_Value = TOrderStruct<TValue_>;                        // FIFO value queue
+
+    // events
     TOn_Event = procedure(var Key: TKey_; var Value: TValue_) of object;
     TOn_Get_Key = procedure(const Key_: PKey_; var Hash:THash) of object;
     TOn_Compare_Key = procedure(const Key_1, Key_2: PKey_; var IsSame:Boolean) of object;
@@ -1332,98 +1338,107 @@ type
     TOn_Sort_Value_P = reference to function(var L, R: TValue_): Integer;
 {$ENDIF FPC}
   private
-    FCritical__: TCritical;
-    FQueue_Pool: TPool___;
-    FHash_Buffer: TKey_Hash_Buffer;
-    FNULL_VALUE: TValue_;
-    FOnAdd: TOn_Event;
-    FOnFree: TOn_Event;
-    FOn_Get_Key: TOn_Get_Key;
-    FOn_Compare_Key: TOn_Compare_Key;
-    FOn_Compare_Value: TOn_Compare_Value;
-    function Get_Value_List(const Key_: TKey_; var Key_Hash_: THash): TValue_Pair_Pool__;
-    procedure Free_Value_List(Key_Hash_: THash);
-    procedure Get_Key_Data_Ptr(const Key_P: PKey_; var p: PByte; var Size: NativeInt);
-    procedure Internal_Do_Queue_Pool_Free(var Data: PPair_Pool_Value__);
-    procedure Internal_Do_Free(var Data: TPair);
+    FCritical__: TCritical;                                      // Lock – always created in constructor
+    FQueue_Pool: TPool___;                                       // Global entry list
+    FHash_Buffer: TKey_Hash_Buffer;                              // Buckets
+    FNULL_VALUE: TValue_;                                        // Default null value
+    FOnAdd: TOn_Event;                                           // Add hook
+    FOnFree: TOn_Event;                                          // Free hook
+    FOn_Get_Key: TOn_Get_Key;                                    // Custom hash
+    FOn_Compare_Key: TOn_Compare_Key;                            // Custom key compare
+    FOn_Compare_Value: TOn_Compare_Value;                        // Custom value compare
+
+    function Get_Value_List(const Key_: TKey_; var Key_Hash_: THash): TValue_Pair_Pool__; // Get bucket list, create if missing
+    procedure Free_Value_List(Key_Hash_: THash);                 // Destroy empty bucket
+    procedure Get_Key_Data_Ptr(const Key_P: PKey_; var p: PByte; var Size: NativeInt); // Raw key bytes
+    procedure Internal_Do_Queue_Pool_Free(var Data: PPair_Pool_Value__); // Called when queue node removed
+    procedure Internal_Do_Free(var Data: TPair);                 // Called when pair freed from bucket
   public
-    class function Null_Key: TKey_;
-    class function NULL_VALUE: TValue_;
-    property Critical__: TCritical read FCritical__;
-    property Queue_Pool: TPool___ read FQueue_Pool;
+    class function Null_Key: TKey_;                              // Zeroed key
+    class function NULL_VALUE: TValue_;                          // Zeroed value
+    property Critical__: TCritical read FCritical__;             // Expose the lock
+    property Queue_Pool: TPool___ read FQueue_Pool;              // Direct global queue access
     property OnAdd: TOn_Event read FOnAdd write FOnAdd;
     property OnFree: TOn_Event read FOnFree write FOnFree;
     property On_Get_Key: TOn_Get_Key read FOn_Get_Key write FOn_Get_Key;
     property On_Compare_Key: TOn_Compare_Key read FOn_Compare_Key write FOn_Compare_Key;
     property On_Compare_Value: TOn_Compare_Value read FOn_Compare_Value write FOn_Compare_Value;
-    constructor Create(const HashSize_: integer; const NULL_VALUE_: TValue_); overload;
-    constructor Create(const HashSize_: integer); overload;
-    destructor Destroy; override;
-    procedure CreateBefore; virtual;
-    procedure CreateAfter; virtual;
-    procedure DoFree(var Key: TKey_; var Value: TValue_); virtual;
-    procedure DoAdd(var Key: TKey_; var Value: TValue_); virtual;
-    function Get_Key_Hash(const Key_: TKey_): THash; virtual;
-    function Compare_Key(const Key_1, Key_2: TKey_): Boolean; virtual;
-    function Compare_Value(const Value_1, Value_2: TValue_): Boolean; virtual;
-    procedure Lock;
-    procedure UnLock;
-    procedure Extract_Queue_Pool_Third;
-    function GetHashSize: Integer;
-    procedure Clear;
-    function Exists_Key(const Key: TKey_): Boolean;
-    function Exists_Value(const Data: TValue_): Boolean;
-    function Exists(const Key: TKey_): Boolean;
-    function Add(const Key: TKey_; const Value: TValue_; Overwrite_: Boolean): PPair_Pool_Value__;
-    function Get_Key_Value(const Key: TKey_): TValue_;
-    procedure Set_Key_Value(const Key: TKey_; const Value: TValue_);
+
+    constructor Create(const HashSize_: integer; const NULL_VALUE_: TValue_); overload; // Create with custom null value
+    constructor Create(const HashSize_: integer); overload;      // Create with zeroed null value
+    destructor Destroy; override;                                // Cleanup
+    procedure CreateBefore; virtual;                             // Pre-creation hook
+    procedure CreateAfter; virtual;                              // Post-creation hook
+    procedure DoFree(var Key: TKey_; var Value: TValue_); virtual; // Fire OnFree
+    procedure DoAdd(var Key: TKey_; var Value: TValue_); virtual; // Fire OnAdd
+    function Get_Key_Hash(const Key_: TKey_): THash; virtual;    // Compute hash (custom or CRC32)
+    function Compare_Key(const Key_1, Key_2: TKey_): Boolean; virtual; // Compare keys
+    function Compare_Value(const Value_1, Value_2: TValue_): Boolean; virtual; // Compare values
+    procedure Lock;                                              // Acquire lock
+    procedure UnLock;                                            // Release lock
+    procedure Extract_Queue_Pool_Third;                          // Re-sync Third pointers after sort
+    function GetHashSize: Integer;                               // Number of buckets
+    procedure Clear;                                             // Remove all entries
+    function Exists_Key(const Key: TKey_): Boolean;              // Check key existence (moves to front if found)
+    function Exists_Value(const Data: TValue_): Boolean;         // Check value existence (linear scan)
+    function Exists(const Key: TKey_): Boolean;                  // Alias for Exists_Key
+    function Add(const Key: TKey_; const Value: TValue_; Overwrite_: Boolean): PPair_Pool_Value__; // Insert/update, returns pair pointer
+    function Get_Key_Value(const Key: TKey_): TValue_;           // Get value, returns NULL_VALUE if absent
+    procedure Set_Key_Value(const Key: TKey_; const Value: TValue_); // Set value (overwrites if exists)
     property Key_Value[const Key: TKey_]: TValue_ read Get_Key_Value write Set_Key_Value; default;
-    procedure Delete(const Key: TKey_);
-    procedure Remove(p: PPair_Pool_Value__); overload;
-    procedure Remove(p: PPair_Pool_Value__; Do_Free_Recycle_Pool_:Boolean); overload;
-    function Num: NativeInt;
+    procedure Delete(const Key: TKey_);                          // Remove by key
+    procedure Remove(p: PPair_Pool_Value__); overload;           // Remove by pair pointer (with recycle)
+    procedure Remove(p: PPair_Pool_Value__; Do_Free_Recycle_Pool_:Boolean); overload; // Remove, optionally free recycle pool immediately
+    function Num: NativeInt;                                     // Entry count (O(1) via queue pool)
     property Count: NativeInt read Num;
-    function GetSum: NativeInt;
+    function GetSum: NativeInt;                                  // Total across all buckets (O(buckets))
     property Sum: NativeInt read GetSum;
-    function Get_Value_Ptr(const Key: TKey_): PValue_; overload;
-    function Get_Value_Ptr(const Key: TKey_; const Default_: TValue_): PValue_; overload;
-    function Get_Default_Value(const Key: TKey_; const Default_: TValue_): TValue_;
-    procedure Set_Default_Value(const Key: TKey_; const Default_: TValue_);
-    function Repeat_(): TRepeat___; overload;
-    function Repeat_(BI_, EI_: NativeInt): TRepeat___; overload;
-    function Invert_Repeat_(): TInvert_Repeat___; overload;
-    function Invert_Repeat_(BI_, EI_: NativeInt): TInvert_Repeat___; overload;
-    procedure For_C(OnFor: TBig_Hash_Pool_For_C); overload;
-    procedure For_M(OnFor: TBig_Hash_Pool_For_M); overload;
-    procedure For_P(OnFor: TBig_Hash_Pool_For_P); overload;
-    procedure Push_To_Recycle_Pool(p: PPair_Pool_Value__); overload;
-    procedure Push_To_Recycle_Pool(p: TPool_Queue_Ptr___); overload;
-    procedure Free_Recycle_Pool;
-    procedure Sort_Key_C(OnSort: TOn_Sort_Key_C);
-    procedure Sort_Key_M(OnSort: TOn_Sort_Key_M);
-    procedure Sort_Key_P(OnSort: TOn_Sort_Key_P);
-    procedure Sort_Value_C(OnSort: TOn_Sort_Value_C);
-    procedure Sort_Value_M(OnSort: TOn_Sort_Value_M);
-    procedure Sort_Value_P(OnSort: TOn_Sort_Value_P);
-    function ToPool(): TPool___;
-    function ToArray_Key(): TArray_Key;
-    function ToOrder_Key(): TOrder_Key;
-    function ToArray_Value(): TArray_Value;
-    function ToOrder_Value(): TOrder_Value;
+    function Get_Value_Ptr(const Key: TKey_): PValue_; overload; // Get pointer to value; creates with NULL_VALUE if missing
+    function Get_Value_Ptr(const Key: TKey_; const Default_: TValue_): PValue_; overload; // Get pointer; creates with given default if missing
+    function Get_Default_Value(const Key: TKey_; const Default_: TValue_): TValue_; // Get value or default (no insertion)
+    procedure Set_Default_Value(const Key: TKey_; const Default_: TValue_); // Same as Add with overwrite
+    function Repeat_(): TRepeat___; overload;                    // Forward iterator over all entries
+    function Repeat_(BI_, EI_: NativeInt): TRepeat___; overload; // Forward iterator with index range
+    function Invert_Repeat_(): TInvert_Repeat___; overload;      // Reverse iterator
+    function Invert_Repeat_(BI_, EI_: NativeInt): TInvert_Repeat___; overload; // Reverse iterator with index range
+    procedure For_C(OnFor: TBig_Hash_Pool_For_C); overload;      // Iterate with C callback
+    procedure For_M(OnFor: TBig_Hash_Pool_For_M); overload;      // Iterate with M callback
+    procedure For_P(OnFor: TBig_Hash_Pool_For_P); overload;      // Iterate with P callback
+
+    // Same naming strategy as parent to avoid FPC overload ambiguity on pointer types
+    procedure Push_To_Recycle_Pool(p: PPair_Pool_Value__);       // Push entry to its bucket's recycle pool
+    procedure Push_To_Recycle_Pool2(p: TPool_Queue_Ptr___);      // Push entry using global queue node pointer
+
+    procedure Free_Recycle_Pool;                                 // Free all recycled entries and empty buckets
+    procedure Sort_Key_C(OnSort: TOn_Sort_Key_C);                // Sort global queue by key (C)
+    procedure Sort_Key_M(OnSort: TOn_Sort_Key_M);                // Sort by key (M)
+    procedure Sort_Key_P(OnSort: TOn_Sort_Key_P);                // Sort by key (P)
+    procedure Sort_Value_C(OnSort: TOn_Sort_Value_C);            // Sort by value (C)
+    procedure Sort_Value_M(OnSort: TOn_Sort_Value_M);            // Sort by value (M)
+    procedure Sort_Value_P(OnSort: TOn_Sort_Value_P);            // Sort by value (P)
+    function ToPool(): TPool___;                                 // New BigList of all entry pointers
+    function ToArray_Key(): TArray_Key;                          // Dynamic array of keys
+    function ToOrder_Key(): TOrder_Key;                          // FIFO queue of keys
+    function ToArray_Value(): TArray_Value;                      // Dynamic array of values
+    function ToOrder_Value(): TOrder_Value;                      // FIFO queue of values
   end;
 
+  // ========================================================================
+  // Object‑specific version for TValue_ that is a class – adds AutoFree
+  // ========================================================================
   TBig_Hash_Object_Pool<TKey_, TValue_: class> = class(TBig_Hash_Pair_Pool<TKey_, TValue_>)
   public
-    AutoFree: Boolean;
-    constructor Create(const HashSize_: integer; const AutoFree_: Boolean);
-    procedure DoFree(var Key: TKey_; var Value: TValue_); override;
+    AutoFree: Boolean;                                           // If True, frees the value object on removal
+    constructor Create(const HashSize_: integer; const AutoFree_: Boolean); // Pass autofree flag
+    procedure DoFree(var Key: TKey_; var Value: TValue_); override; // Override to dispose object if AutoFree
   end;
 
+  // Thread‑safe object pool
   TCritical_Big_Hash_Object_Pool<TKey_, TValue_: class> = class(TCritical_Big_Hash_Pair_Pool<TKey_, TValue_>)
   public
-    AutoFree: Boolean;
-    constructor Create(const HashSize_: integer; const AutoFree_: Boolean);
-    procedure DoFree(var Key: TKey_; var Value: TValue_); override;
+    AutoFree: Boolean;                                           // If True, frees value object on removal
+    constructor Create(const HashSize_: integer; const AutoFree_: Boolean); // Constructor with autofree flag
+    procedure DoFree(var Key: TKey_; var Value: TValue_); override; // Override to dispose object if AutoFree
   end;
 
 {$EndRegion 'Hash-Tool'}
@@ -1455,7 +1470,7 @@ type
   TSoft_Synchronize_Tool = class(TCore_Object_Intermediate)
   private type
     TSynchronize_Data___ = TPair4<TOnSynchronize_C_NP, TOnSynchronize_M_NP, TOnSynchronize_P_NP, PBoolean>;
-    TSynchronize_Queue___ = TCritical_BigList<TSynchronize_Data___>;
+    TSynchronize_Queue___ = TCriticalOrderStruct<TSynchronize_Data___>;
   private
     SyncQueue__: TSynchronize_Queue___;
   public
@@ -1562,7 +1577,6 @@ type
     procedure PostC_NP(OnSync: TThreadPost_C1); // Posts a C‑style procedure to the thread queue (non‑blocking, no status tracking).
     procedure PostM_NP(OnSync: TThreadPost_M1); // Posts an M‑style method to the thread queue (non‑blocking, no status tracking).
     procedure PostP_NP(OnSync: TThreadPost_P1); // Posts a P‑style procedure to the thread queue (non‑blocking, no status tracking).
-
     procedure PostC1(OnSync: TThreadPost_C1); overload; // Posts a C‑style procedure without extra data.
     procedure PostC1(OnSync: TThreadPost_C1; IsRuning_, IsExit_: PBoolean); overload; // Posts a C‑style procedure; sets IsRuning_=True while running, IsExit_=True when done.
     procedure PostC2(Data1: Pointer; OnSync: TThreadPost_C2); overload; // Posts a C‑style procedure with one pointer argument.
@@ -1571,7 +1585,6 @@ type
     procedure PostC3(Data1: Pointer; Data2: TCore_Object; Data3: Variant; OnSync: TThreadPost_C3; IsRuning_, IsExit_: PBoolean); overload; // Posts C‑style with three arguments; tracks status via IsRuning_/IsExit_.
     procedure PostC4(Data1: Pointer; Data2: TCore_Object; OnSync: TThreadPost_C4); overload; // Posts a C‑style procedure with pointer and object arguments.
     procedure PostC4(Data1: Pointer; Data2: TCore_Object; OnSync: TThreadPost_C4; IsRuning_, IsExit_: PBoolean); overload; // Posts C‑style with pointer and object; tracks execution status.
-
     procedure PostM1(OnSync: TThreadPost_M1); overload; // Posts an M‑style method (object method) without extra data.
     procedure PostM1(OnSync: TThreadPost_M1; IsRuning_, IsExit_: PBoolean); overload; // Posts an M‑style method; tracks status via IsRuning_/IsExit_.
     procedure PostM2(Data1: Pointer; OnSync: TThreadPost_M2); overload; // Posts an M‑style method with one pointer argument.
@@ -1580,7 +1593,6 @@ type
     procedure PostM3(Data1: Pointer; Data2: TCore_Object; Data3: Variant; OnSync: TThreadPost_M3; IsRuning_, IsExit_: PBoolean); overload; // Posts M‑style with three args; tracks status.
     procedure PostM4(Data1: Pointer; Data2: TCore_Object; OnSync: TThreadPost_M4); overload; // Posts an M‑style method with pointer and object.
     procedure PostM4(Data1: Pointer; Data2: TCore_Object; OnSync: TThreadPost_M4; IsRuning_, IsExit_: PBoolean); overload; // Posts M‑style with pointer/object; tracks status.
-
     procedure PostP1(OnSync: TThreadPost_P1); overload; // Posts a P‑style procedure (nested/anonymous) without extra data.
     procedure PostP1(OnSync: TThreadPost_P1; IsRuning_, IsExit_: PBoolean); overload; // Posts a P‑style procedure; tracks status.
     procedure PostP2(Data1: Pointer; OnSync: TThreadPost_P2); overload; // Posts a P‑style procedure with one pointer argument.
@@ -1595,12 +1607,10 @@ type
     procedure Sync_Wait_PostC2(Data1: Pointer; OnSync: TThreadPost_C2); // Posts a C‑style procedure with one pointer argument and waits for completion.
     procedure Sync_Wait_PostC3(Data1: Pointer; Data2: TCore_Object; Data3: Variant; OnSync: TThreadPost_C3); // Posts a C‑style procedure with pointer, object, and Variant; blocks until done.
     procedure Sync_Wait_PostC4(Data1: Pointer; Data2: TCore_Object; OnSync: TThreadPost_C4); // Posts a C‑style procedure with pointer and object; blocks until done.
-
     procedure Sync_Wait_PostM1(OnSync: TThreadPost_M1); // Posts an M‑style method and blocks the caller until it executes.
     procedure Sync_Wait_PostM2(Data1: Pointer; OnSync: TThreadPost_M2); // Posts an M‑style method with one pointer argument and waits for completion.
     procedure Sync_Wait_PostM3(Data1: Pointer; Data2: TCore_Object; Data3: Variant; OnSync: TThreadPost_M3); // Posts an M‑style method with pointer, object, and Variant; blocks until done.
     procedure Sync_Wait_PostM4(Data1: Pointer; Data2: TCore_Object; OnSync: TThreadPost_M4); // Posts an M‑style method with pointer and object; blocks until done.
-
     procedure Sync_Wait_PostP1(OnSync: TThreadPost_P1); // Posts a P‑style procedure (nested/anonymous) and blocks the caller until it executes.
     procedure Sync_Wait_PostP2(Data1: Pointer; OnSync: TThreadPost_P2); // Posts a P‑style procedure with one pointer argument and waits for completion.
     procedure Sync_Wait_PostP3(Data1: Pointer; Data2: TCore_Object; Data3: Variant; OnSync: TThreadPost_P3); // Posts a P‑style procedure with pointer, object, and Variant; blocks until done.
