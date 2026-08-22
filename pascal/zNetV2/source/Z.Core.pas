@@ -621,7 +621,6 @@ type
 {
   TBigList<T> – a doubly linked circular list with a built‑in object pool
   (recycle pool) and optional sorting / indexing.
-
   Key features:
     - Fast insertion/removal at any position (O(1)).
     - Iterators (TRepeat___, TInvert_Repeat___) that allow safe removal
@@ -633,10 +632,8 @@ type
       access, automatically rebuilt when the list changes.
     - Thread‑safe version (TCritical_BigList) adds a lock around every
       public operation.
-
   This is the core data structure used throughout the framework for
   collections that are frequently modified (e.g., task queues, object pools).
-
   Design notes:
     - The circular structure (with Prev/Next pointers) allows O(1)
       insertion before or after any known node.
@@ -647,25 +644,20 @@ type
       (built via BuildArrayMemory) to avoid modifying the list during sort.
     - The index cache (FList) is invalidated when the list changes and
       rebuilt on demand, providing O(1) access by index.
-
   Usage:
     - Use Add/Insert to add elements.
     - Use Remove_P/Remove_Data to remove elements.
     - Use Repeat_ / Invert_Repeat_ to iterate forward/backward.
     - Use Sort_* to sort the list.
-
   The class is generic over any type T; for object types, the specialized
   TBig_Object_List handles automatic freeing.
 }
-
   TBigList<T_> = class(TCore_Object_Intermediate)
   public type
-
     P_ = ^T_;                                                      // Pointer to the element type
     PQueueStruct = ^TQueueStruct;                                  // Pointer to a list node
     PPQueueStruct = ^PQueueStruct;                                 // Pointer to a node pointer (used for index buffers)
     T___ = TBigList<T_>;                                           // Self-reference for nested types
-
     TQueueStruct = record
       Data: T_;                                                    // User data stored in the node
       Next: PQueueStruct;                                          // Pointer to the next node in the circular list
@@ -673,7 +665,6 @@ type
       Instance___: T___;                                           // Back-reference to the owning list
       Recycle___: Boolean;                                         // True if this node is currently in the recycle pool
     end;
-
     TRepeat___ = record                                            // Forward iterator over a range of nodes
     private
       BI___: NativeInt;                                            // Starting index (inclusive)
@@ -695,7 +686,6 @@ type
       property Right: Boolean read Next;                           // Alias for Next
       property Instance: T___ read Instance___;
     end;
-
     TInvert_Repeat___ = record                                     // Reverse iterator over a range
     private
       BI___: NativeInt;                                            // Start index (in forward order, inclusive)
@@ -717,7 +707,6 @@ type
       property Left: Boolean read Prev;
       property Instance: T___ read Instance___;
     end;
-
     TArray_T_ = array of T_;                                       // Dynamic array of elements
     TOrder_Data_Pool = TOrderStruct<T_>;                           // FIFO queue of elements
     TRecycle_Pool__ = TOrderStruct<PQueueStruct>;                  // Recycle pool storing node pointers for later reuse
@@ -819,7 +808,6 @@ type
     class procedure Test;                                          // Debug: runs a self-test on the list implementation
 {$ENDIF DEBUG}
   end;
-
   // ==========================================================================
   // Thread-safe version – all public methods are guarded by FCritical__.
   // ==========================================================================
@@ -829,7 +817,6 @@ type
     PQueueStruct = ^TQueueStruct;
     PPQueueStruct = ^PQueueStruct;
     T___ = TCritical_BigList<T_>;
-
     TQueueStruct = record
       Data: T_;
       Next: PQueueStruct;
@@ -837,7 +824,6 @@ type
       Instance___: T___;
       Recycle___: Boolean;
     end;
-
     TRepeat___ = record
     private
       BI___: NativeInt;
@@ -859,7 +845,6 @@ type
       property Right: Boolean read Next;
       property Instance: T___ read Instance___;
     end;
-
     TInvert_Repeat___ = record
     private
       BI___: NativeInt;
@@ -881,7 +866,6 @@ type
       property Left: Boolean read Prev;
       property Instance: T___ read Instance___;
     end;
-
     TArray_T_ = array of T_;
     TOrder_Data_Pool = TOrderStruct<T_>;
     TRecycle_Pool__ = TOrderStruct<PQueueStruct>;
@@ -987,9 +971,7 @@ type
     class procedure Test;                                          // Debug: runs unit tests
 {$ENDIF DEBUG}
   end;
-
   TC_BigList<T_> = class(TCritical_BigList<T_>);                  // Short alias for the thread‑safe version
-
   // ==========================================================================
   // Object‑specialized version – automatically frees objects when removed.
   // ==========================================================================
@@ -999,9 +981,7 @@ type
     constructor Create(AutoFreeObject_: Boolean);                 // Constructor with autofree flag
     procedure DoFree(var Data: T_); override;                     // Override: frees the object if AutoFreeObject is True
   end;
-
   TObject_BigList<T_: class> = class(TBig_Object_List<T_>);      // Alias
-
   // Thread‑safe object list
   TCritical_Big_Object_List<T_: class> = class(TCritical_BigList<T_>)
   public
@@ -1009,9 +989,7 @@ type
     constructor Create(AutoFreeObject_: Boolean);
     procedure DoFree(var Data: T_); override;
   end;
-
   TC_Big_Object_List<T_: class> = class(TCritical_Big_Object_List<T_>); // Alias
-
 {$ENDREGION 'BigList'}
 {$REGION 'Pair'}
 {
@@ -1146,10 +1124,8 @@ type
 {
   TBig_Hash_Pair_Pool<TKey, TValue> – a generic hash map with open addressing
   and collision resolution using linked lists (chaining).
-
   It uses a CRC32 hash of the key by default, but custom key hashing and
   comparison can be provided via events (On_Get_Key, On_Compare_Key).
-
   Features:
     - Automatic rehashing: the number of buckets is fixed at creation.
     - LRU optimization: recently accessed keys are moved to the front of
@@ -1159,7 +1135,6 @@ type
     - Multiple iteration styles: forward, reverse, and with abortable callbacks.
     - Thread‑safe version (TCritical_Big_Hash_Pair_Pool) adds a lock around
       every public operation.
-
   This is the primary associative container used in the Z framework.
 }
   TBig_Hash_Pair_Pool<TKey_, TValue_> = class(TCore_Object_Intermediate)
@@ -1181,7 +1156,6 @@ type
     TOrder_Key = TOrderStruct<TKey_>;                            // FIFO queue of keys
     TArray_Value = array of TValue_;                             // Dynamic array of values
     TOrder_Value = TOrderStruct<TValue_>;                        // FIFO queue of values
-
     // event
     TOn_Event = procedure(var Key: TKey_; var Value: TValue_) of object; // Called on add/free
     TOn_Get_Key = procedure(const Key_: PKey_; var Hash:THash) of object; // Custom hash computation
@@ -1212,7 +1186,6 @@ type
     FOn_Get_Key: TOn_Get_Key;                                    // Custom key hash function
     FOn_Compare_Key: TOn_Compare_Key;                            // Custom key comparison
     FOn_Compare_Value: TOn_Compare_Value;                        // Custom value comparison
-
     function Get_Critical__: TCritical;                          // Returns the lock, creating it if nil
     function Get_Value_List(const Key_: TKey_; var Key_Hash_: THash): TValue_Pair_Pool__; // Locates the bucket list for a key (creates if missing)
     procedure Free_Value_List(Key_Hash_: THash);                 // Frees an empty bucket list
@@ -1229,7 +1202,6 @@ type
     property On_Get_Key: TOn_Get_Key read FOn_Get_Key write FOn_Get_Key; // Custom key hashing
     property On_Compare_Key: TOn_Compare_Key read FOn_Compare_Key write FOn_Compare_Key; // Custom key equality
     property On_Compare_Value: TOn_Compare_Value read FOn_Compare_Value write FOn_Compare_Value; // Custom value equality
-
     constructor Create(const HashSize_: integer; const NULL_VALUE_: TValue_); overload; // Constructor with specified null value
     constructor Create(const HashSize_: integer); overload;      // Constructor with default null value (zeroed)
     destructor Destroy; override;                                // Cleans up all resources
@@ -1270,7 +1242,6 @@ type
     procedure For_C(OnFor: TBig_Hash_Pool_For_C); overload;      // Iterate with C-style callback (abortable)
     procedure For_M(OnFor: TBig_Hash_Pool_For_M); overload;      // Iterate with M-style callback
     procedure For_P(OnFor: TBig_Hash_Pool_For_P); overload;      // Iterate with P-style callback
-
     // These two methods are intentionally NOT overloaded with the same name,
     // because FPC's overload resolution rules differ from Delphi's and can
     // cause ambiguous calls when both parameters are pointers (which they are
@@ -1279,7 +1250,6 @@ type
     // without relying on overload selection heuristics that may vary.
     procedure Push_To_Recycle_Pool(p: PPair_Pool_Value__);       // Moves an entry to the recycle pool of its bucket list
     procedure Push_To_Recycle_Pool2(p: TPool_Queue_Ptr___);      // Moves an entry to recycle pool by its queue node pointer
-
     procedure Free_Recycle_Pool;                                 // Frees all recycled entries and removes empty buckets
     procedure Sort_Key_C(OnSort: TOn_Sort_Key_C);                // Sorts the global queue by key (C comparator)
     procedure Sort_Key_M(OnSort: TOn_Sort_Key_M);                // Sorts by key (M comparator)
@@ -1293,7 +1263,6 @@ type
     function ToArray_Value(): TArray_Value;                      // Returns all values as a dynamic array
     function ToOrder_Value(): TOrder_Value;                      // Returns all values as a FIFO queue
   end;
-
   // ========================================================================
   // Thread-safe version – every public method is protected by FCritical__
   // ========================================================================
@@ -1316,7 +1285,6 @@ type
     TOrder_Key = TOrderStruct<TKey_>;                            // FIFO key queue
     TArray_Value = array of TValue_;                             // Dynamic value array
     TOrder_Value = TOrderStruct<TValue_>;                        // FIFO value queue
-
     // events
     TOn_Event = procedure(var Key: TKey_; var Value: TValue_) of object;
     TOn_Get_Key = procedure(const Key_: PKey_; var Hash:THash) of object;
@@ -1347,7 +1315,6 @@ type
     FOn_Get_Key: TOn_Get_Key;                                    // Custom hash
     FOn_Compare_Key: TOn_Compare_Key;                            // Custom key compare
     FOn_Compare_Value: TOn_Compare_Value;                        // Custom value compare
-
     function Get_Value_List(const Key_: TKey_; var Key_Hash_: THash): TValue_Pair_Pool__; // Get bucket list, create if missing
     procedure Free_Value_List(Key_Hash_: THash);                 // Destroy empty bucket
     procedure Get_Key_Data_Ptr(const Key_P: PKey_; var p: PByte; var Size: NativeInt); // Raw key bytes
@@ -1363,7 +1330,6 @@ type
     property On_Get_Key: TOn_Get_Key read FOn_Get_Key write FOn_Get_Key;
     property On_Compare_Key: TOn_Compare_Key read FOn_Compare_Key write FOn_Compare_Key;
     property On_Compare_Value: TOn_Compare_Value read FOn_Compare_Value write FOn_Compare_Value;
-
     constructor Create(const HashSize_: integer; const NULL_VALUE_: TValue_); overload; // Create with custom null value
     constructor Create(const HashSize_: integer); overload;      // Create with zeroed null value
     destructor Destroy; override;                                // Cleanup
@@ -1404,11 +1370,9 @@ type
     procedure For_C(OnFor: TBig_Hash_Pool_For_C); overload;      // Iterate with C callback
     procedure For_M(OnFor: TBig_Hash_Pool_For_M); overload;      // Iterate with M callback
     procedure For_P(OnFor: TBig_Hash_Pool_For_P); overload;      // Iterate with P callback
-
     // Same naming strategy as parent to avoid FPC overload ambiguity on pointer types
     procedure Push_To_Recycle_Pool(p: PPair_Pool_Value__);       // Push entry to its bucket's recycle pool
     procedure Push_To_Recycle_Pool2(p: TPool_Queue_Ptr___);      // Push entry using global queue node pointer
-
     procedure Free_Recycle_Pool;                                 // Free all recycled entries and empty buckets
     procedure Sort_Key_C(OnSort: TOn_Sort_Key_C);                // Sort global queue by key (C)
     procedure Sort_Key_M(OnSort: TOn_Sort_Key_M);                // Sort by key (M)
@@ -1422,7 +1386,6 @@ type
     function ToArray_Value(): TArray_Value;                      // Dynamic array of values
     function ToOrder_Value(): TOrder_Value;                      // FIFO queue of values
   end;
-
   // ========================================================================
   // Object‑specific version for TValue_ that is a class – adds AutoFree
   // ========================================================================
@@ -1432,7 +1395,6 @@ type
     constructor Create(const HashSize_: integer; const AutoFree_: Boolean); // Pass autofree flag
     procedure DoFree(var Key: TKey_; var Value: TValue_); override; // Override to dispose object if AutoFree
   end;
-
   // Thread‑safe object pool
   TCritical_Big_Hash_Object_Pool<TKey_, TValue_: class> = class(TCritical_Big_Hash_Pair_Pool<TKey_, TValue_>)
   public
@@ -1440,7 +1402,6 @@ type
     constructor Create(const HashSize_: integer; const AutoFree_: Boolean); // Constructor with autofree flag
     procedure DoFree(var Key: TKey_; var Value: TValue_); override; // Override to dispose object if AutoFree
   end;
-
 {$EndRegion 'Hash-Tool'}
 {$REGION 'soft_synchronize_technology'}
 {
