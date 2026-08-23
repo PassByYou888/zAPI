@@ -14,7 +14,19 @@ lazbuild.exe fpc_tester_for_zAPI.lpi
 lazbuild.exe zAPIBenchClient.lpi
 lazbuild.exe zAPIBenchServer.lpi
 lazbuild.exe zAPIBench_API_Check.lpi
-lazbuild.exe .\pascal4py\call_py.lpi
-lazbuild.exe ..\Py\bridge\pascal\pascal_cross_test.lpi
+
+:: 子目录编译，使用 pushd/popd
+for %%d in (cross_demo SequenceData Compute_Grid_Demo) do (
+    pushd "%%d"
+    echo 进入 %%d 编译...
+    call build.bat
+    if errorlevel 1 (
+        echo %%d 编译失败！
+        popd
+        exit /b
+    )
+    popd
+)
 
 echo 所有项目编译完成。
+pause
