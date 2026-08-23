@@ -1,6 +1,6 @@
 # 🐍 喂，Python 大佬，别写 Flask 了！直接调 C++ 吧！
 
-> 以前你要调个 C++ 库：`subprocess` + 解析 stdout，或者写个 Cython 编译到怀疑人生。现在？`pip install` 然后 `@expose` 一下，完事儿。
+> 以前你要调个 C++ 库：`subprocess` + 解析 stdout，或者写个 Cython 编译到怀疑人生。现在？**把 `api_hub` 文件夹放进项目，然后 `@expose` 一下**，完事儿。
 >
 > **版本**：2.0（与 ZAPI Bridge v2.0 同步）
 
@@ -29,12 +29,10 @@ app.start("ipc:ai_service")  # 就这一行，你的模型变成微服务了！
 
 > **v2.0 新特性：** 现在不仅 C++/Go 能调，PHP 和 Node.js 也能通过 [ZAPI Bridge](../bridge/📖%20ZAPI%20Bridge%20完整使用手册.md) 调用你的 Python 服务了。
 
-
 ## 别废话，快不快？
 - **IPC 调用**：延迟 0.8 毫秒，比你 `print()` 一下还快。
 - **序列化**：默认支持 JSON 和 Pickle，你要是高兴，传个 numpy 数组进去也行。
 - **吞吐量**：单核轻松 3000+ QPS，比 Flask + Gunicorn 不知道高到哪里去了。
-
 
 ## Python 特有的甜头
 ### 🍬 装饰器式注册
@@ -43,19 +41,17 @@ app.start("ipc:ai_service")  # 就这一行，你的模型变成微服务了！
 ### 🍬 自动类型转换
 你传 `int`，对方收到 `int`。你传 `dict`，对方收到 JSON 对象。底层二进制协议帮你打理好一切。
 
-### 🍬 即改即用
-修改完 Python 代码，`Ctrl+S` 保存，下次调用立即生效。**不用重启服务，不用重新编译，不用等 CI/CD。**
+### 🍬 热更新支持（动态注销）
+修改完 Python 逻辑后，如果想不重启服务就切换新版本，可以通过 `app.unregister('predict')` 注销旧 API，再注册新 API。客户端会自动感知（约 3 秒传播延迟），从而实现**不停服热更新**。当然，如果只是修改了函数内部实现而保持 API 签名不变，则无需重新注册，直接重启服务进程即可。
 
-### 🍬 多语言客户端自动生成（v2.0 新增）
-你的 Python 服务注册后，C++、Go、Rust、Java、C#、PHP、Node.js 客户端都能直接调用——**不用写任何客户端代码**。
-
+### 🍬 多语言客户端无需编写代码（v2.0 新增）
+你的 Python 服务注册后，C++、Go、Rust、Java、C#、PHP、Node.js 客户端都能直接调用——**这些语言的绑定库已经为你准备好了所有调用逻辑，你只需要传入参数即可**。
 
 ## 那些让你头大的坑（过来人血泪）
 - **回调别阻塞**：你的 `predict` 函数如果跑太久（比如 > 100ms），记得用 `asyncio.to_thread` 丢到线程池，不然会卡住 C4 的线程池，导致其他请求超时。**别问我是怎么知道的。**
 - **IPC 地址不要带空格**：`ipc:ai service` 这种写法会报错，用下划线 `ipc:ai_service`。
 - **DataHandle 记得释放**：虽然 Python 有 GC，但高并发下建议显式 `h.free()`，避免内存积压。
 - **动态注销记得用**：如果服务要热更新，先 `app.unregister('predict')` 再重新注册，客户端会自动感知（约 3 秒传播）。
-
 
 ## 📚 相关资源（其他语言指南）
 
@@ -73,7 +69,6 @@ app.start("ipc:ai_service")  # 就这一行，你的模型变成微服务了！
 - [js_api.py 使用指南](web/js_api.py%20使用指南.md)
 - [📖 ZAPI Bridge 完整使用手册](bridge/📖%20ZAPI%20Bridge%20完整使用手册.md)
 - [ZAPI 桥接开发踩坑记录](bridge/ZAPI%20桥接开发踩坑记录.md)
-
 
 ## 总结
 > **"以前是 Python 调一切（慢），现在是一切调 Python（快）。"**
