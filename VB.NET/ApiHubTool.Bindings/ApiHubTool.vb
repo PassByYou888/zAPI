@@ -3,78 +3,94 @@ Imports System.Runtime.InteropServices
 Imports System.Text
 
 ''' <summary>
-''' Opaque data handle that holds an API name and its binary payload.
-''' Must be created with <see cref="API.API_Create_DataHnd"/> and freed with <see cref="API.API_Free_DataHnd"/>.
+''' 不透明数据句柄，持有 API 名称及其二进制载荷。
+''' 必须使用 <see cref="API.API_Create_DataHnd"/> 创建，并使用 <see cref="API.API_Free_DataHnd"/> 释放。
 ''' </summary>
 Public Structure DataHnd
     Public Handle As IntPtr
+
     Public ReadOnly Property IsValid As Boolean
         Get
             Return Handle <> IntPtr.Zero
         End Get
     End Property
+
     Public Shared ReadOnly Null As DataHnd = New DataHnd With {.Handle = IntPtr.Zero}
+
     Public Overrides Function Equals(obj As Object) As Boolean
         Return TypeOf obj Is DataHnd AndAlso DirectCast(obj, DataHnd).Handle = Handle
     End Function
+
     Public Overrides Function GetHashCode() As Integer
         Return Handle.GetHashCode()
     End Function
+
     Public Shared Operator =(left As DataHnd, right As DataHnd) As Boolean
         Return left.Handle = right.Handle
     End Operator
+
     Public Shared Operator <>(left As DataHnd, right As DataHnd) As Boolean
         Return Not (left = right)
     End Operator
 End Structure
 
 ''' <summary>
-''' Opaque application handle that groups a set of APIs.
-''' Created with <see cref="API.API_Create_APPHnd"/> and freed with <see cref="API.API_Free_APPHnd"/>.
+''' 不透明应用句柄，用于分组一组 API。
+''' 必须使用 <see cref="API.API_Create_APPHnd"/> 创建，并使用 <see cref="API.API_Free_APPHnd"/> 释放。
 ''' </summary>
 Public Structure AppHnd
     Public Handle As IntPtr
+
     Public ReadOnly Property IsValid As Boolean
         Get
             Return Handle <> IntPtr.Zero
         End Get
     End Property
+
     Public Shared ReadOnly Null As AppHnd = New AppHnd With {.Handle = IntPtr.Zero}
+
     Public Overrides Function Equals(obj As Object) As Boolean
         Return TypeOf obj Is AppHnd AndAlso DirectCast(obj, AppHnd).Handle = Handle
     End Function
+
     Public Overrides Function GetHashCode() As Integer
         Return Handle.GetHashCode()
     End Function
+
     Public Shared Operator =(left As AppHnd, right As AppHnd) As Boolean
         Return left.Handle = right.Handle
     End Operator
+
     Public Shared Operator <>(left As AppHnd, right As AppHnd) As Boolean
         Return Not (left = right)
     End Operator
 End Structure
 
 ''' <summary>
-''' Callback delegate for request‑response (Call) APIs.
-''' Executed in a background thread‑pool thread – do NOT block or call API_Call/API_Notify inside.
+''' 请求‑响应（Call）API 的回调委托。
+''' 回调在后台线程池中执行 —— 禁止阻塞，禁止在内部调用 API_Call/API_Notify。
 ''' </summary>
-''' <param name="trigger">User data pointer passed during registration.</param>
-''' <param name="input">Read‑only input data handle (do not free).</param>
-''' <param name="output">Write‑only output data handle for the response (do not free).</param>
+''' <param name="trigger">注册时传入的用户数据指针。</param>
+''' <param name="input">只读的输入句柄（禁止释放）。</param>
+''' <param name="output">只写的输出句柄，用于写入响应（禁止释放）。</param>
 <UnmanagedFunctionPointer(CallingConvention.Cdecl)>
 Public Delegate Sub APICallDelegate(trigger As IntPtr, input As IntPtr, output As IntPtr)
 
 ''' <summary>
-''' Callback delegate for one‑way notification (Notify) APIs.
-''' Same threading and safety restrictions as <see cref="APICallDelegate"/>.
+''' 单向通知（Notify）API 的回调委托。
+''' 线程与安全约束同 <see cref="APICallDelegate"/>。
 ''' </summary>
 <UnmanagedFunctionPointer(CallingConvention.Cdecl)>
 Public Delegate Sub APINotifyDelegate(trigger As IntPtr, input As IntPtr)
 
 ''' <summary>
-''' Static class providing all API Hub functions.
-''' The library is loaded automatically via a custom DllImport resolver.
-''' <para>All string parameters are marshaled as UTF‑8 (using <see cref="UnmanagedType.LPUTF8Str"/>).</para>
+''' 提供所有 API Hub 函数的静态类。
+''' 动态库通过自定义 DllImport 解析器自动加载。
+''' <para>所有字符串参数均以 UTF‑8 编码封送（使用 <see cref="UnmanagedType.LPUTF8Str"/>）。</para>
+''' <para>所有导出函数均为<b>线程安全</b>，可并发调用。</para>
+''' <para>通过 <see cref="API_Reg_Call"/> 和 <see cref="API_Reg_Notify"/> 注册的回调在后台线程池中执行，
+''' 禁止阻塞，禁止调用 API_Call/API_Notify（有死锁风险），耗时任务应分流到独立线程。</para>
+''' <para>动态注销（<see cref="API_UnReg"/>）会立即从本地移除 API，并触发异步网络广播（传播约 3 秒）。</para>
 ''' </summary>
 Public NotInheritable Class API
 
@@ -101,82 +117,82 @@ Public NotInheritable Class API
     End Sub
 
     ' ======================================================================
-    ' Data Handle Operations
+    ' 数据句柄操作
     ' ======================================================================
 
     ''' <summary>
-    ''' Creates a new data handle with the given API name.
-    ''' The internal payload is initially empty (size = 0).
+    ''' 使用给定的 API 名称创建数据句柄。
+    ''' 内部载荷初始为空（大小 = 0）。
     ''' </summary>
-    ''' <param name="apiName">Target API name (UTF‑8).</param>
-    ''' <returns>A new <see cref="DataHnd"/>; must be freed with <see cref="API_Free_DataHnd"/>.</returns>
+    ''' <param name="apiName">目标 API 名称（UTF‑8）。</param>
+    ''' <returns>新的 <see cref="DataHnd"/>；必须使用 <see cref="API_Free_DataHnd"/> 释放。</returns>
     <DllImport(DllName, CallingConvention:=CallingConvention.Cdecl)>
     Public Shared Function API_Create_DataHnd(<MarshalAs(UnmanagedType.LPUTF8Str)> apiName As String) As DataHnd
     End Function
 
     ''' <summary>
-    ''' Destroys a data handle and releases all resources.
+    ''' 销毁数据句柄，释放所有资源。
     ''' </summary>
     <DllImport(DllName, CallingConvention:=CallingConvention.Cdecl)>
     Public Shared Sub API_Free_DataHnd(hnd As DataHnd)
     End Sub
 
     ''' <summary>
-    ''' Returns a direct pointer to the internal buffer (zero‑copy access).
-    ''' Do not free this pointer; it is managed by the library.
+    ''' 返回内部缓冲区的直接指针（零拷贝访问）。
+    ''' 不要释放此指针，由库管理。
     ''' </summary>
     <DllImport(DllName, CallingConvention:=CallingConvention.Cdecl)>
     Public Shared Function API_GetBuffer(hnd As DataHnd) As IntPtr
     End Function
 
     ''' <summary>
-    ''' Writes binary data at the current position. The buffer is enlarged if needed.
+    ''' 在当前位置写入二进制数据。缓冲区会自动扩容。
     ''' </summary>
     <DllImport(DllName, CallingConvention:=CallingConvention.Cdecl)>
     Public Shared Function API_WriteBuffer(hnd As DataHnd, buffer As Byte(), size As Long) As Long
     End Function
 
     ''' <summary>
-    ''' Reads binary data from the current position into the provided buffer.
+    ''' 从当前位置读取二进制数据到提供的缓冲区。
     ''' </summary>
     <DllImport(DllName, CallingConvention:=CallingConvention.Cdecl)>
     Public Shared Function API_ReadBuffer(hnd As DataHnd, buffer As Byte(), size As Long) As Long
     End Function
 
     ''' <summary>
-    ''' Returns the current read/write position (byte offset).
+    ''' 返回当前读写位置（字节偏移）。
     ''' </summary>
     <DllImport(DllName, CallingConvention:=CallingConvention.Cdecl)>
     Public Shared Function API_GetPos(hnd As DataHnd) As Long
     End Function
 
     ''' <summary>
-    ''' Sets the current read/write position. Extends the buffer with zeros if beyond current size.
+    ''' 设置当前读写位置。若超出当前大小，则用零扩展缓冲区。
     ''' </summary>
     <DllImport(DllName, CallingConvention:=CallingConvention.Cdecl)>
     Public Shared Sub API_SetPos(hnd As DataHnd, pos As Long)
     End Sub
 
     ''' <summary>
-    ''' Returns the total size (in bytes) of the payload.
+    ''' 返回载荷的总大小（字节）。
     ''' </summary>
     <DllImport(DllName, CallingConvention:=CallingConvention.Cdecl)>
     Public Shared Function API_GetSize(hnd As DataHnd) As Long
     End Function
 
     ''' <summary>
-    ''' Resizes the internal buffer. Truncates data if smaller, uninitialised if larger.
+    ''' 调整内部缓冲区大小。若缩小则截断，若扩大则未初始化。
     ''' </summary>
     <DllImport(DllName, CallingConvention:=CallingConvention.Cdecl)>
     Public Shared Sub API_SetSize(hnd As DataHnd, size As Long)
     End Sub
 
     ' ======================================================================
-    ' Application Handle Operations
+    ' 应用句柄操作
     ' ======================================================================
 
     ''' <summary>
-    ''' Creates a new application context with a unique name and optional description.
+    ''' 使用唯一名称和可选描述创建应用上下文。
     ''' </summary>
     <DllImport(DllName, CallingConvention:=CallingConvention.Cdecl)>
     Public Shared Function API_Create_APPHnd(<MarshalAs(UnmanagedType.LPUTF8Str)> appName As String,
@@ -184,21 +200,21 @@ Public NotInheritable Class API
     End Function
 
     ''' <summary>
-    ''' Destroys an application handle and releases all registered APIs.
+    ''' 销毁应用句柄，释放所有已注册的 API。
     ''' </summary>
     <DllImport(DllName, CallingConvention:=CallingConvention.Cdecl)>
     Public Shared Sub API_Free_APPHnd(appHnd As AppHnd)
     End Sub
 
     ''' <summary>
-    ''' Registers a request‑response (Call) API.
+    ''' 注册一个请求‑响应（Call）API。
     ''' </summary>
-    ''' <param name="appHnd">Application handle.</param>
-    ''' <param name="apiName">Unique API name (UTF‑8).</param>
-    ''' <param name="desc">Optional description (UTF‑8).</param>
-    ''' <param name="trigger">User data pointer.</param>
-    ''' <param name="onCall">Callback delegate.</param>
-    ''' <returns>1 on success, 0 if the API name already exists.</returns>
+    ''' <param name="appHnd">应用句柄。</param>
+    ''' <param name="apiName">唯一 API 名称（UTF‑8）。</param>
+    ''' <param name="desc">可选描述（UTF‑8）。</param>
+    ''' <param name="trigger">用户数据指针。</param>
+    ''' <param name="onCall">回调委托。</param>
+    ''' <returns>1 成功，0 表示 API 名称已存在。</returns>
     <DllImport(DllName, CallingConvention:=CallingConvention.Cdecl)>
     Public Shared Function API_Reg_Call(appHnd As AppHnd,
                                         <MarshalAs(UnmanagedType.LPUTF8Str)> apiName As String,
@@ -208,7 +224,7 @@ Public NotInheritable Class API
     End Function
 
     ''' <summary>
-    ''' Registers a one‑way notification (Notify) API.
+    ''' 注册一个单向通知（Notify）API。
     ''' </summary>
     <DllImport(DllName, CallingConvention:=CallingConvention.Cdecl)>
     Public Shared Function API_Reg_Notify(appHnd As AppHnd,
@@ -219,102 +235,98 @@ Public NotInheritable Class API
     End Function
 
     ''' <summary>
-    ''' Unregisters a previously registered API from the application.
+    ''' 从应用中注销先前注册的 API。
     ''' <para>
-    ''' The API is <b>immediately</b> removed from the local registry and a network
-    ''' broadcast is triggered. Remote peers will stop seeing this API within
-    ''' approximately 3 seconds (depending on network latency and the C4 update
-    ''' interval). During that short window, remote calls may still be attempted;
-    ''' they will fail gracefully (the remote side receives a "not found" error).
+    ''' API 会<b>立即</b>从本地注册表中移除，并触发网络广播。
+    ''' 远程对等节点约 3 秒后不再看到此 API（取决于网络延迟和 C4 更新间隔）。
+    ''' 在该短暂窗口期内，远程调用仍可能到达，但会优雅失败（收到“未找到”错误）。
     ''' </para>
     ''' <para>
-    ''' Use this function to dynamically unload plugins, temporarily disable
-    ''' services, or adjust exposed functionality at runtime without restarting
-    ''' the application.
+    ''' 用于动态卸载插件、临时禁用服务或在不重启应用的情况下调整暴露功能。
     ''' </para>
     ''' </summary>
-    ''' <param name="appHnd">Application handle.</param>
-    ''' <param name="apiName">Name of the API to unregister (UTF‑8).</param>
-    ''' <returns>1 on success, 0 if the API name does not exist.</returns>
+    ''' <param name="appHnd">应用句柄。</param>
+    ''' <param name="apiName">要注销的 API 名称（UTF‑8）。</param>
+    ''' <returns>1 成功，0 表示 API 名称不存在。</returns>
     <DllImport(DllName, CallingConvention:=CallingConvention.Cdecl)>
     Public Shared Function API_UnReg(appHnd As AppHnd,
                                      <MarshalAs(UnmanagedType.LPUTF8Str)> apiName As String) As Integer
     End Function
 
     ''' <summary>
-    ''' Executes a Call API locally (within the same process), bypassing the network.
+    ''' 在本地（同一进程内）执行 Call API，绕过网络。
     ''' </summary>
-    ''' <returns>A new <see cref="DataHnd"/> containing the result; caller must free it.</returns>
+    ''' <returns>包含结果的新 <see cref="DataHnd"/>；调用者必须释放。</returns>
     <DllImport(DllName, CallingConvention:=CallingConvention.Cdecl)>
     Public Shared Function API_Local_APP_Call(appHnd As AppHnd, param As DataHnd) As DataHnd
     End Function
 
     ''' <summary>
-    ''' Sends a notification locally (no result).
+    ''' 在本地发送通知（无结果）。
     ''' </summary>
     <DllImport(DllName, CallingConvention:=CallingConvention.Cdecl)>
     Public Shared Sub API_Local_APP_Notify(appHnd As AppHnd, param As DataHnd)
     End Sub
 
     ' ======================================================================
-    ' Network Preparation & Communication
+    ' 网络准备与通信
     ' ======================================================================
 
     ''' <summary>
-    ''' Prepares a service (listener) that will be started when <see cref="API_Prepare_Done"/> is called.
+    ''' 准备一个服务（监听器），将在 <see cref="API_Prepare_Done"/> 调用时启动。
     ''' </summary>
-    ''' <param name="listeningAddr">Local address to bind (e.g., "0.0.0.0:9898" or "ipc:my_service").</param>
-    ''' <param name="physicsAddr">Public address advertised to clients (must match clients' address).</param>
-    ''' <returns>A service tag (informational).</returns>
+    ''' <param name="listeningAddr">本地绑定地址（如 "0.0.0.0:9898" 或 "ipc:my_service"）。</param>
+    ''' <param name="physicsAddr">向客户端公布的公共地址（必须与客户端使用的地址一致）。</param>
+    ''' <returns>服务标签（仅作参考）。</returns>
     <DllImport(DllName, CallingConvention:=CallingConvention.Cdecl)>
     Public Shared Function API_Prepare_Service(<MarshalAs(UnmanagedType.LPUTF8Str)> listeningAddr As String,
                                                <MarshalAs(UnmanagedType.LPUTF8Str)> physicsAddr As String) As Integer
     End Function
 
     ''' <summary>
-    ''' Prepares a client connection.
+    ''' 准备一个客户端连接。
     ''' </summary>
-    ''' <param name="physicsAddr">Remote service address (must match service's advertised address).</param>
-    ''' <param name="appHnd">Optional application handle to expose (can be <see cref="AppHnd.Null"/>).</param>
-    ''' <returns>A client tag (informational).</returns>
+    ''' <param name="physicsAddr">远程服务地址（必须与服务公布的地址一致）。</param>
+    ''' <param name="appHnd">可选应用句柄（可为 <see cref="AppHnd.Null"/>）。</param>
+    ''' <returns>客户端标签（仅作参考）。</returns>
     <DllImport(DllName, CallingConvention:=CallingConvention.Cdecl)>
     Public Shared Function API_Prepare_Client(<MarshalAs(UnmanagedType.LPUTF8Str)> physicsAddr As String,
                                               appHnd As AppHnd) As Integer
     End Function
 
     ''' <summary>
-    ''' Clears all previously prepared services and clients.
-    ''' Call before preparing a new set.
+    ''' 清除所有已准备的服务和客户端。
+    ''' 在准备新配置之前调用。
     ''' </summary>
     <DllImport(DllName, CallingConvention:=CallingConvention.Cdecl)>
     Public Shared Sub API_Reset_Prepare()
     End Sub
 
     ''' <summary>
-    ''' Starts the network framework with all prepared services/clients.
-    ''' This call blocks until the framework is ready.
+    ''' 启动网络框架，包含所有已准备的服务/客户端。
+    ''' 此调用将阻塞直到框架就绪。
     ''' </summary>
-    ''' <returns>1 on success, 0 on failure (check console output for details).</returns>
+    ''' <returns>1 成功，0 失败（详情请查看控制台输出）。</returns>
     <DllImport(DllName, CallingConvention:=CallingConvention.Cdecl)>
     Public Shared Function API_Prepare_Done() As Integer
     End Function
 
     ''' <summary>
-    ''' Signals the internal main loop to exit gracefully.
-    ''' Must be followed by <see cref="API_shutdown"/> to release resources.
+    ''' 通知内部主循环优雅退出。
+    ''' 必须后跟 <see cref="API_shutdown"/> 以释放资源。
     ''' </summary>
     <DllImport(DllName, CallingConvention:=CallingConvention.Cdecl)>
     Public Shared Sub API_Exit_MainThread()
     End Sub
 
     ''' <summary>
-    ''' Performs a remote (or local) synchronous call.
+    ''' 执行远程（或本地）同步调用。
     ''' </summary>
-    ''' <param name="appName">Target application name (case‑sensitive).</param>
-    ''' <param name="param">Input data handle (cloned internally; caller must still free it).</param>
-    ''' <param name="timeout">Maximum wait time in milliseconds (0 = infinite).</param>
-    ''' <returns>A new <see cref="DataHnd"/> containing the result. The handle is never null;
-    ''' if the call times out or fails, its size will be 0. Must be freed by the caller.</returns>
+    ''' <param name="appName">目标应用名（区分大小写）。</param>
+    ''' <param name="param">输入数据句柄（内部会克隆，调用者仍需释放原句柄）。</param>
+    ''' <param name="timeout">最大等待毫秒数（0 表示无限）。</param>
+    ''' <returns>包含结果的新 <see cref="DataHnd"/>。句柄永不为空；
+    ''' 若超时或失败，其大小为 0。调用者必须释放。</returns>
     <DllImport(DllName, CallingConvention:=CallingConvention.Cdecl)>
     Public Shared Function API_Call(<MarshalAs(UnmanagedType.LPUTF8Str)> appName As String,
                                     param As DataHnd,
@@ -322,53 +334,157 @@ Public NotInheritable Class API
     End Function
 
     ''' <summary>
-    ''' Sends a one‑way notification (fire‑and‑forget).
+    ''' 发送单向通知（fire‑and‑forget）。
     ''' </summary>
     <DllImport(DllName, CallingConvention:=CallingConvention.Cdecl)>
     Public Shared Sub API_Notify(<MarshalAs(UnmanagedType.LPUTF8Str)> appName As String, param As DataHnd)
     End Sub
 
     ''' <summary>
-    ''' Dynamically adjusts global runtime options of the API Hub framework.
+    ''' 动态调整 API Hub 框架的全局运行时选项。
     ''' </summary>
-    ''' <param name="optionName">Configuration key (UTF‑8, case‑insensitive). Supported keys:
+    ''' <param name="optionName">配置键（UTF‑8，不区分大小写）。支持的键：
     ''' <list type="bullet">
-    '''   <item><term>"password" / "passwd"</term><description>Sets the C4 P2PVM authentication token.
-    '''       Must match on both service and client sides. Affects new connections only.</description></item>
-    '''   <item><term>"Quiet"</term><description>Enable/disable quiet mode (True/False).</description></item>
-    '''   <item><term>"External_Conf_Auto_Save" / "Conf_Auto_Save"</term><description>Auto‑save .ini on exit (True/False).</description></item>
+    '''   <item><term>"password" / "passwd"</term><description>设置 C4 P2PVM 认证令牌。
+    '''       服务端和客户端必须匹配。仅影响新建连接。</description></item>
+    '''   <item><term>"Quiet"</term><description>启用/禁用静默模式（True/False）。</description></item>
+    '''   <item><term>"External_Conf_Auto_Save" / "Conf_Auto_Save"</term><description>退出时自动保存 .ini（True/False）。</description></item>
     '''   <item><term>"Wait_Connection_ReadyOk" / "Wait_API_Prepare_Done" / ...</term><description>
-    '''       Controls whether <see cref="API_Prepare_Done"/> blocks until all clients are connected.
-    '''       When False, clients auto‑connect later (important for deployment).</description></item>
-    '''   <item><term>"Wait_Connection_Timeout" / "Wait_TimeOut"</term><description>Max wait (ms) when the above is True.</description></item>
-    '''   <item><term>"ShowThreadID" / "ShowThread" / "Show_Thread"</term><description>Show thread IDs in logs (True/False).</description></item>
-    '''   <item><term>"ConsoleOutput" / "Console_Output"</term><description>Enable/disable console logging (True/False).</description></item>
-    '''   <item><term>"IPC_Serv_ThreadCount" / "IPC_ThreadCount" / "IPC_Server_ThreadCount"</term><description>IPC service thread pool size.</description></item>
-    '''   <item><term>"IPC_Serv_MaxQueueLength" / "IPC_MaxQueueLength" / "IPC_Server_MaxQueueLength"</term><description>Max IPC queue length.</description></item>
-    '''   <item><term>"IPC_Serv_MaxMsgSize" / "IPC_MaxMsgSize" / "IPC_Server_MaxMsgSize"</term><description>Max IPC message size (bytes).</description></item>
+    '''       控制 <see cref="API_Prepare_Done"/> 是否阻塞直到所有客户端连接就绪。
+    '''       设为 False 时客户端将稍后自动连接（适用于部署）。</description></item>
+    '''   <item><term>"Wait_Connection_Timeout" / "Wait_TimeOut"</term><description>上述等待的最大毫秒数。</description></item>
+    '''   <item><term>"ShowThreadID" / "ShowThread" / "Show_Thread"</term><description>在日志中显示线程 ID（True/False）。</description></item>
+    '''   <item><term>"ConsoleOutput" / "Console_Output"</term><description>启用/禁用控制台日志（True/False）。</description></item>
+    '''   <item><term>"IPC_Serv_ThreadCount" / "IPC_ThreadCount" / "IPC_Server_ThreadCount"</term><description>IPC 服务线程池大小。</description></item>
+    '''   <item><term>"IPC_Serv_MaxQueueLength" / "IPC_MaxQueueLength" / "IPC_Server_MaxQueueLength"</term><description>IPC 消息队列最大长度。</description></item>
+    '''   <item><term>"IPC_Serv_MaxMsgSize" / "IPC_MaxMsgSize" / "IPC_Server_MaxMsgSize"</term><description>IPC 单条消息最大字节数。</description></item>
     ''' </list>
     ''' </param>
-    ''' <param name="optionValue">New value (UTF‑8). For booleans, accepts "True"/"False", "1"/"0", "Yes"/"No".</param>
-    ''' <remarks>Unknown options are silently ignored. This function has no return value.</remarks>
+    ''' <param name="optionValue">新值（UTF‑8）。布尔值接受 "True"/"False"、"1"/"0"、"Yes"/"No"。</param>
+    ''' <remarks>未知选项被静默忽略。此函数无返回值。</remarks>
     <DllImport(DllName, CallingConvention:=CallingConvention.Cdecl)>
     Public Shared Sub API_SetOption(<MarshalAs(UnmanagedType.LPUTF8Str)> optionName As String,
                                     <MarshalAs(UnmanagedType.LPUTF8Str)> optionValue As String)
     End Sub
 
     ''' <summary>
-    ''' Gracefully shuts down the entire framework: stops services, disconnects clients,
-    ''' and releases internal resources. After this, you can re‑initialise.
+    ''' 优雅关闭整个框架：停止服务、断开客户端、释放内部资源。
+    ''' 之后可重新初始化。
     ''' </summary>
     <DllImport(DllName, CallingConvention:=CallingConvention.Cdecl)>
     Public Shared Sub API_shutdown()
     End Sub
 
     ' ======================================================================
-    ' Convenience Helpers (Existing)
+    ' 新增：状态与诊断函数（2026-08-24 添加）
+    ' 提供对内部日志队列和网络状态的编程式访问。
     ' ======================================================================
 
     ''' <summary>
-    ''' Reads all bytes from the handle (resets position to 0).
+    ''' 返回内部状态队列中待读取的日志消息数量。
+    ''' 此函数<b>线程安全</b>，可与 <see cref="API_Get_Status"/> 和 <see cref="API_Post_Status"/> 并发调用。
+    ''' </summary>
+    ''' <returns>当前队列中的消息条数。</returns>
+    <DllImport(DllName, CallingConvention:=CallingConvention.Cdecl, EntryPoint:="API_Get_Status_Num")>
+    Private Shared Function API_Get_Status_Num_Internal() As Integer
+    End Function
+
+    ''' <summary>
+    ''' 从状态队列中取出一条日志消息（FIFO 顺序）。
+    ''' 返回的指针指向内部缓冲区，该缓冲区在下次调用时会被覆盖。
+    ''' 调用者必须立即复制数据。
+    ''' </summary>
+    ''' <returns>指向以 NUL 结尾的 UTF‑8 字符串的指针；若队列为空则返回 <see cref="IntPtr.Zero"/>。</returns>
+    <DllImport(DllName, CallingConvention:=CallingConvention.Cdecl, EntryPoint:="API_Get_Status")>
+    Private Shared Function API_Get_Status_Internal() As IntPtr
+    End Function
+
+    ''' <summary>
+    ''' 向内部状态队列中注入一条自定义日志消息。
+    ''' 消息将被追加，可通过 <see cref="API_Get_Status"/> 读取。
+    ''' 此函数<b>线程安全</b>。
+    ''' </summary>
+    ''' <param name="status">要添加的消息（UTF‑8）。</param>
+    <DllImport(DllName, CallingConvention:=CallingConvention.Cdecl, EntryPoint:="API_Post_Status")>
+    Private Shared Sub API_Post_Status_Internal(<MarshalAs(UnmanagedType.LPUTF8Str)> status As String)
+    End Sub
+
+    ''' <summary>
+    ''' 检查模拟主线程（C4 事件循环）是否正在运行。
+    ''' 返回 1 表示运行中，0 表示已停止或尚未启动。
+    ''' 此函数<b>线程安全</b>。
+    ''' </summary>
+    <DllImport(DllName, CallingConvention:=CallingConvention.Cdecl, EntryPoint:="API_Check_MainThread")>
+    Private Shared Function API_Check_MainThread_Internal() As Integer
+    End Function
+
+    ''' <summary>
+    ''' 检查网络中是否存在指定名称的应用。
+    ''' 查询基于本地缓存，可能略有过时（通常 < 3 秒）。
+    ''' 返回 1 表示存在至少一个实例，0 表示不存在。
+    ''' 此函数<b>线程安全</b>。
+    ''' </summary>
+    ''' <param name="appName">应用名称（UTF‑8，区分大小写）。</param>
+    <DllImport(DllName, CallingConvention:=CallingConvention.Cdecl, EntryPoint:="API_Check_App")>
+    Private Shared Function API_Check_App_Internal(<MarshalAs(UnmanagedType.LPUTF8Str)> appName As String) As Integer
+    End Function
+
+    ' ---------- 公共包装器 ----------
+
+    ''' <summary>
+    ''' 返回内部状态队列中待读取的日志消息数量。
+    ''' </summary>
+    Public Shared Function API_Get_Status_Num() As Integer
+        Return API_Get_Status_Num_Internal()
+    End Function
+
+    ''' <summary>
+    ''' 从状态队列中取出一条日志消息（FIFO 顺序）。
+    ''' 返回的字符串是内部缓冲区的副本，因此后续调用不会影响其有效性。
+    ''' 若队列为空，返回空字符串。
+    ''' <para>此函数<b>线程安全</b>。</para>
+    ''' <para>消息超过 64 KB 会被截断；队列最多容纳 1000 条消息。</para>
+    ''' </summary>
+    Public Shared Function API_Get_Status() As String
+        Dim ptr = API_Get_Status_Internal()
+        If ptr = IntPtr.Zero Then Return ""
+        Return Marshal.PtrToStringUTF8(ptr)
+    End Function
+
+    ''' <summary>
+    ''' 向内部状态队列中注入一条自定义日志消息。
+    ''' 消息将被追加，可通过 <see cref="API_Get_Status"/> 读取。
+    ''' 此函数<b>线程安全</b>。
+    ''' </summary>
+    ''' <param name="status">要添加的消息（UTF‑8）。</param>
+    Public Shared Sub API_Post_Status(status As String)
+        API_Post_Status_Internal(status)
+    End Sub
+
+    ''' <summary>
+    ''' 检查模拟主线程（C4 事件循环）是否正在运行。
+    ''' </summary>
+    ''' <returns>True 表示正在运行，False 表示已停止。</returns>
+    Public Shared Function API_Check_MainThread() As Boolean
+        Return API_Check_MainThread_Internal() <> 0
+    End Function
+
+    ''' <summary>
+    ''' 检查网络中是否存在指定名称的应用。
+    ''' 查询基于本地缓存，可能略有过时（通常 < 3 秒）。
+    ''' </summary>
+    ''' <param name="appName">应用名称（UTF‑8，区分大小写）。</param>
+    ''' <returns>True 表示存在至少一个实例，False 表示不存在。</returns>
+    Public Shared Function API_Check_App(appName As String) As Boolean
+        Return API_Check_App_Internal(appName) <> 0
+    End Function
+
+    ' ======================================================================
+    ' 便利辅助函数（原有）
+    ' ======================================================================
+
+    ''' <summary>
+    ''' 从句柄中读取所有字节（重置位置到 0）。
     ''' </summary>
     Public Shared Function ReadAllBytes(hnd As DataHnd) As Byte()
         Dim size = API_GetSize(hnd)
@@ -383,14 +499,14 @@ Public NotInheritable Class API
     End Function
 
     ''' <summary>
-    ''' Writes a byte array to the handle at the current position.
+    ''' 将字节数组写入句柄的当前位置。
     ''' </summary>
     Public Shared Function WriteBytes(hnd As DataHnd, data As Byte()) As Long
         Return API_WriteBuffer(hnd, data, data.Length)
     End Function
 
     ''' <summary>
-    ''' Reads a null‑terminated UTF-8 string from the handle.
+    ''' 从句柄中读取以 NUL 结尾的 UTF‑8 字符串。
     ''' </summary>
     Public Shared Function ReadString(hnd As DataHnd) As String
         Dim bytes = ReadAllBytes(hnd)
@@ -400,7 +516,7 @@ Public NotInheritable Class API
     End Function
 
     ''' <summary>
-    ''' Writes a UTF‑8 string to the handle, appending a null terminator.
+    ''' 将 UTF‑8 字符串写入句柄，并追加一个 NUL 终止符。
     ''' </summary>
     Public Shared Sub WriteString(hnd As DataHnd, str As String)
         Dim bytes = Encoding.UTF8.GetBytes(str)
@@ -411,92 +527,92 @@ Public NotInheritable Class API
     End Sub
 
     ' ======================================================================
-    ' NEW: Atomic Type Helpers (Pascal‑compatible, little‑endian)
-    ' Added 2026-08-20, matching z_api_hubtool_import.pas exactly.
-    ' All write methods return Boolean indicating success (full bytes written).
-    ' All read methods return the value via ByRef and return Boolean.
+    ' 原子类型辅助（与 Pascal 兼容，小端序）
+    ' 2026-08-20 添加，完全匹配 z_api_hubtool_import.pas
+    ' 所有写方法返回 Boolean 表示成功（完整写入所需字节）。
+    ' 所有读方法通过 ByRef 返回值，并返回 Boolean。
     ' ======================================================================
 
-    ' ---------- Write Helpers ----------
+    ' ---------- 写辅助 ----------
 
     ''' <summary>
-    ''' Writes a signed 8‑bit integer (1 byte) to the handle at the current position.
+    ''' 写入有符号 8 位整数（1 字节）到当前位置。
     ''' </summary>
-    ''' <returns>True if the byte was successfully written.</returns>
+    ''' <returns>True 表示成功写入该字节。</returns>
     Public Shared Function WriteInt8(hnd As DataHnd, value As SByte) As Boolean
         Dim b As Byte = CByte(value)
         Return WriteBytes(hnd, {b}) = 1
     End Function
 
     ''' <summary>
-    ''' Writes an unsigned 8‑bit integer (1 byte) to the handle.
+    ''' 写入无符号 8 位整数（1 字节）到当前位置。
     ''' </summary>
     Public Shared Function WriteUInt8(hnd As DataHnd, value As Byte) As Boolean
         Return WriteBytes(hnd, {value}) = 1
     End Function
 
     ''' <summary>
-    ''' Writes a signed 16‑bit integer (2 bytes, little‑endian) to the handle.
+    ''' 写入有符号 16 位整数（2 字节，小端序）到当前位置。
     ''' </summary>
     Public Shared Function WriteInt16(hnd As DataHnd, value As Short) As Boolean
         Return WriteBytes(hnd, BitConverter.GetBytes(value)) = 2
     End Function
 
     ''' <summary>
-    ''' Writes an unsigned 16‑bit integer (2 bytes, little‑endian) to the handle.
+    ''' 写入无符号 16 位整数（2 字节，小端序）到当前位置。
     ''' </summary>
     Public Shared Function WriteUInt16(hnd As DataHnd, value As UShort) As Boolean
         Return WriteBytes(hnd, BitConverter.GetBytes(value)) = 2
     End Function
 
     ''' <summary>
-    ''' Writes a signed 32‑bit integer (4 bytes, little‑endian) to the handle.
+    ''' 写入有符号 32 位整数（4 字节，小端序）到当前位置。
     ''' </summary>
     Public Shared Function WriteInt32(hnd As DataHnd, value As Integer) As Boolean
         Return WriteBytes(hnd, BitConverter.GetBytes(value)) = 4
     End Function
 
     ''' <summary>
-    ''' Writes an unsigned 32‑bit integer (4 bytes, little‑endian) to the handle.
+    ''' 写入无符号 32 位整数（4 字节，小端序）到当前位置。
     ''' </summary>
     Public Shared Function WriteUInt32(hnd As DataHnd, value As UInteger) As Boolean
         Return WriteBytes(hnd, BitConverter.GetBytes(value)) = 4
     End Function
 
     ''' <summary>
-    ''' Writes a signed 64‑bit integer (8 bytes, little‑endian) to the handle.
+    ''' 写入有符号 64 位整数（8 字节，小端序）到当前位置。
     ''' </summary>
     Public Shared Function WriteInt64(hnd As DataHnd, value As Long) As Boolean
         Return WriteBytes(hnd, BitConverter.GetBytes(value)) = 8
     End Function
 
     ''' <summary>
-    ''' Writes an unsigned 64‑bit integer (8 bytes, little‑endian) to the handle.
+    ''' 写入无符号 64 位整数（8 字节，小端序）到当前位置。
     ''' </summary>
     Public Shared Function WriteUInt64(hnd As DataHnd, value As ULong) As Boolean
         Return WriteBytes(hnd, BitConverter.GetBytes(value)) = 8
     End Function
 
     ''' <summary>
-    ''' Writes a 32‑bit IEEE 754 single‑precision float (4 bytes, little‑endian) to the handle.
+    ''' 写入 32 位 IEEE 754 单精度浮点数（4 字节，小端序）到当前位置。
     ''' </summary>
     Public Shared Function WriteSingle(hnd As DataHnd, value As Single) As Boolean
         Return WriteBytes(hnd, BitConverter.GetBytes(value)) = 4
     End Function
 
     ''' <summary>
-    ''' Writes a 64‑bit IEEE 754 double‑precision float (8 bytes, little‑endian) to the handle.
+    ''' 写入 64 位 IEEE 754 双精度浮点数（8 字节，小端序）到当前位置。
     ''' </summary>
     Public Shared Function WriteDouble(hnd As DataHnd, value As Double) As Boolean
         Return WriteBytes(hnd, BitConverter.GetBytes(value)) = 8
     End Function
 
     ''' <summary>
-    ''' Writes a UTF‑8 encoded string followed by a null terminator (#0).
-    ''' This matches the standard "UTF‑8 + #0" format used across all languages.
-    ''' The position is advanced by Length(UTF8String) + 1 bytes.
+    ''' 写入 UTF‑8 编码的字符串，后跟一个 NUL 终止符（#0）。
+    ''' 此格式为跨语言标准 "UTF‑8 + #0"。
+    ''' 位置会前进 Length(UTF8String) + 1 字节。
     ''' </summary>
-    ''' <returns>True if the entire string (including the trailing null) was written.</returns>
+    ''' <returns>True 表示完整写入了字符串（含终止符）。</returns>
     Public Shared Function WriteStringNullTerminated(hnd As DataHnd, str As String) As Boolean
         Dim bytes = Encoding.UTF8.GetBytes(str)
         Dim totalLen = bytes.Length + 1
@@ -506,12 +622,12 @@ Public NotInheritable Class API
         Return WriteBytes(hnd, buf) = totalLen
     End Function
 
-    ' ---------- Read Helpers ----------
+    ' ---------- 读辅助 ----------
 
     ''' <summary>
-    ''' Reads a signed 8‑bit integer (1 byte) from the current position.
+    ''' 从当前位置读取有符号 8 位整数（1 字节）。
     ''' </summary>
-    ''' <returns>True if the byte was successfully read.</returns>
+    ''' <returns>True 表示成功读取该字节。</returns>
     Public Shared Function ReadInt8(hnd As DataHnd, ByRef value As SByte) As Boolean
         Dim b(0) As Byte
         If API_ReadBuffer(hnd, b, 1) <> 1 Then
@@ -522,7 +638,7 @@ Public NotInheritable Class API
     End Function
 
     ''' <summary>
-    ''' Reads an unsigned 8‑bit integer (1 byte) from the current position.
+    ''' 从当前位置读取无符号 8 位整数（1 字节）。
     ''' </summary>
     Public Shared Function ReadUInt8(hnd As DataHnd, ByRef value As Byte) As Boolean
         Dim b(0) As Byte
@@ -534,7 +650,7 @@ Public NotInheritable Class API
     End Function
 
     ''' <summary>
-    ''' Reads a signed 16‑bit integer (2 bytes, little‑endian) from the current position.
+    ''' 从当前位置读取有符号 16 位整数（2 字节，小端序）。
     ''' </summary>
     Public Shared Function ReadInt16(hnd As DataHnd, ByRef value As Short) As Boolean
         Dim b(1) As Byte
@@ -546,7 +662,7 @@ Public NotInheritable Class API
     End Function
 
     ''' <summary>
-    ''' Reads an unsigned 16‑bit integer (2 bytes, little‑endian) from the current position.
+    ''' 从当前位置读取无符号 16 位整数（2 字节，小端序）。
     ''' </summary>
     Public Shared Function ReadUInt16(hnd As DataHnd, ByRef value As UShort) As Boolean
         Dim b(1) As Byte
@@ -558,7 +674,7 @@ Public NotInheritable Class API
     End Function
 
     ''' <summary>
-    ''' Reads a signed 32‑bit integer (4 bytes, little‑endian) from the current position.
+    ''' 从当前位置读取有符号 32 位整数（4 字节，小端序）。
     ''' </summary>
     Public Shared Function ReadInt32(hnd As DataHnd, ByRef value As Integer) As Boolean
         Dim b(3) As Byte
@@ -570,7 +686,7 @@ Public NotInheritable Class API
     End Function
 
     ''' <summary>
-    ''' Reads an unsigned 32‑bit integer (4 bytes, little‑endian) from the current position.
+    ''' 从当前位置读取无符号 32 位整数（4 字节，小端序）。
     ''' </summary>
     Public Shared Function ReadUInt32(hnd As DataHnd, ByRef value As UInteger) As Boolean
         Dim b(3) As Byte
@@ -582,7 +698,7 @@ Public NotInheritable Class API
     End Function
 
     ''' <summary>
-    ''' Reads a signed 64‑bit integer (8 bytes, little‑endian) from the current position.
+    ''' 从当前位置读取有符号 64 位整数（8 字节，小端序）。
     ''' </summary>
     Public Shared Function ReadInt64(hnd As DataHnd, ByRef value As Long) As Boolean
         Dim b(7) As Byte
@@ -594,7 +710,7 @@ Public NotInheritable Class API
     End Function
 
     ''' <summary>
-    ''' Reads an unsigned 64‑bit integer (8 bytes, little‑endian) from the current position.
+    ''' 从当前位置读取无符号 64 位整数（8 字节，小端序）。
     ''' </summary>
     Public Shared Function ReadUInt64(hnd As DataHnd, ByRef value As ULong) As Boolean
         Dim b(7) As Byte
@@ -606,7 +722,7 @@ Public NotInheritable Class API
     End Function
 
     ''' <summary>
-    ''' Reads a 32‑bit IEEE 754 single‑precision float (4 bytes, little‑endian) from the current position.
+    ''' 从当前位置读取 32 位 IEEE 754 单精度浮点数（4 字节，小端序）。
     ''' </summary>
     Public Shared Function ReadSingle(hnd As DataHnd, ByRef value As Single) As Boolean
         Dim b(3) As Byte
@@ -618,7 +734,7 @@ Public NotInheritable Class API
     End Function
 
     ''' <summary>
-    ''' Reads a 64‑bit IEEE 754 double‑precision float (8 bytes, little‑endian) from the current position.
+    ''' 从当前位置读取 64 位 IEEE 754 双精度浮点数（8 字节，小端序）。
     ''' </summary>
     Public Shared Function ReadDouble(hnd As DataHnd, ByRef value As Double) As Boolean
         Dim b(7) As Byte
@@ -630,13 +746,13 @@ Public NotInheritable Class API
     End Function
 
     ''' <summary>
-    ''' Reads a UTF‑8 encoded string terminated by a null byte (#0) from the current position.
-    ''' The read position is advanced past the terminating null.
-    ''' If no null terminator is found, the position remains unchanged and False is returned.
+    ''' 从当前位置读取以 NUL 字节（#0）终止的 UTF‑8 字符串。
+    ''' 读取位置会前进到终止符之后。
+    ''' 若未找到 NUL 终止符，位置保持不变并返回 False。
     ''' </summary>
-    ''' <returns>True if a null terminator was found and the string was read.</returns>
-    ''' <param name="hnd">Data handle.</param>
-    ''' <param name="value">Output string (empty if no data or no null found).</param>
+    ''' <returns>True 表示找到了 NUL 终止符并读取了字符串。</returns>
+    ''' <param name="hnd">数据句柄。</param>
+    ''' <param name="value">输出的字符串（若无数据或未找到 NUL 则为空）。</param>
     Public Shared Function ReadStringNullTerminated(hnd As DataHnd, ByRef value As String) As Boolean
         Dim size = API_GetSize(hnd)
         Dim pos = API_GetPos(hnd)
@@ -644,7 +760,7 @@ Public NotInheritable Class API
             value = ""
             Return False
         End If
-        ' Read all remaining bytes
+        ' 读取剩余所有字节
         Dim remaining = CInt(size - pos)
         Dim buf(remaining - 1) As Byte
         Dim read = API_ReadBuffer(hnd, buf, remaining)
@@ -652,17 +768,17 @@ Public NotInheritable Class API
             value = ""
             Return False
         End If
-        ' Find null terminator
+        ' 查找 NUL 终止符
         Dim nulPos = Array.IndexOf(buf, CByte(0), 0, CInt(read))
         If nulPos >= 0 Then
-            ' Found null: extract string without it, and move position to after the null
+            ' 找到 NUL：提取字符串（不含 NUL），并将位置移到 NUL 之后
             API_SetPos(hnd, pos + nulPos + 1)
             Dim strBytes(nulPos - 1) As Byte
             Array.Copy(buf, 0, strBytes, 0, nulPos)
             value = Encoding.UTF8.GetString(strBytes)
             Return True
         Else
-            ' No null found: restore position to original, return False
+            ' 未找到 NUL：恢复原位置，返回 False
             API_SetPos(hnd, pos)
             value = ""
             Return False
