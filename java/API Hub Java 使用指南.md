@@ -7,6 +7,7 @@
 > - 在 Java 中调用远程服务；
 > - 实现与 C++/C#/Python/Go/Pascal/PHP/Node.js 的互通；
 > - 动态注销 API 和运行时调整配置；
+> - 利用状态与检查 API 进行运行时监控和日志管理；
 > - 应对生产环境中的常见问题。
 
 ---
@@ -19,12 +20,13 @@
   - [3.1 DataHandle —— 数据句柄](#31-datahandle--数据句柄)
   - [3.2 AppHandle —— 应用句柄](#32-apphandle--应用句柄)
   - [3.3 回调接口](#33-回调接口)
-  - [3.4 ApiHub —— 网络工具类](#34-apihub--网络工具类)
+  - [3.4 ApiHub —— 网络与工具类](#34-apihub--网络与工具类)
+  - [3.5 v2.1 新增：状态与检查 API](#35-v21-新增状态与检查-api)
 - [4. 服务端开发](#4-服务端开发)
 - [5. 客户端开发](#5-客户端开发)
 - [6. 序列化与数据类型](#6-序列化与数据类型)
-- [7. 动态注销 API（新增）](#7-动态注销-api新增)
-- [8. 运行时配置（新增）](#8-运行时配置新增)
+- [7. 动态注销 API](#7-动态注销-api)
+- [8. 运行时配置](#8-运行时配置)
 - [9. 多场景实战](#9-多场景实战)
 - [10. 多语言互操作](#10-多语言互操作)
 - [11. 性能调优与最佳实践](#11-性能调优与最佳实践)
@@ -44,8 +46,9 @@ API Hub Java 绑定是一套基于 [JNA](https://github.com/java-native-access/j
 - **双协议无缝切换**：IPC（本机进程间）和 TCP（跨机器）使用完全相同的 API，仅地址字符串不同。  
 - **自动服务发现**：应用按名称注册，客户端按名称调用，框架自动路由、负载均衡、断线重连。  
 - **RAII 资源管理**：`DataHandle` 和 `AppHandle` 实现 `AutoCloseable`，自动释放内存，杜绝泄漏。
-- **动态 API 注销**：`AppHandle.unregister()` 支持运行时移除 API，自动广播至所有对等节点。
-- **运行时配置**：`ApiHub.setOption()` 支持动态调整认证密码、等待连接、IPC 线程池等参数。
+- **动态 API 注销**（v2.0）：`AppHandle.unregister()` 支持运行时移除 API，自动广播至所有对等节点。
+- **运行时配置**（v2.0）：`ApiHub.setOption()` 支持动态调整认证密码、等待连接、IPC 线程池等参数。
+- **状态与检查 API**（v2.1）：新增 `checkMainThread`、`checkApp`、`getStatusNum`、`getStatus`、`postStatus`，方便调试和运维。
 
 ### 1.2 适用场景
 
@@ -126,11 +129,14 @@ java/
 **写入数据**：
 - `write(byte[])`：写入原始字节。
 - `writeInt(int)`、`writeDouble(double)`：小端序写入。
-- `writeString(String)`：写入 UTF-8 字符串（4 字节长度前缀 + 内容）。
+- **推荐**：`writeStringNullTerminated(String)` —— 写入 UTF-8 字符串并追加一个 **空终止符 (#0)**，与 Pascal 的 `API_WriteString` 完全兼容，适用于跨语言通信。  
+- **已弃用**：`writeString(String)` —— 使用 4 字节长度前缀，仅限 Java 内部协议，不跨语言。
 
 **读取数据**：
 - `read(int)`：读取指定字节数。
-- `readInt()`、`readDouble()`、`readString()`：按顺序读取。
+- `readInt()`、`readDouble()`。
+- **推荐**：`readStringNullTerminated()` —— 读取直到空终止符，位置移至终止符后，与 Pascal `API_ReadString` 一致。  
+- **已弃用**：`readString()` —— 长度前缀方式。
 
 **位置控制**：
 - `getPos()` / `setPos(long)`：读写位置。
@@ -152,8 +158,8 @@ java/
 - `registerCall(apiName, desc, callback)`：请求-响应。
 - `registerNotify(apiName, desc, callback)`：单向通知。
 
-**动态注销（新增）**：
-- `unregister(apiName)`：运行时移除已注册的 API，触发网络广播。
+**动态注销（v2.0）**：
+- `unregister(apiName)`：运行时移除已注册的 API，触发网络广播（约 3 秒传播）。
 
 **本地调用**（用于测试）：
 - `localCall(param)`：同步执行本地注册的 API，不经过网络。
@@ -167,7 +173,7 @@ java/
 
 **重要**：回调由底层 C 库在内部线程池中执行，必须线程安全。
 
-### 3.4 ApiHub —— 网络工具类
+### 3.4 ApiHub —— 网络与工具类
 
 | 方法 | 说明 |
 |------|------|
@@ -179,9 +185,46 @@ java/
 | `shutdown()` | 关闭所有连接，释放资源。 |
 | `call(appName, param, timeoutMs)` | 同步远程调用，返回结果句柄。 |
 | `notify(appName, param)` | 单向通知，无返回。 |
-| **`setOption(option, value)`** | **运行时动态调整全局配置（新增）**。 |
+| `setOption(option, value)` | **运行时动态调整全局配置（v2.0）**。 |
 
-> **调试说明**：库会将详细的运行日志（包括连接状态、注册信息、错误原因）自动输出到控制台（stdout/stderr）。你可以在 `<可执行文件名>.api-tool.ini` 配置文件中调整日志行为（例如关闭控制台输出或调整详细程度）。
+### 3.5 v2.1 新增：状态与检查 API
+
+| 方法 | 说明 |
+|------|------|
+| `checkMainThread()` | 返回 1 如果模拟主线程（C4 事件循环）正在运行，0 否则。 |
+| `checkApp(appName)` | 返回 1 如果指定应用在线（基于本地缓存，可能短暂滞后），0 否则。 |
+| `getStatusNum()` | 返回内部日志队列中待读取的消息数量。 |
+| `getStatus()` | 从队列中取出下一条日志消息（UTF-8），队列为空返回空字符串。 |
+| `postStatus(status)` | 向队列中注入一条自定义日志消息，与库自身日志混合。 |
+
+这些 API 全部线程安全，可用于实时监控框架运行状态、探测目标服务可用性、程序化拉取和注入日志。
+
+**使用示例**：
+```java
+// 检查主线程状态
+if (ApiHub.checkMainThread() == 1) {
+    System.out.println("主线程运行中");
+}
+
+// 探测目标服务是否在线
+if (ApiHub.checkApp("MyService") == 1) {
+    // 安全调用
+    try (DataHandle res = ApiHub.call("MyService", param, 5000)) { ... }
+} else {
+    System.err.println("服务不可用");
+}
+
+// 拉取所有日志
+while (ApiHub.getStatusNum() > 0) {
+    String msg = ApiHub.getStatus();
+    System.out.println("[库日志] " + msg);
+}
+
+// 注入自定义日志
+ApiHub.postStatus("应用初始化完成");
+```
+
+> **调试说明**：库会将详细的运行日志（包括连接状态、注册信息、错误原因）自动输出到控制台。你也可以通过上述状态 API 程序化获取日志，实现集中监控。
 
 ---
 
@@ -218,8 +261,8 @@ try (AppHandle app = new AppHandle("CalcService", "Calculator")) {
 ```java
 app.registerNotify("log", "Logging", (trigger, input) -> {
     DataHandle in = DataHandle.wrapInput(input);
-    String level = in.readString();
-    String msg = in.readString();
+    String level = in.readStringNullTerminated();
+    String msg = in.readStringNullTerminated();
     System.out.println("[" + level + "] " + msg);
 });
 ```
@@ -292,8 +335,8 @@ public static DataHandle callWithRetry(String app, DataHandle param, long timeou
 
 ```java
 try (DataHandle param = new DataHandle("log")) {
-    param.writeString("INFO");
-    param.writeString("Client started");
+    param.writeStringNullTerminated("INFO");
+    param.writeStringNullTerminated("Client started");
     ApiHub.notify("LogService", param);
 }
 ```
@@ -310,14 +353,14 @@ try (DataHandle param = new DataHandle("log")) {
 ```java
 param.writeInt(100);
 param.writeDouble(3.14);
-param.writeString("hello");
+param.writeStringNullTerminated("hello");
 ```
 
 **服务端读取**：
 ```java
 int a = in.readInt();
 double b = in.readDouble();
-String s = in.readString();
+String s = in.readStringNullTerminated();
 ```
 
 ### 6.2 数组与结构体
@@ -362,13 +405,21 @@ Point readPoint(DataHandle h) {
 
 这种方式与 C/C++ 的 `struct` 完全兼容，实现零拷贝跨语言数据交换。
 
-### 6.3 字符串协议
+### 6.3 字符串协议（跨语言关键）
 
-所有语言绑定统一使用 **4 字节长度前缀（小端序）+ UTF-8 字节**，因此 Java 的 `writeString` / `readString` 与其他语言完全互通。
+**所有语言绑定统一采用「空终止符（#0）」格式**：  
+- 写入：UTF-8 字节 + 一个 `\0` 字节。  
+- 读取：从当前位置扫描直到遇到 `\0`，位置移至终止符后。  
+
+Java 绑定提供：
+- `writeStringNullTerminated(String)` —— **推荐**，与 Pascal、C#、Go 等完全兼容。
+- `readStringNullTerminated()` —— **推荐**，配套使用。
+
+**已弃用的长度前缀方法**（`writeString` / `readString`）仅用于 Java 内部协议，**不跨语言**。
 
 ---
 
-## 7. 动态注销 API（新增）
+## 7. 动态注销 API
 
 `AppHandle.unregister()` 方法允许您在运行时移除已注册的 API。
 
@@ -413,7 +464,7 @@ try (AppHandle app = new AppHandle("MyService", "")) {
 
 ---
 
-## 8. 运行时配置（新增）
+## 8. 运行时配置
 
 `ApiHub.setOption()` 方法允许您在运行时动态调整 API Hub 框架的全局配置选项。
 
@@ -473,8 +524,8 @@ Map<String, String> config = new ConcurrentHashMap<>();
 
 app.registerNotify("set", "", (trigger, input) -> {
     DataHandle in = DataHandle.wrapInput(input);
-    String key = in.readString();
-    String val = in.readString();
+    String key = in.readStringNullTerminated();
+    String val = in.readStringNullTerminated();
     config.put(key, val);
     System.out.println("Config updated: " + key + "=" + val);
 });
@@ -482,9 +533,9 @@ app.registerNotify("set", "", (trigger, input) -> {
 app.registerCall("get", "", (trigger, input, output) -> {
     DataHandle in = DataHandle.wrapInput(input);
     DataHandle out = DataHandle.wrapOutput(output);
-    String key = in.readString();
+    String key = in.readStringNullTerminated();
     String val = config.getOrDefault(key, "");
-    out.writeString(val);
+    out.writeStringNullTerminated(val);
 });
 ```
 
@@ -499,7 +550,7 @@ app.registerCall("get", "", (trigger, input, output) -> {
 ```java
 app.registerCall("upload", "", (trigger, input, output) -> {
     DataHandle in = DataHandle.wrapInput(input);
-    String name = in.readString();
+    String name = in.readStringNullTerminated();
     int len = in.readInt();
     byte[] data = in.read(len);
     try (FileOutputStream fos = new FileOutputStream(name)) {
@@ -515,7 +566,7 @@ app.registerCall("upload", "", (trigger, input, output) -> {
 ```java
 try (DataHandle param = new DataHandle("upload")) {
     byte[] content = Files.readAllBytes(Paths.get("local.txt"));
-    param.writeString("remote.txt");
+    param.writeStringNullTerminated("remote.txt");
     param.writeInt(content.length);
     param.write(content);
     try (DataHandle res = ApiHub.call("FileService", param, 10000)) {
@@ -532,15 +583,15 @@ Map<String, Set<String>> subscribers = new ConcurrentHashMap<>();
 
 app.registerNotify("subscribe", "", (trigger, input) -> {
     DataHandle in = DataHandle.wrapInput(input);
-    String topic = in.readString();
-    String client = in.readString();
+    String topic = in.readStringNullTerminated();
+    String client = in.readStringNullTerminated();
     subscribers.computeIfAbsent(topic, k -> ConcurrentHashMap.newKeySet()).add(client);
 });
 
 app.registerNotify("publish", "", (trigger, input) -> {
     DataHandle in = DataHandle.wrapInput(input);
-    String topic = in.readString();
-    String msg = in.readString();
+    String topic = in.readStringNullTerminated();
+    String msg = in.readStringNullTerminated();
     Set<String> clients = subscribers.get(topic);
     if (clients != null) {
         for (String c : clients) {
@@ -652,9 +703,9 @@ echo "10 + 20 = " . $result . "\n";
   ```java
   ApiHub.prepareClient("ipc:func_service", null);
   try (DataHandle param = new DataHandle("sha3")) {
-      param.writeString("hello");
+      param.writeStringNullTerminated("hello");
       try (DataHandle res = ApiHub.call("FuncService", param, 5000)) {
-          System.out.println(res.readString());  // SHA3 哈希
+          System.out.println(res.readStringNullTerminated());  // SHA3 哈希
       }
   }
   ```
@@ -663,9 +714,9 @@ echo "10 + 20 = " . $result . "\n";
   ```java
   ApiHub.prepareClient("127.0.0.1:9898", null);
   try (DataHandle param = new DataHandle("predict")) {
-      param.writeString(imageDataBase64);
+      param.writeStringNullTerminated(imageDataBase64);
       try (DataHandle res = ApiHub.call("InferenceService", param, 10000)) {
-          String result = res.readString();  // 模型输出
+          String result = res.readStringNullTerminated();  // 模型输出
       }
   }
   ```
@@ -692,7 +743,12 @@ echo "10 + 20 = " . $result . "\n";
 4. **超时设置**：根据网络环境设置合理超时（毫秒），避免无谓等待。  
 5. **回调避免阻塞**：若回调中有耗时操作（如数据库访问），应将其放入独立线程池，并在回调中仅将任务入队。  
 6. **线程安全**：底层库完全线程安全，但同一 `DataHandle` 不应并发读写；不同句柄可安全并发。
-7. **错误诊断**：库会将详细的运行日志自动输出到控制台（stdout/stderr）。如需调整日志行为，可编辑 `<可执行文件名>.api-tool.ini` 配置文件。
+7. **错误诊断**：
+   - 控制台会自动输出日志。  
+   - 可通过 **状态与检查 API** 程序化拉取日志（`getStatusNum`/`getStatus`），实现集中监控。  
+   - 使用 `checkApp` 提前探测目标服务可用性，避免无效超时。  
+   - 使用 `checkMainThread` 确认框架已就绪。
+8. **动态配置**：利用 `setOption` 和 `unregister` 实现热更新和不停机维护。
 
 ---
 
@@ -702,13 +758,13 @@ echo "10 + 20 = " . $result . "\n";
 A：动态库不在 `PATH` 中。将 `Binary/` 目录加入环境变量，或复制 `.dll` 到项目目录。使用提供的脚本可自动处理。
 
 **Q2：`prepareDone()` 返回 `false`，如何排查？**  
-A：检查控制台输出，库会打印详细的错误信息（如端口占用、IPC 地址冲突、动态库版本不匹配等）。也可通过编辑 `.api-tool.ini` 文件调整日志详细程度。
+A：检查控制台输出，库会打印详细的错误信息（如端口占用、IPC 地址冲突、动态库版本不匹配等）。也可使用 `getStatusNum()` / `getStatus()` 程序化获取日志，便于集成到日志系统。
 
 **Q3：回调没有触发**  
-A：检查应用名称和 API 名称是否**大小写完全一致**（如 `FuncService` 和 `funcservice` 不同）；查看控制台输出是否有注册成功日志。
+A：检查应用名称和 API 名称是否**大小写完全一致**（如 `FuncService` 和 `funcservice` 不同）；查看控制台输出是否有注册成功日志；使用 `checkApp` 验证目标应用是否在线。
 
 **Q4：客户端调用超时**  
-A：确认服务端已启动且地址一致；适当增加超时时间（如 5000ms）；检查防火墙是否阻止 IPC（通常不会）。
+A：确认服务端已启动且地址一致；适当增加超时时间（如 5000ms）；检查防火墙是否阻止 IPC（通常不会）。用 `checkApp` 提前探测。
 
 **Q5：如何传递二进制数据（如文件）？**  
 A：使用 `write(byte[])` 直接写入原始字节；读取时用 `read(int)` 获取。注意大文件应分块传输。
@@ -722,18 +778,25 @@ A：可以，每个 `AppHandle` 独立命名，分别注册 API 并连接到不�
 **Q8：动态注销 API 后，正在进行的调用会怎样？**  
 A：正在执行中的回调不会被打断，它们会正常完成。新到达的请求会在广播传播后收到"未找到"错误。
 
+**Q9：如何获取库内部的运行日志？**  
+A：使用 `getStatusNum()` / `getStatus()` 拉取日志，或使用 `postStatus()` 注入自定义日志。也可查看控制台输出。
+
 ---
 
 ## 13. 总结与扩展
 
 API Hub Java 绑定让你以最优雅的方式接入跨语言分布式网络。通过 JNA 和 RAII，Java 开发者无需接触任何 C 代码即可享受高性能 RPC。无论你是想快速搭建微服务原型，还是希望将 Java 算法融入异构系统，它都能大幅降低开发成本。
 
+**v2.1 新能力**：
+- 状态与检查 API 提供了主动监控和日志管理能力，让生产环境下的故障诊断更加高效。
+- 结合 `checkApp`、`checkMainThread` 和日志拉取，可构建更健壮的服务治理体系。
+
 **扩展方向**：
 - 基于 `DataHandle` 封装更高级的序列化工具（如支持 protobuf、JSON 的适配器）。
 - 集成 Spring Boot，将 `@RestController` 自动映射为远程 API。
 - 提供异步调用模式（基于 `CompletableFuture`）。
 
-现在你已经掌握了全部核心知识，动手写一个属于自己的跨语言服务吧！如果遇到问题，记得检查控制台输出——它是最好的"诊断工具"。
+现在你已经掌握了全部核心知识，动手写一个属于自己的跨语言服务吧！如果遇到问题，记得检查控制台输出或使用 `getStatus()` ——它们是最好的"诊断工具"。
 
 ---
 
