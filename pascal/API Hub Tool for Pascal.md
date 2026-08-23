@@ -1,6 +1,6 @@
 # API Hub Tool for Pascal — 完整使用手册
 
-> **让您的 Pascal 应用轻松融入分布式 API 生态，以最轻量的方式实现跨语言、跨进程、跨机器的函数调用。**  
+> **让您的 Pascal 应用以最轻量、最可靠的方式融入分布式 API 生态，实现跨语言、跨进程、跨机器的函数调用。**  
 > 基于 C4 分布式服务网格与 Z 系列基础库，提供企业级服务发现、负载均衡与容错能力。
 
 ---
@@ -23,6 +23,8 @@
    - 5.4 `API__` 底层静态映射
 6. [回调函数详解与线程安全](#6-回调函数详解与线程安全)
 7. [完整示例：服务端与客户端](#7-完整示例服务端与客户端)
+   - 7.1 使用底层 `import` 单元
+   - 7.2 使用 RAII 封装（推荐）
 8. [常见问题与排错](#8-常见问题与排错)
 9. [附录：函数速查表](#9-附录函数速查表)
 
@@ -633,18 +635,18 @@ begin
   app := TAppHandle.Create('CalcService', 'Calculator');
   app.RegisterCall('add', 'Addition', nil, @AddCallback);
 
-  ResetPrepare;
-  PrepareService('ipc:calc_service', 'ipc:calc_service');
-  PrepareClient('ipc:calc_service', app);
+  API.ResetPrepare;
+  API.PrepareService('ipc:calc_service', 'ipc:calc_service');
+  API.PrepareClient('ipc:calc_service', app);
 
-  if PrepareDone then
+  if API.PrepareDone then
   begin
     Writeln('Service running. Press Enter to stop.');
     Readln;
   end;
 
-  ExitMainThread;
-  Shutdown;
+  API.ExitMainThread;
+  API.Shutdown;
   app.Free;  // 或利用 try..finally 自动释放
 end.
 ```
@@ -661,10 +663,10 @@ var
   param, res: TDataHandle;
   sum: Integer;
 begin
-  ResetPrepare;
-  PrepareClient('ipc:calc_service', nil);
+  API.ResetPrepare;
+  API.PrepareClient('ipc:calc_service', nil);
 
-  if not PrepareDone then
+  if not API.PrepareDone then
   begin
     Writeln('Connect failed');
     Halt(1);
@@ -673,7 +675,7 @@ begin
   param := TDataHandle.Create('add');
   param.WriteInt32(10).WriteInt32(20);
 
-  res := CallApp('CalcService', param, 3000);
+  res := API.CallApp('CalcService', param, 3000);
   param.Free;
 
   if res.GetSize >= SizeOf(Integer) then
@@ -684,8 +686,8 @@ begin
   end;
   res.Free;
 
-  ExitMainThread;
-  Shutdown;
+  API.ExitMainThread;
+  API.Shutdown;
 end.
 ```
 
