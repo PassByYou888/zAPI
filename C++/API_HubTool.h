@@ -2,11 +2,11 @@
  * @file API_HubTool.h
  * @brief C explicit‑linking wrapper – strictly matches Pascal export table.
  *
- * Only the 25 functions marked as 'external' in z_api_hubtool_import.pas
- * are resolved from the dynamic library. All helper functions are implemented
- * in the C wrapper itself, using API_WriteBuffer / API_ReadBuffer.
+ * All functions declared here are either directly exported from the dynamic
+ * library (the 30 functions marked as 'exported') or implemented as helpers
+ * in the C wrapper itself using API_WriteBuffer / API_ReadBuffer.
  *
- * @section export_table Exported Functions (25 total)
+ * @section export_table Exported Functions (30 total)
  * 1  API_shutdown
  * 2  API_SetOption
  * 3  API_Notify
@@ -32,6 +32,123 @@
  * 23 API_GetBuffer
  * 24 API_Free_DataHnd
  * 25 API_Create_DataHnd
+ * 26 API_Check_MainThread   (新增)
+ * 27 API_Check_App          (新增)
+ * 28 API_Get_Status_Num     (新增)
+ * 29 API_Get_Status         (新增)
+ * 30 API_Post_Status        (新增)
+ *
+ * ============================================================================
+ * STRING ENCODING – UTF-8 IS MANDATORY
+ * ============================================================================
+ * All string parameters (API names, descriptions, network addresses, etc.)
+ * MUST be encoded in **UTF-8** and MUST be null-terminated (i.e., end with a
+ * byte of value 0).
+ *
+ * - UTF-8 is a multi-byte encoding where ASCII characters (0x00–0x7F) occupy
+ *   one byte, and all other Unicode characters are encoded in 2–4 bytes.
+ * - The null terminator is the only zero byte in a well-formed UTF-8 string.
+ * - The library internally decodes UTF-8 input into Unicode, and encodes
+ *   outgoing strings to UTF-8.
+ * - This encoding is **platform-independent** and works identically on
+ *   Windows, Linux, macOS, and BSD.
+ *
+ * *Important*: Do **not** use the system ANSI codepage (e.g., CP_ACP on
+ * Windows). All strings are explicitly marshaled as UTF-8.
+ *
+ * ============================================================================
+ * IMPORTANT NOTES & BEST PRACTICES (READ BEFORE USING)
+ * ============================================================================
+ *
+ * 1. **THREAD SAFETY**:
+ *    All exported functions are **fully thread-safe**. They can be called
+ *    concurrently from any thread without external synchronization.
+ *
+ *    However, for a given TDataHnd, write operations (API_WriteBuffer,
+ *    API_SetPos, API_SetSize) should be serialised across threads because they
+ *    modify the internal buffer state. Read‑only operations (API_GetBuffer,
+ *    API_GetPos, API_GetSize) are safe even while another thread is writing,
+ *    as long as the handle is not being freed.
+ *
+ *    Different TDataHnd instances are independent and can be used concurrently
+ *    without any restrictions.
+ *
+ * 2. **CALLBACK EXECUTION CONTEXT** (⚠️ CRITICAL):
+ *    Your callbacks (TAPI_Call, TAPI_Notify) are **executed in background
+ *    threads** from the library's internal thread pool.
+ *
+ *    This means:
+ *      * **DO NOT** perform long‑blocking operations inside callbacks.
+ *      * **DO NOT** call API_Call() or API_Notify() from within a callback –
+ *        this may cause deadlocks because the callback thread may hold internal
+ *        locks. If you need to make a remote call, offload the request to a
+ *        separate worker thread and return quickly.
+ *      * **DO NOT** access UI components or thread‑local storage without
+ *        proper synchronization (e.g., using a message queue).
+ *      * Offload heavy processing to a separate thread or queue to keep
+ *        callbacks responsive.
+ *
+ *    The library guarantees that callbacks are thread‑safe and reentrant,
+ *    but it is your responsibility to ensure that any shared data accessed
+ *    from callbacks is properly synchronized.
+ *
+ * 3. **EXECUTION ORDER**:
+ *    The library does **not** guarantee the order of execution for concurrent
+ *    API calls. Calls are independent and may be executed out‑of‑order because
+ *    the underlying service mesh distributes requests across multiple
+ *    application instances for load balancing. If you send calls '1', '2', '3'
+ *    in that order, the remote side may process them in any order (e.g., '2',
+ *    '1', '3'). Only the per‑call request‑response semantics are reliable –
+ *    each call is atomic and returns a correct result, but the global ordering
+ *    is not preserved.
+ *
+ * 4. **DATA HANDLE LIFETIME**:
+ *    Every TDataHnd created with API_Create_DataHnd() MUST be freed with
+ *    API_Free_DataHnd() when no longer needed. The library does NOT auto‑free
+ *    them, even after remote calls (it clones the input internally).
+ *
+ * 5. **RESULT HANDLES**:
+ *    API_Call() always returns a valid TDataHnd (never a null handle). If the
+ *    call times out or fails, the handle size will be 0. You must still free
+ *    it with API_Free_DataHnd().
+ *
+ * 6. **TIMEOUTS**:
+ *    API_Call() timeout is in milliseconds. 0 means infinite wait (use with
+ *    caution). On timeout, the returned handle size is 0.
+ *
+ * 7. **APPLICATION NAMES**:
+ *    App names are case‑sensitive and should be unique across the network.
+ *
+ * 8. **DYNAMIC UNREGISTRATION (API_UnReg)**:
+ *    - Immediately removes the API from the local registry.
+ *    - Triggers an asynchronous network broadcast to all connected peers.
+ *    - Remote peers stop seeing this API within approximately 3 seconds
+ *      (depending on network latency and the C4 update interval).
+ *    - During this short window, remote calls may still be attempted; they will
+ *      fail gracefully (the remote side receives a "not found" error).
+ *
+ * 9. **RUNTIME OPTIONS (API_SetOption)**:
+ *     Supports keys (case‑insensitive, aliases accepted):
+ *       - "password" / "passwd" : Sets C4 P2PVM authentication token.
+ *         Must match on both service and client sides.
+ *       - "Quiet" : Enable/disable quiet mode (True/False).
+ *       - "External_Conf_Auto_Save" / "Conf_Auto_Save" : Auto‑save .ini on exit.
+ *       - "Wait_Connection_ReadyOk" / "Wait_API_Prepare_Done" / ... :
+ *         Controls whether API_Prepare_Done blocks until all clients are connected.
+ *         When False, clients auto‑connect later (useful for deployment).
+ *       - "Wait_Connection_Timeout" / "Wait_TimeOut" : Max wait (ms) when the above is True.
+ *       - "ShowThreadID" / "ShowThread" / "Show_Thread" : Show thread IDs in logs.
+ *       - "ConsoleOutput" / "Console_Output" : Enable/disable console logging.
+ *       - "IPC_Serv_ThreadCount" / "IPC_ThreadCount" / ... : Number of IPC service threads.
+ *       - "IPC_Serv_MaxQueueLength" / "IPC_MaxQueueLength" / ... : Max IPC queue length.
+ *       - "IPC_Serv_MaxMsgSize" / "IPC_MaxMsgSize" / ... : Max IPC message size (bytes).
+ *
+ * 10. **STATUS LOGGING** (新增):
+ *     - API_Get_Status_Num() returns the number of pending log messages.
+ *     - API_Get_Status() retrieves the next message (UTF‑8, null‑terminated) from an
+ *       internal static buffer. The pointer is valid until the next call.
+ *     - API_Post_Status() injects custom log messages into the same queue.
+ *     - This is useful for integrating external logging with the library's internal logs.
  */
 
 #pragma once
@@ -58,11 +175,20 @@ extern "C" {
     /* ============================================================================
        Library loading / unloading
        ============================================================================ */
+       /**
+        * @brief Loads the API Hub dynamic library.
+        * @return 1 on success, 0 on failure.
+        * @note Must be called before any other API function.
+        */
     int  API_LoadLibrary(void);
+
+    /**
+     * @brief Unloads the dynamic library and clears all function pointers.
+     */
     void API_FreeLibrary(void);
 
     /* ============================================================================
-       25 EXPORTED FUNCTIONS (matches Pascal external declarations)
+       30 EXPORTED FUNCTIONS (matches Pascal external declarations)
        ============================================================================ */
 
        /* ----- Data Handle ----- */
@@ -87,7 +213,7 @@ extern "C" {
     TDataHnd API_Local_APP_Call(TAppHnd appHnd, TDataHnd Param);
     void     API_Local_APP_Notify(TAppHnd appHnd, TDataHnd Param);
 
-    /* ----- Network ----- */
+    /* ----- Network and Remote Calls ----- */
     int      API_Prepare_Service(const char* ListeningAddr_, const char* PhysicsAddr_);
     int      API_Prepare_Client(const char* PhysicsAddr_, TAppHnd appHnd);
     void     API_Reset_Prepare(void);
@@ -97,6 +223,43 @@ extern "C" {
     void     API_Notify(const char* appName, TDataHnd Param);
     void     API_SetOption(const char* Option, const char* Value);
     void     API_shutdown(void);
+
+    /* ----- Status and Checks (新增) ----- */
+    /**
+     * @brief Checks whether the simulated main thread (the C4 event loop) is running.
+     * @return 1 if running, 0 if stopped or not yet started.
+     */
+    int      API_Check_MainThread(void);
+
+    /**
+     * @brief Checks whether an application with the given name is available on the network.
+     *        This query is based on a local cache and may be slightly stale.
+     * @param appName Application name (UTF‑8, case‑sensitive).
+     * @return 1 if at least one instance exists, 0 otherwise.
+     */
+    int      API_Check_App(const char* appName);
+
+    /**
+     * @brief Returns the number of pending log messages in the internal status queue.
+     * @return Number of messages.
+     */
+    int      API_Get_Status_Num(void);
+
+    /**
+     * @brief Retrieves the next log message from the status queue (FIFO order).
+     *        The returned pointer points to a static internal buffer; the data is
+     *        valid until the next call to this function.
+     *        The message is UTF‑8 encoded and null‑terminated.
+     * @return Pointer to the message string, or an empty string if no message is available.
+     * @note The caller must NOT free the returned pointer.
+     */
+    const char* API_Get_Status(void);
+
+    /**
+     * @brief Injects a custom log message into the internal status queue.
+     * @param status The message to add (UTF‑8, null‑terminated).
+     */
+    void     API_Post_Status(const char* status);
 
     /* ============================================================================
        HELPER FUNCTIONS – implemented in C, NOT exported from DLL
@@ -116,7 +279,7 @@ extern "C" {
     int API_WriteDouble(TDataHnd Hnd, double  Value);
 
     /**
-     * @brief Writes UTF‑8 string followed by null terminator (#0).
+     * @brief Writes a UTF‑8 string followed by a null terminator (#0).
      *        Matches Pascal's API_WriteString exactly.
      * @param Hnd   Data handle.
      * @param Value Null‑terminated UTF‑8 string (may be empty).
@@ -137,9 +300,9 @@ extern "C" {
     int API_ReadDouble(TDataHnd Hnd, double* pValue);
 
     /**
-     * @brief Reads a null‑terminated UTF‑8 string from current position.
+     * @brief Reads a null‑terminated UTF‑8 string from the current position.
      *        Matches Pascal's API_ReadString exactly.
-     *        Position is advanced past the null terminator.
+     *        The position is advanced past the null terminator.
      * @param Hnd     Data handle.
      * @param pBuf    Output buffer (must be at least bufSize bytes).
      * @param bufSize Size of output buffer.

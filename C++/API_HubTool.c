@@ -1,6 +1,6 @@
-/**
+﻿/**
  * @file API_HubTool.c
- * @brief Implementation – resolves ONLY the 25 exported functions.
+ * @brief Implementation – resolves ALL 30 exported functions + helpers.
  *
  * All helper functions (WriteInt8, ReadString, etc.) are implemented
  * using API_WriteBuffer / API_ReadBuffer, matching Pascal semantics.
@@ -49,7 +49,7 @@ static LIB_HANDLE g_hDll = NULL;
 static int g_loaded = 0;
 
 /* ============================================================================
-   Function pointer types for the 25 exported functions
+   Function pointer types for the 30 exported functions
    ============================================================================ */
 typedef TDataHnd(__cdecl* fnAPI_Create_DataHnd) (const char*);
 typedef void(__cdecl* fnAPI_Free_DataHnd)   (TDataHnd);
@@ -79,8 +79,15 @@ typedef void(__cdecl* fnAPI_Notify)         (const char*, TDataHnd);
 typedef void(__cdecl* fnAPI_SetOption)      (const char*, const char*);
 typedef void(__cdecl* fnAPI_shutdown)       (void);
 
+/* ----- Newly added status/check functions ----- */
+typedef int(__cdecl* fnAPI_Check_MainThread)(void);
+typedef int(__cdecl* fnAPI_Check_App)       (const char*);
+typedef int(__cdecl* fnAPI_Get_Status_Num)  (void);
+typedef const char* (__cdecl* fnAPI_Get_Status)(void);
+typedef void(__cdecl* fnAPI_Post_Status)    (const char*);
+
 /* ============================================================================
-   Static function pointers for the 25 exports
+   Static function pointers for the 30 exports
    ============================================================================ */
 static fnAPI_Create_DataHnd   pAPI_Create_DataHnd = NULL;
 static fnAPI_Free_DataHnd     pAPI_Free_DataHnd = NULL;
@@ -107,6 +114,13 @@ static fnAPI_Call             pAPI_Call = NULL;
 static fnAPI_Notify           pAPI_Notify = NULL;
 static fnAPI_SetOption        pAPI_SetOption = NULL;
 static fnAPI_shutdown         pAPI_shutdown = NULL;
+
+/* ----- Newly added ----- */
+static fnAPI_Check_MainThread pAPI_Check_MainThread = NULL;
+static fnAPI_Check_App        pAPI_Check_App = NULL;
+static fnAPI_Get_Status_Num   pAPI_Get_Status_Num = NULL;
+static fnAPI_Get_Status       pAPI_Get_Status = NULL;
+static fnAPI_Post_Status      pAPI_Post_Status = NULL;
 
 /* ============================================================================
    Helper macros
@@ -182,7 +196,7 @@ int API_LoadLibrary(void) {
         }
     }
 
-    /* ---- Resolve ONLY the 25 exported functions ---- */
+    /* ---- Resolve ALL 30 exported functions ---- */
     RESOLVE(Create_DataHnd);
     RESOLVE(Free_DataHnd);
     RESOLVE(GetBuffer);
@@ -208,6 +222,12 @@ int API_LoadLibrary(void) {
     RESOLVE(Notify);
     RESOLVE(SetOption);
     RESOLVE(shutdown);
+    /* ----- Newly added ----- */
+    RESOLVE(Check_MainThread);
+    RESOLVE(Check_App);
+    RESOLVE(Get_Status_Num);
+    RESOLVE(Get_Status);
+    RESOLVE(Post_Status);
 
     g_loaded = 1;
     return 1;
@@ -244,13 +264,19 @@ void API_FreeLibrary(void) {
     ZERO(Notify);
     ZERO(SetOption);
     ZERO(shutdown);
+    ZERO(Check_MainThread);
+    ZERO(Check_App);
+    ZERO(Get_Status_Num);
+    ZERO(Get_Status);
+    ZERO(Post_Status);
     g_loaded = 0;
 }
 
 /* ============================================================================
-   25 EXPORTED FUNCTIONS – forwarders to resolved pointers
+   30 EXPORTED FUNCTIONS – forwarders to resolved pointers
    ============================================================================ */
 
+   /* ----- Data Handle ----- */
 TDataHnd API_Create_DataHnd(const char* APIName) {
     if (APIName == NULL) { fprintf(stderr, "API_Create_DataHnd: NULL APIName\n"); return NULL; }
     CHECK_LOADED_RET(Create_DataHnd, NULL);
@@ -297,6 +323,7 @@ void API_SetSize(TDataHnd Hnd, int64_t Size_) {
     pAPI_SetSize(Hnd, Size_);
 }
 
+/* ----- Application Handle ----- */
 TAppHnd API_Create_APPHnd(const char* appName, const char* Desc) {
     if (appName == NULL) { fprintf(stderr, "API_Create_APPHnd: NULL appName\n"); return NULL; }
     CHECK_LOADED_RET(Create_APPHnd, NULL);
@@ -338,6 +365,7 @@ void API_Local_APP_Notify(TAppHnd appHnd, TDataHnd Param) {
     pAPI_Local_APP_Notify(appHnd, Param);
 }
 
+/* ----- Network and Remote Calls ----- */
 int API_Prepare_Service(const char* ListeningAddr_, const char* PhysicsAddr_) {
     if (ListeningAddr_ == NULL || PhysicsAddr_ == NULL) {
         fprintf(stderr, "API_Prepare_Service: NULL address\n"); return 0;
@@ -388,6 +416,34 @@ void API_SetOption(const char* Option, const char* Value) {
 void API_shutdown(void) {
     CHECK_LOADED_VOID(shutdown);
     pAPI_shutdown();
+}
+
+/* ----- Newly added status and check functions ----- */
+int API_Check_MainThread(void) {
+    CHECK_LOADED_RET(Check_MainThread, 0);
+    return pAPI_Check_MainThread();
+}
+
+int API_Check_App(const char* appName) {
+    if (appName == NULL) { fprintf(stderr, "API_Check_App: NULL appName\n"); return 0; }
+    CHECK_LOADED_RET(Check_App, 0);
+    return pAPI_Check_App(appName);
+}
+
+int API_Get_Status_Num(void) {
+    CHECK_LOADED_RET(Get_Status_Num, 0);
+    return pAPI_Get_Status_Num();
+}
+
+const char* API_Get_Status(void) {
+    CHECK_LOADED_RET(Get_Status, "");
+    return pAPI_Get_Status();
+}
+
+void API_Post_Status(const char* status) {
+    if (status == NULL) { fprintf(stderr, "API_Post_Status: NULL status\n"); return; }
+    CHECK_LOADED_VOID(Post_Status);
+    pAPI_Post_Status(status);
 }
 
 /* ============================================================================
