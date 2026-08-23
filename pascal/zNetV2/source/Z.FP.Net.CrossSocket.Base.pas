@@ -65,17 +65,17 @@ const
   INVALID_HANDLE_VALUE__ = THandle(-1);
 
   // UID categories: high 2 bits indicate the object type
-  UID_RAW        = $0;
-  UID_LISTEN     = $1;
+  UID_RAW = $0;
+  UID_LISTEN = $1;
   UID_CONNECTION = $2;
 
   // Mask for the lower 62 bits (the actual counter)
-  UID_MASK       = UInt64($3FFFFFFFFFFFFFFF);
+  UID_MASK = UInt64($3FFFFFFFFFFFFFFF);
 
   // Convenience constants for common IPv4/IPv6 addresses
-  IPv4_ALL   = '0.0.0.0';
-  IPv6_ALL   = '::';
-  IPv4v6_ALL = '';            // empty means bind to both families
+  IPv4_ALL = '0.0.0.0';
+  IPv6_ALL = '::';
+  IPv4v6_ALL = ''; // empty means bind to both families
   IPv4_LOCAL = '127.0.0.1';
   IPv6_LOCAL = '::1';
 
@@ -85,31 +85,31 @@ type
   ICrossSocket = interface;
 
   /// <summary>
-  ///   How the connection was established.
+  /// How the connection was established.
   /// </summary>
   TConnectType = (
-    ctUnknown,   // not yet determined
-    ctAccept,    // accepted from a listening socket
-    ctConnect    // initiated by a Connect() call
-  );
+    ctUnknown, // not yet determined
+    ctAccept, // accepted from a listening socket
+    ctConnect // initiated by a Connect() call
+    );
 
   /// <summary>
-  ///   Current state of a connection.
+  /// Current state of a connection.
   /// </summary>
   TConnectStatus = (
-    csUnknown,      // initial state
-    csConnecting,   // TCP handshake in progress
-    csHandshaking,  // TLS/SSL negotiation (not used in this base)
-    csConnected,    // fully established
+    csUnknown, // initial state
+    csConnecting, // TCP handshake in progress
+    csHandshaking, // TLS/SSL negotiation (not used in this base)
+    csConnected, // fully established
     csDisconnected, // gracefully shut down
-    csClosed        // forcibly closed
-  );
+    csClosed // forcibly closed
+    );
 
   /// <summary>
-  ///   Common interface for any socket‑based object (listen or connection).
+  /// Common interface for any socket‑based object (listen or connection).
   /// </summary>
   ICrossData = interface
-  ['{41416836-6448-48CE-9FCC-0AFBB2A3A283}']
+    ['{41416836-6448-48CE-9FCC-0AFBB2A3A283}']
     function GetOwner: ICrossSocket;
     function GetUID: UInt64;
     function GetSocket: THandle;
@@ -125,14 +125,14 @@ type
     procedure SetUserInterface(const AValue: IInterface);
 
     /// <summary>
-    ///   Refresh cached local address/port from the underlying socket.
-    ///   Called internally when the socket becomes bound or connected.
+    /// Refresh cached local address/port from the underlying socket.
+    /// Called internally when the socket becomes bound or connected.
     /// </summary>
     procedure UpdateAddr;
 
     /// <summary>
-    ///   Close the socket and release associated resources.
-    ///   After this, IsClosed returns True.
+    /// Close the socket and release associated resources.
+    /// After this, IsClosed returns True.
     /// </summary>
     procedure Close;
 
@@ -150,10 +150,10 @@ type
   TCrossDatas = TDictionary<UInt64, ICrossData>;
 
   /// <summary>
-  ///   Interface for a listening socket.
+  /// Interface for a listening socket.
   /// </summary>
   ICrossListen = interface(ICrossData)
-  ['{F4E7DC40-03FA-4161-ADC6-B3CC10DBB16D}']
+    ['{F4E7DC40-03FA-4161-ADC6-B3CC10DBB16D}']
     function GetFamily: Integer;
     function GetSockType: Integer;
     function GetProtocol: Integer;
@@ -171,10 +171,10 @@ type
   TProc_ICrossListen_Boolean = procedure(AListen: ICrossListen; ASuccessed: Boolean) of object;
 
   /// <summary>
-  ///   Interface for a connected socket (client or accepted).
+  /// Interface for a connected socket (client or accepted).
   /// </summary>
   ICrossConnection = interface(ICrossData)
-  ['{3C2F05EB-706E-47E7-9D5A-D0AF026615AB}']
+    ['{3C2F05EB-706E-47E7-9D5A-D0AF026615AB}']
     function GetPeerAddr: SystemString;
     function GetPeerPort: Word;
     function GetConnectType: TConnectType;
@@ -183,15 +183,15 @@ type
     function ConnectionIntf: TCore_Object;
 
     /// <summary>
-    ///   Gracefully disconnect (send FIN, then close). Data in flight is delivered.
+    /// Gracefully disconnect (send FIN, then close). Data in flight is delivered.
     /// </summary>
     procedure Disconnect;
 
     /// <summary>
-    ///   Send a buffer asynchronously.
-    ///   @param ABuffer  pointer to the data to send
-    ///   @param ACount   number of bytes to send
-    ///   @param ACallback called when the send completes (or fails); can be nil
+    /// Send a buffer asynchronously.
+    /// @param ABuffer  pointer to the data to send
+    /// @param ACount   number of bytes to send
+    /// @param ACallback called when the send completes (or fails); can be nil
     /// </summary>
     procedure SendBuf(ABuffer: Pointer; ACount: Integer;
       const ACallback: TProc_ICrossConnection_Boolean = nil); overload;
@@ -205,17 +205,17 @@ type
   TCrossConnections = TDictionary<UInt64, ICrossConnection>;
 
   // Event handler types for the socket engine
-  TCrossAcceptEvent = procedure(Sender: TCore_Object; AListen: ICrossListen; var Accept:Boolean) of object;
+  TCrossAcceptEvent = procedure(Sender: TCore_Object; AListen: ICrossListen; var Accept: Boolean) of object;
   TCrossListenEvent = procedure(Sender: TCore_Object; AListen: ICrossListen) of object;
   TCrossConnectEvent = procedure(Sender: TCore_Object; AConnection: ICrossConnection) of object;
   TCrossDataEvent = procedure(Sender: TCore_Object; AConnection: ICrossConnection; ABuf: Pointer; ALen: Integer) of object;
 
   /// <summary>
-  ///   Main interface for the cross‑platform socket engine.
-  ///   All I/O operations are asynchronous; events are fired on the I/O threads.
+  /// Main interface for the cross‑platform socket engine.
+  /// All I/O operations are asynchronous; events are fired on the I/O threads.
   /// </summary>
   ICrossSocket = interface
-  ['{52DBB95B-2AAB-4369-ADE6-FD61F080B94F}']
+    ['{52DBB95B-2AAB-4369-ADE6-FD61F080B94F}']
     function GetIoThreads: Integer;
     function GetConnectionsCount: Integer;
     function GetListensCount: Integer;
@@ -235,67 +235,67 @@ type
     procedure SetOnSent(const Value: TCrossDataEvent);
 
     /// <summary>
-    ///   Start the I/O threads and begin processing events.
-    ///   Called automatically in AfterConstruction if using TAbstractCrossSocket.
+    /// Start the I/O threads and begin processing events.
+    /// Called automatically in AfterConstruction if using TAbstractCrossSocket.
     /// </summary>
     procedure StartLoop;
 
     /// <summary>
-    ///   Stop all I/O threads and close all sockets. Called in BeforeDestruction.
+    /// Stop all I/O threads and close all sockets. Called in BeforeDestruction.
     /// </summary>
     procedure StopLoop;
 
     /// <summary>
-    ///   Process one I/O event (blocking). Returns False when the loop should exit.
-    ///   Called repeatedly by each I/O thread.
+    /// Process one I/O event (blocking). Returns False when the loop should exit.
+    /// Called repeatedly by each I/O thread.
     /// </summary>
     function ProcessIoEvent: Boolean;
 
     /// <summary>
-    ///   Start listening on the given address/port.
-    ///   @param AHost  IP or hostname; empty for all interfaces (IPv4+IPv6)
-    ///   @param APort  port number; 0 to let the system choose a free port
-    ///   @param ACallback called when the listen operation completes (success or failure)
+    /// Start listening on the given address/port.
+    /// @param AHost  IP or hostname; empty for all interfaces (IPv4+IPv6)
+    /// @param APort  port number; 0 to let the system choose a free port
+    /// @param ACallback called when the listen operation completes (success or failure)
     /// </summary>
     procedure Listen(const AHost: SystemString; APort: Word;
       const ACallback: TProc_ICrossListen_Boolean = nil);
 
     /// <summary>
-    ///   Initiate an outbound connection.
-    ///   @param AHost  remote host (IP or name)
-    ///   @param APort  remote port
-    ///   @param ACallback called when the connection is established (or fails)
+    /// Initiate an outbound connection.
+    /// @param AHost  remote host (IP or name)
+    /// @param APort  remote port
+    /// @param ACallback called when the connection is established (or fails)
     /// </summary>
     procedure Connect(const AHost: SystemString; APort: Word;
       const ACallback: TProc_ICrossConnection_Boolean = nil);
 
     /// <summary>
-    ///   Send data on a connection. The buffer must remain valid until the callback fires.
-    ///   @param AConnection the target connection
-    ///   @param ABuf       data pointer
-    ///   @param ALen       bytes to send
-    ///   @param ACallback  called on completion (or error)
+    /// Send data on a connection. The buffer must remain valid until the callback fires.
+    /// @param AConnection the target connection
+    /// @param ABuf       data pointer
+    /// @param ALen       bytes to send
+    /// @param ACallback  called on completion (or error)
     /// </summary>
     procedure Send(AConnection: ICrossConnection; ABuf: Pointer; ALen: Integer;
       const ACallback: TProc_ICrossConnection_Boolean = nil);
 
     /// <summary>
-    ///   Close all connections immediately (data may be lost).
+    /// Close all connections immediately (data may be lost).
     /// </summary>
     procedure CloseAllConnections;
 
     /// <summary>
-    ///   Close all listening sockets.
+    /// Close all listening sockets.
     /// </summary>
     procedure CloseAllListens;
 
     /// <summary>
-    ///   Close everything (listens and connections).
+    /// Close everything (listens and connections).
     /// </summary>
     procedure CloseAll;
 
     /// <summary>
-    ///   Disconnect all connections gracefully (data is sent before closing).
+    /// Disconnect all connections gracefully (data is sent before closing).
     /// </summary>
     procedure DisconnectAll;
 
@@ -337,7 +337,7 @@ type
   }
   TCrossData = class abstract(TInterfacedObject, ICrossData)
   private
-    class var FCrossUID: UInt64;   // global counter for unique IDs (62 bits)
+    class var FCrossUID: UInt64; // global counter for unique IDs (62 bits)
   private
     FOwner: ICrossSocket;
     FUID: UInt64;
@@ -349,7 +349,7 @@ type
     FUserInterface: IInterface;
   protected
     function GetOwner: ICrossSocket;
-    function GetUIDTag: Byte; virtual;   // returns UID_LISTEN or UID_CONNECTION
+    function GetUIDTag: Byte; virtual; // returns UID_LISTEN or UID_CONNECTION
     function GetUID: UInt64;
     function GetSocket: THandle;
     function GetLocalAddr: SystemString;
@@ -389,7 +389,7 @@ type
     FFamily: Integer;
     FSockType: Integer;
     FProtocol: Integer;
-    FClosed: Integer;          // 0 = open, 1 = closed
+    FClosed: Integer; // 0 = open, 1 = closed
   protected
     function GetUIDTag: Byte; override;
     function GetFamily: Integer;
@@ -416,12 +416,12 @@ type
   }
   TAbstractCrossConnection = class(TCrossData, ICrossConnection)
   public const
-    SND_BUF_SIZE = 16384;      // default send chunk size (not used in all platforms)
+    SND_BUF_SIZE = 16384; // default send chunk size (not used in all platforms)
   private
     FPeerAddr: SystemString;
     FPeerPort: Word;
     FConnectType: TConnectType;
-    FConnectStatus: Integer;   // stored as TConnectStatus
+    FConnectStatus: Integer; // stored as TConnectStatus
   protected
     function GetUIDTag: Byte; override;
     function GetPeerAddr: SystemString;
@@ -436,8 +436,8 @@ type
     function ConnectionIntf: TCore_Object;
 
     /// <summary>
-    ///   Actually send the buffer using the engine's Send method.
-    ///   This is called by SendBuf; can be overridden for SSL etc.
+    /// Actually send the buffer using the engine's Send method.
+    /// This is called by SendBuf; can be overridden for SSL etc.
     /// </summary>
     procedure DirectSend(ABuffer: Pointer; ACount: Integer;
       const ACallback: TProc_ICrossConnection_Boolean = nil); virtual;
@@ -464,7 +464,6 @@ type
     property ConnectStatus: TConnectStatus read GetConnectStatus write SetConnectStatus;
   end;
 
-
   { *
     * Bridge class used by DirectSend to wrap the callback and trigger Sent event.
   }
@@ -487,7 +486,7 @@ type
   protected
     procedure Execute; override;
   public
-    IO_Is_Busy: Boolean;       // True while the thread is alive
+    IO_Is_Busy: Boolean; // True while the thread is alive
     constructor Create(ACrossSocket: ICrossSocket); reintroduce;
   end;
 
@@ -498,15 +497,16 @@ type
   }
   TAbstractCrossSocket = class abstract(TCore_InterfacedObject_Intermediate, ICrossSocket)
   protected const
-    RCV_BUF_SIZE = 32768;      // per‑thread receive buffer size
-  protected class threadvar
-    FRecvBuf: array [0..RCV_BUF_SIZE-1] of Byte; // thread‑local receive buffer
+    RCV_BUF_SIZE = 32768; // per‑thread receive buffer size
   protected
-    FIoThreads: Integer;       // number of I/O threads requested
+    class threadvar
+      FRecvBuf: array [0 .. RCV_BUF_SIZE - 1] of Byte; // thread‑local receive buffer
+  protected
+    FIoThreads: Integer; // number of I/O threads requested
 
     /// <summary>
-    ///   Set TCP keep‑alive parameters on a new socket.
-    ///   Default: 2s idle, 1s interval, 2 probes.
+    /// Set TCP keep‑alive parameters on a new socket.
+    /// Default: 2s idle, 1s interval, 2 probes.
     /// </summary>
     function SetKeepAlive(ASocket: THandle): Integer;
   private
@@ -618,21 +618,24 @@ type
   { *
     * Utility: extract the high 2 bits of a UID to get the object type.
   }
-  function GetTagByUID(const AUID: UInt64): Byte;
+function GetTagByUID(const AUID: UInt64): Byte;
 
-  { *
-    * Logging helpers (only active in DEBUG builds).
-  }
-  procedure _LogLastOsError(const ATag: SystemString);
-  procedure _Log(const S: SystemString); overload;
-  procedure _Log(const Fmt: SystemString; const Args: array of const); overload;
+{ *
+  * Logging helpers (only active in DEBUG builds).
+}
+procedure _LogLastOsError(const ATag: SystemString);
+procedure _Log(const S: SystemString); overload;
+procedure _Log(const Fmt: SystemString; const Args: array of const); overload;
 
 implementation
+
 {$IFDEF MSWINDOWS}
 {$IFDEF DEBUG}
-  uses windows;
+
+uses windows;
 {$ENDIF}
 {$ENDIF MSWINDOWS}
+
 
 { *
   * GetTagByUID – extract the high two bits.
@@ -647,9 +650,9 @@ end;
 }
 procedure _Log(const S: SystemString); overload;
 begin
-  {$IFDEF DEBUG}
-  DoStatus(s);
-  {$ENDIF}
+{$IFDEF DEBUG}
+  DoStatus(S);
+{$ENDIF}
 end;
 
 { *
@@ -672,17 +675,17 @@ var
 {$ENDIF}
 {$ENDIF MSWINDOWS}
 begin
-  {$IFDEF MSWINDOWS}
-  {$IFDEF DEBUG}
+{$IFDEF MSWINDOWS}
+{$IFDEF DEBUG}
   LError := GetLastError;
   if (ATag <> '') then
-    LErrMsg := ATag + ' : '
+      LErrMsg := ATag + ' : '
   else
-    LErrMsg := '';
+      LErrMsg := '';
   LErrMsg := LErrMsg + Format('System Error.  Code: %0:d(%0:.4x), %1:s', [LError, SysErrorMessage(LError)]);
   _Log(LErrMsg);
-  {$ENDIF}
-  {$ENDIF MSWINDOWS}
+{$ENDIF}
+{$ENDIF MSWINDOWS}
 end;
 
 { *
@@ -703,12 +706,12 @@ end;
 procedure TIoEventThread.Execute;
 begin
   while not Terminated do
-  begin
-    try
-      if not FCrossSocket.ProcessIoEvent then Break;
-    except
+    begin
+      try
+        if not FCrossSocket.ProcessIoEvent then Break;
+      except
+      end;
     end;
-  end;
   IO_Is_Busy := False;
 end;
 
@@ -720,10 +723,10 @@ begin
   FIoThreads := AIoThreads;
 
   FListens := TCrossListens.Create;
-  FListensLock := TCritical.Create;
+  FListensLock := TCritical.Create(ClassName + '.FListensLock');
 
   FConnections := TCrossConnections.Create;
-  FConnectionsLock := TCritical.Create;
+  FConnectionsLock := TCritical.Create(ClassName + '.FConnectionsLock');
 end;
 
 { *
@@ -777,13 +780,13 @@ var
 begin
   _LockConnections;
   try
-    LLConnectionArr := FConnections.Values.ToArray;
+      LLConnectionArr := FConnections.Values.ToArray;
   finally
-    _UnlockConnections;
+      _UnlockConnections;
   end;
 
   for LConnection in LLConnectionArr do
-    LConnection.Close;
+      LConnection.Close;
 end;
 
 { *
@@ -796,13 +799,13 @@ var
 begin
   _LockListens;
   try
-    LListenArr := FListens.Values.ToArray;
+      LListenArr := FListens.Values.ToArray;
   finally
-    _UnlockListens;
+      _UnlockListens;
   end;
 
   for LListen in LListenArr do
-    LListen.Close;
+      LListen.Close;
 end;
 
 { *
@@ -815,13 +818,13 @@ var
 begin
   _LockConnections;
   try
-    LLConnectionArr := FConnections.Values.ToArray;
+      LLConnectionArr := FConnections.Values.ToArray;
   finally
-    _UnlockConnections;
+      _UnlockConnections;
   end;
 
   for LConnection in LLConnectionArr do
-    LConnection.Disconnect;
+      LConnection.Disconnect;
 end;
 
 // -- Getters for properties --
@@ -834,9 +837,9 @@ end;
 function TAbstractCrossSocket.GetIoThreads: Integer;
 begin
   if (FIoThreads > 0) then
-    Result := FIoThreads
+      Result := FIoThreads
   else
-    Result := CPUCount * 2 + 1; // default heuristic
+      Result := CPUCount * 2 + 1; // default heuristic
 end;
 
 function TAbstractCrossSocket.GetListensCount: Integer;
@@ -978,7 +981,7 @@ begin
     FConnections.AddOrSetValue(AConnection.UID, AConnection);
     FConnectionsCount := FConnections.Count;
   finally
-    _UnlockConnections;
+      _UnlockConnections;
   end;
 end;
 
@@ -990,7 +993,7 @@ begin
   LogicConnected(AConnection);
 
   if Assigned(FOnConnected) then
-    FOnConnected(Self, AConnection);
+      FOnConnected(Self, AConnection);
 end;
 
 procedure TAbstractCrossSocket.TriggerDisconnected(AConnection: ICrossConnection);
@@ -1003,13 +1006,13 @@ begin
     FConnections.Remove(AConnection.UID);
     FConnectionsCount := FConnections.Count;
   finally
-    _UnlockConnections;
+      _UnlockConnections;
   end;
 
   LogicDisconnected(AConnection);
 
   if Assigned(FOnDisconnected) then
-    FOnDisconnected(Self, AConnection);
+      FOnDisconnected(Self, AConnection);
 end;
 
 procedure TAbstractCrossSocket.TriggerListened(AListen: ICrossListen);
@@ -1021,11 +1024,11 @@ begin
     FListens.AddOrSetValue(AListen.UID, AListen);
     FListensCount := FListens.Count;
   finally
-    _UnlockListens;
+      _UnlockListens;
   end;
 
   if Assigned(FOnListened) then
-    FOnListened(Self, AListen);
+      FOnListened(Self, AListen);
 end;
 
 procedure TAbstractCrossSocket.TriggerListenEnd(AListen: ICrossListen);
@@ -1036,18 +1039,18 @@ begin
     FListens.Remove(AListen.UID);
     FListensCount := FListens.Count;
   finally
-    _UnlockListens;
+      _UnlockListens;
   end;
 
   if Assigned(FOnListenEnd) then
-    FOnListenEnd(Self, AListen);
+      FOnListenEnd(Self, AListen);
 end;
 
 function TAbstractCrossSocket.TriggerAccept(AListen: ICrossListen): Boolean;
 begin
   Result := True;
   if Assigned(FOnAccept) then
-   FOnAccept(Self, AListen, Result);
+      FOnAccept(Self, AListen, Result);
 end;
 
 procedure TAbstractCrossSocket.TriggerReceived(AConnection: ICrossConnection;
@@ -1056,7 +1059,7 @@ begin
   LogicReceived(AConnection, ABuf, ALen);
 
   if Assigned(FOnReceived) then
-    FOnReceived(Self, AConnection, ABuf, ALen);
+      FOnReceived(Self, AConnection, ABuf, ALen);
 end;
 
 procedure TAbstractCrossSocket.TriggerSent(AConnection: ICrossConnection;
@@ -1065,7 +1068,7 @@ begin
   LogicSent(AConnection, ABuf, ALen);
 
   if Assigned(FOnSent) then
-    FOnSent(Self, AConnection, ABuf, ALen);
+      FOnSent(Self, AConnection, ABuf, ALen);
 end;
 
 // -- Logic event stubs (do nothing in base) --
@@ -1107,10 +1110,10 @@ end;
 destructor TCrossData.Destroy;
 begin
   if (FSocket <> INVALID_HANDLE_VALUE__) then
-  begin
-    TSocketAPI.CloseSocket(FSocket);
-    FSocket := THandle(INVALID_HANDLE_VALUE__);
-  end;
+    begin
+      TSocketAPI.CloseSocket(FSocket);
+      FSocket := THandle(INVALID_HANDLE_VALUE__);
+    end;
   inherited;
 end;
 
@@ -1184,7 +1187,7 @@ begin
   FillChar(LAddr, SizeOf(TRawSockAddrIn), 0);
   LAddr.AddrLen := SizeOf(LAddr.Addr6);
   if (TSocketAPI.GetSockName(FSocket, @LAddr.Addr, LAddr.AddrLen) = 0) then
-    TSocketAPI.ExtractAddrInfo(@LAddr.Addr, LAddr.AddrLen,
+      TSocketAPI.ExtractAddrInfo(@LAddr.Addr, LAddr.AddrLen,
       FLocalAddr, FLocalPort);
 end;
 
@@ -1211,11 +1214,11 @@ begin
   FClosed := 1;
 
   if (FSocket <> INVALID_HANDLE_VALUE__) then
-  begin
-    TSocketAPI.CloseSocket(FSocket);
-    FOwner.TriggerListenEnd(Self);
-    FSocket := INVALID_HANDLE_VALUE__;
-  end;
+    begin
+      TSocketAPI.CloseSocket(FSocket);
+      FOwner.TriggerListenEnd(Self);
+      FSocket := INVALID_HANDLE_VALUE__;
+    end;
 end;
 
 function TAbstractCrossListen.GetFamily: Integer;
@@ -1270,15 +1273,15 @@ end;
 }
 procedure TAbstractCrossConnection.Close;
 begin
-  if TConnectStatus(FConnectStatus) = csClosed then exit;
+  if TConnectStatus(FConnectStatus) = csClosed then Exit;
   _SetConnectStatus(csClosed);
 
   if (FSocket <> INVALID_HANDLE_VALUE__) then
-  begin
-    TSocketAPI.CloseSocket(FSocket);
-    FOwner.TriggerDisconnected(Self);
-    FSocket := INVALID_HANDLE_VALUE__;
-  end;
+    begin
+      TSocketAPI.CloseSocket(FSocket);
+      FOwner.TriggerDisconnected(Self);
+      FSocket := INVALID_HANDLE_VALUE__;
+    end;
 end;
 
 { *
@@ -1343,7 +1346,7 @@ begin
   FillChar(LAddr, SizeOf(TRawSockAddrIn), 0);
   LAddr.AddrLen := SizeOf(LAddr.Addr6);
   if (TSocketAPI.GetPeerName(FSocket, @LAddr.Addr, LAddr.AddrLen) = 0) then
-    TSocketAPI.ExtractAddrInfo(@LAddr.Addr, LAddr.AddrLen, FPeerAddr, FPeerPort);
+      TSocketAPI.ExtractAddrInfo(@LAddr.Addr, LAddr.AddrLen, FPeerAddr, FPeerPort);
 end;
 
 function TAbstractCrossConnection._SetConnectStatus(
@@ -1386,13 +1389,13 @@ begin
   if ASuccess then
     (FOwner as TAbstractCrossSocket).TriggerSent(AConnection, LBuffer, ACount);
 
- if Assigned(ACallback) then
-   begin
-     try
-       ACallback(AConnection, ASuccess);
-     except
-     end;
-   end;
+  if Assigned(ACallback) then
+    begin
+      try
+          ACallback(AConnection, ASuccess);
+      except
+      end;
+    end;
   DisposeObject(Self);
 end;
 

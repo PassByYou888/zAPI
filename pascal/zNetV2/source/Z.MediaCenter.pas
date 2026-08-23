@@ -385,7 +385,7 @@ end;
 constructor TFileIO.Create;
 begin
   inherited Create;
-  FCritical := TCritical.Create;
+  FCritical := TCritical.Create(ClassName + '.Critical');
   FList := TSearchConfigInfo_List_Decl.Create;
 {$IFDEF DELPHI}
   AddSearchObj(True, nil, TPath.GetLibraryPath);

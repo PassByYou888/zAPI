@@ -35,9 +35,9 @@ begin
   if IsConsole then
       Writeln('Init Critical');
 {$ENDIF DEBUG}
-  Lock_Pool_Cirtical__ := TCritical.Create;
-  Atom_Num_Critical__ := TCritical.Create;
-  TimeTick_Critical__ := TCritical.Create;
+  Lock_Pool_Cirtical__ := TCritical.Create('Lock_Pool_Cirtical__');
+  Atom_Num_Critical__ := TCritical.Create('Atom_Num_Critical__');
+  TimeTick_Critical__ := TCritical.Create('TimeTick_Critical__');
   Lock_Pool__ := TCritical_Struct_Pool__.Create;
 end;
 
@@ -85,7 +85,7 @@ begin
   new(Critical_Result);
   Critical_Result^.Obj := Obj;
   Critical_Result^.LEnter := 0;
-  Critical_Result^.Critical := TCritical.Create;
+  Critical_Result^.Critical := TCritical.Create('Get_Critical_Lock__');
   if Lock_Pool__.Num > 0 then
       Critical_Result^.Pool_Ptr := Lock_Pool__.Insert(Critical_Result, Lock_Pool__.First)
   else

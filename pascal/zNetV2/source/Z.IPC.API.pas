@@ -959,7 +959,7 @@ end;
 
 initialization
   IPC_Status_buff := TMem64.CustomCreate($FF); // Pre‑allocate buffer
-  IPC_Status_Critical := TCritical.Create;
+  IPC_Status_Critical := TCritical.Create('IPC_Status_Critical');
   LibHandle := 0;
 
 finalization

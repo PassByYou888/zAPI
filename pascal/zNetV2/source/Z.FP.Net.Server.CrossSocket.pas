@@ -202,7 +202,7 @@ begin
   CurrentBuff := TMem64.Create;
   LastSendingBuff := nil;
   OnSendBackcall := nil;
-  FSendCritical := TCritical.Create;
+  FSendCritical := TCritical.Create(ClassName + '.FSendCritical');
   FWriteBuffer_Size := 0;
 end;
 

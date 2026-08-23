@@ -308,6 +308,7 @@ type
       Returns True if a matching service exists.
     }
     function ExistsPhysicsAddr(PhysicsAddr: U_String; PhysicsPort: Word): Boolean;
+    function ExistsListenAddr(ListenAddr: U_String; Port: Word): Boolean;
     {
       Aggregates receive and send statistics from all physics services.
       recv - Output: total received bytes.
@@ -800,7 +801,7 @@ type
       ip6  - Output: generated IPv6 address.
       port - Output: generated port.
     }
-    procedure MakeP2PVM_IPv6_Port(var ip6, port: U_String);
+    procedure MakeP2PVM_IPv6_Port(var ip6, Port: U_String);
     function FindHash(hash_: TMD5): TC40_Custom_Service; { Finds a service by its hash. }
     function FindAliasOrHash(AliasOrhash_: U_String): TC40_Custom_Service; { Finds a service by its alias or hash string. }
     function MakeAlias(preset_: U_String): U_String; { Creates a unique alias from a preset string. }
@@ -2447,6 +2448,17 @@ begin
   Result := True;
   for i := 0 to Count - 1 do
     if PhysicsAddr.Same(@Items[i].PhysicsAddr) and ((PhysicsPort = 0) or (PhysicsPort = Items[i].PhysicsPort)) then
+        exit;
+  Result := False;
+end;
+
+function TC40_PhysicsServicePool.ExistsListenAddr(ListenAddr: U_String; Port: Word): Boolean;
+var
+  i: Integer;
+begin
+  Result := True;
+  for i := 0 to Count - 1 do
+    if ListenAddr.Same(@Items[i].ListeningAddr) and ((Port = 0) or (Port = Items[i].PhysicsPort)) then
         exit;
   Result := False;
 end;
@@ -4498,7 +4510,7 @@ begin
   enablePerServiceDirectory := EStrToBool(ParamList.GetDefaultValue('enablePerServiceDirectory', if_(enablePerServiceDirectory, 'True', 'False')), enablePerServiceDirectory);
 
   Tag := 0;
-  Tag := EStrToInt(ParamList.GetDefaultValue('Tag', umlIntToStr(Tag)), Tag);;
+  Tag := EStrToInt(ParamList.GetDefaultValue('Tag', umlIntToStr(Tag)), Tag);
 
   P2PVM_Recv_Name_ := ServiceTyp + 'R';
   C40_ServicePool.MakeP2PVM_IPv6_Port(P2PVM_Recv_IP6_, P2PVM_Recv_Port_);
@@ -4757,14 +4769,14 @@ begin
       fastSort_(L_, 0, L_.Count - 1);
 end;
 
-procedure TC40_Custom_ServicePool.MakeP2PVM_IPv6_Port(var ip6, port: U_String);
+procedure TC40_Custom_ServicePool.MakeP2PVM_IPv6_Port(var ip6, Port: U_String);
 var
   tmp: TIPV6;
   i: Integer;
 begin
   for i := 0 to 7 do
       tmp[i] := FIPV6_Seed;
-  port := umlIntToStr(FIPV6_Seed);
+  Port := umlIntToStr(FIPV6_Seed);
   inc(FIPV6_Seed);
   ip6 := IPV6ToStr(tmp);
 end;
@@ -5028,7 +5040,7 @@ begin
   Alias_or_Hash___ := ParamList.GetDefaultValue('Alias', C40_ClientPool.MakeAlias(source_.ServiceTyp));
 
   Tag := 0;
-  Tag := EStrToInt(ParamList.GetDefaultValue('Tag', umlIntToStr(Tag)), Tag);;
+  Tag := EStrToInt(ParamList.GetDefaultValue('Tag', umlIntToStr(Tag)), Tag);
 
   if PhysicsTunnel_ = nil then
       C40PhysicsTunnel := C40_PhysicsTunnelPool.GetOrCreatePhysicsTunnel(ClientInfo)
@@ -7713,7 +7725,7 @@ function TC40_Console_Help.Do_Service(var OP_Param: TOpParam): Variant;
 var
   i: Integer;
   ip: U_String;
-  port: Word;
+  Port: Word;
 begin
   if length(OP_Param) = 1 then
     begin
@@ -7728,11 +7740,11 @@ begin
   else if length(OP_Param) = 2 then
     begin
       ip := umlVarToStr(OP_Param[0], False);
-      port := OP_Param[1];
+      Port := OP_Param[1];
       for i := 0 to C40_PhysicsServicePool.Count - 1 do
         begin
           if (umlMultipleMatch(ip, C40_PhysicsServicePool[i].ListeningAddr)
-              or umlMultipleMatch(ip, C40_PhysicsServicePool[i].PhysicsAddr)) and (port = C40_PhysicsServicePool[i].PhysicsPort) then
+              or umlMultipleMatch(ip, C40_PhysicsServicePool[i].PhysicsAddr)) and (Port = C40_PhysicsServicePool[i].PhysicsPort) then
               UpdateServiceInfo(C40_PhysicsServicePool[i]);
         end;
     end
@@ -7747,7 +7759,7 @@ function TC40_Console_Help.Do_Tunnel(var OP_Param: TOpParam): Variant;
 var
   i: Integer;
   ip: U_String;
-  port: Word;
+  Port: Word;
 begin
   if length(OP_Param) = 1 then
     begin
@@ -7761,11 +7773,11 @@ begin
   else if length(OP_Param) = 2 then
     begin
       ip := umlVarToStr(OP_Param[0], False);
-      port := OP_Param[1];
+      Port := OP_Param[1];
       for i := 0 to C40_PhysicsTunnelPool.Count - 1 do
         begin
           if umlMultipleMatch(ip, C40_PhysicsTunnelPool[i].PhysicsAddr)
-            and (port = C40_PhysicsTunnelPool[i].PhysicsPort) then
+            and (Port = C40_PhysicsTunnelPool[i].PhysicsPort) then
               UpdateTunnelInfo(C40_PhysicsTunnelPool[i]);
         end;
     end

@@ -457,7 +457,7 @@ var
   n, i: Integer;
 begin
   inherited Create;
-  FCritical := TCritical.Create;
+  FCritical := TCritical.Create('TIO_Thread.FCritical');
   FThRunning := TAtomBool.Create(True);
   FThNum := 0;
   FQueue := TIO_Thread_Queue.Create;
@@ -635,7 +635,7 @@ end;
 constructor TIO_Direct.Create;
 begin
   inherited Create;
-  FCritical := TCritical.Create;
+  FCritical := TCritical.Create('TIO_Direct.FCritical');
   FQueue := TIO_Thread_Queue.Create;
 end;
 
@@ -760,7 +760,7 @@ var
   i: Integer;
 begin
   inherited Create;
-  FCritical := TCritical.Create;
+  FCritical := TCritical.Create('TThread_Pool.FCritical');
   FQueueOptimized := True;
 
   for i := 0 to ThNum_ - 1 do

@@ -27,7 +27,7 @@ end;
 constructor TThreadPost.Create(ThreadID_: TThreadID);
 begin
   inherited Create;
-  FCritical := TCritical.Create;
+  FCritical := TCritical.Create('TThreadPost.FCritical');
   FThreadID := ThreadID_;
   FSyncPool := TThread_Post_Data_Order_Struct__.Create;
   FSyncPool.OnFree := FreeThreadProgressPostData;

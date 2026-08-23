@@ -336,7 +336,7 @@ begin
   Core_Thread_Wait_Sum__ := TAtomInt.Create(0);
   Core_Thread_Life_Time_Tick__ := 200;
   Parallel_Granularity__ := Parallel_Granularity_;
-  Core_Thread_Dispatch_Critical__ := TCritical.Create;
+  Core_Thread_Dispatch_Critical__ := TCritical.Create('Core_Thread_Dispatch_Critical__');
   Max_Activted_Parallel__ := 0;
   Parallel_Overflow__.ActivtedParallel := 0;
 

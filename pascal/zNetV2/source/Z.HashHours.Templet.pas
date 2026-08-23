@@ -194,7 +194,7 @@ end;
 constructor THours_Buffer_Pool<T_>.Create(const HashSize_: Integer);
 begin
   inherited Create(HashSize_, nil);
-  FCritical := TCritical.Create;
+  FCritical := TCritical.Create(ClassName + '.Critical');
   FTime_Data_Pool := TTime_Data_Pool.Create(HashSize_, nil);
   FTime_Data_Pool.OnFree := Do_Time_Data_Pool_Free;
   FLevel_2_Hash_Size := $FF;

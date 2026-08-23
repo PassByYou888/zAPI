@@ -284,46 +284,8 @@ type
   end;
 {$EndRegion 'CPS-Tool'}
 {$Region 'Critical'}
-{
-  TSoftCritical – a user‑space spin‑lock implementation.
 
-  This lock uses a simple Boolean flag and busy‑waiting (while L do Sleep(1)).
-  It is faster than OS critical sections for very short lock durations
-  because it does not enter the kernel. However, it consumes CPU cycles
-  while waiting, so it should only be used when contention is expected
-  to be low and the lock hold time is minimal.
-
-  The Sleep(1) call yields the CPU to other threads, which is a trade-off
-  between responsiveness and CPU usage. This lock is used internally for
-  situations where a lightweight, non-recursive lock is sufficient.
-}
-  TSoftCritical = class
-  private
-    L: Boolean;
-  public
-    constructor Create;
-    procedure Acquire; inline;
-    procedure Release; inline;
-    procedure Enter; inline;
-    procedure Leave; inline;
-    procedure Lock; inline;
-    procedure UnLock; inline;
-  end;
-
-{
-  TSystem_Critical – an alias for either TSoftCritical or TCriticalSection,
-  depending on the compiler define 'SoftCritical'.
-
-  If 'SoftCritical' is defined, the spin‑lock version is used; otherwise,
-  the OS‑backed TCriticalSection (which is fair and supports recursive
-  locking) is used. This allows the library to be tuned for either speed
-  (spin‑lock) or safety/fairness (OS lock) via a single compiler switch.
-}
-{$IFDEF SoftCritical}
-  TSystem_Critical = TSoftCritical;
-{$ELSE SoftCritical}
   TSystem_Critical = TCriticalSection;
-{$ENDIF SoftCritical}
 
   TCritical = class;
 
@@ -409,10 +371,13 @@ type
 }
   TCritical = class
   private
+    FName: string;
     Instance__: TSystem_Critical;
     LNum: Integer;  // number of times the lock has been acquired (recursion count)
   public
-    constructor Create;
+    property Name: string read FName;
+    constructor Create(); overload;
+    constructor Create(const Name_: string); overload;
     destructor Destroy; override;
     procedure Acquire; inline;
     procedure Release; inline;
@@ -803,10 +768,6 @@ type
     property OnFree: TOnStruct_Event read FOnFree write FOnFree;   // Event fired before an element is freed
     property OnAdd: TOnStruct_Event read FOnAdd write FOnAdd;      // Event fired after an element is added
     class function Null_Data: T_;                                  // Returns a zero-initialized instance of T_
-{$IFDEF DEBUG}
-    function Test_Check__: Boolean;                                // Debug: verifies the integrity of the circular list links
-    class procedure Test;                                          // Debug: runs a self-test on the list implementation
-{$ENDIF DEBUG}
   end;
   // ==========================================================================
   // Thread-safe version – all public methods are guarded by FCritical__.
@@ -966,10 +927,6 @@ type
     property OnFree: TOnStruct_Event read FOnFree write FOnFree;   // Event fired when element is freed
     property OnAdd: TOnStruct_Event read FOnAdd write FOnAdd;      // Event fired when element is added
     class function Null_Data: T_;                                  // Returns zeroed T_
-{$IFDEF DEBUG}
-    function Test_Check__: Boolean;                                // Debug: verifies circular list integrity
-    class procedure Test;                                          // Debug: runs unit tests
-{$ENDIF DEBUG}
   end;
   TC_BigList<T_> = class(TCritical_BigList<T_>);                  // Short alias for the thread‑safe version
   // ==========================================================================

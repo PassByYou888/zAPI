@@ -684,7 +684,7 @@ begin
       RaiseInfo('error');
   inherited Create;
   Owner_Large_DB_Engine_.FCritical.Inc_(Owner_Large_DB_Engine_.FBatch_Post_Num);
-  FCritical := TCritical.Create;
+  FCritical := TCritical.Create(ClassName + '.Critical');
   Total_Post := 0;
   Post_Busy := 0;
   FOwner_Large_Marshal := Owner_Large_DB_Engine_;
@@ -1323,7 +1323,7 @@ begin
   FCurrent_S_DB_Sequence_ID := 1;
   FCurrent_M_DB_Sequence_ID := 1;
   FCurrent_L_DB_Sequence_ID := 1;
-  FCritical := TCritical.Create;
+  FCritical := TCritical.Create(ClassName + '.Critical');
 
   FSmall_Data_Class := TZDB2_Custom_Small_Data;
   FMedium_Data_Class := TZDB2_Custom_Medium_Data;
@@ -1363,7 +1363,7 @@ begin
   FCurrent_S_DB_Sequence_ID := 1;
   FCurrent_M_DB_Sequence_ID := 1;
   FCurrent_L_DB_Sequence_ID := 1;
-  FCritical := TCritical.Create;
+  FCritical := TCritical.Create(ClassName + '.Critical');
 
   FSmall_Data_Class := Small_Data_Class_;
   FMedium_Data_Class := Medium_Data_Class_;
@@ -1406,7 +1406,7 @@ begin
   FCurrent_S_DB_Sequence_ID := 1;
   FCurrent_M_DB_Sequence_ID := 1;
   FCurrent_L_DB_Sequence_ID := 1;
-  FCritical := TCritical.Create;
+  FCritical := TCritical.Create(ClassName + '.Critical');
 
   FSmall_Data_Class := Small_Data_Class_;
   FMedium_Data_Class := Medium_Data_Class_;

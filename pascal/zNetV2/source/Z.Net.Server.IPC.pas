@@ -298,7 +298,7 @@ begin
     if io_ <> nil then
         io_.DelayFree // Mark for delayed destruction (framework will free it later)
     else
-        Inst.PrintError('IO error:%d', [PCardinal(data)^]);
+        Inst.PrintError('IPC_Buff_Handler-IO error:%d', [PCardinal(data)^]);
   finally
       Inst.Critical.UnLock;
   end;
@@ -326,7 +326,7 @@ begin
     if io_ <> nil then
         io_.Write_Physics_Fragment(GetPtr(data, 4), Size - 4) // Skip the ID header
     else
-        Inst.PrintError('IO error:%d', [PCardinal(data)^]);
+        Inst.PrintError('IPC_Buff_Handler-IO error:%d', [PCardinal(data)^]);
   finally
       Inst.Critical.UnLock;
   end;
@@ -459,7 +459,7 @@ begin
   TimeOutKeepAlive := True; // Use keep‑alive timeout mechanism
   SendFlushSize := 32 * 1024; // Flush size: 32KB
   SwitchMaxPerformance; // Optimize for performance
-  Critical := TCritical.Create;
+  Critical := TCritical.Create(ClassName + '.Critical');
   TimeOut := 10 * 1000; // 10 seconds timeout (for underlying emulation)
   ipc_serv := nil;
 end;
@@ -561,11 +561,12 @@ end;
 
 initialization
 
-TZNet_Server_IPC.IPC_Serv_ThreadCount := 4;
 {$IFDEF CPU64}
-TZNet_Server_IPC.IPC_Serv_MaxQueueLength := 4096;
+TZNet_Server_IPC.IPC_Serv_ThreadCount := 4;
+TZNet_Server_IPC.IPC_Serv_MaxQueueLength := 1024;
 TZNet_Server_IPC.IPC_Serv_MaxMsgSize := 32 * 1024;
 {$ELSE CPU64}
+TZNet_Server_IPC.IPC_Serv_ThreadCount := 2;
 TZNet_Server_IPC.IPC_Serv_MaxQueueLength := 1024;
 TZNet_Server_IPC.IPC_Serv_MaxMsgSize := 1024;
 {$ENDIF CPU64}

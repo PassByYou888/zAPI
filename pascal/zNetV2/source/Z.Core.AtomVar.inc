@@ -21,7 +21,7 @@ constructor TAtomVar<T_>.Create(Value_: T_);
 begin
   inherited Create;
   FValue__ := Value_;
-  FCritical := TCritical.Create;
+  FCritical := TCritical.Create(ClassName + '.Critical');
 end;
 
 destructor TAtomVar<T_>.Destroy;

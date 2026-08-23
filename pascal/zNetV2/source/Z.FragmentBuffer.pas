@@ -1281,7 +1281,7 @@ var
   mode_: Word;
 begin
   inherited Create;
-  FCritical := TCritical.Create;
+  FCritical := TCritical.Create('TSafe_Flush_Stream.FCritical');
 
   FFileName := FileName_;
   FIsNew := IsNew_;

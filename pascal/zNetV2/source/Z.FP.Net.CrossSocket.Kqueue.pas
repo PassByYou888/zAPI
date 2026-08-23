@@ -256,7 +256,7 @@ constructor TKqueueListen.Create(AOwner: ICrossSocket; AListenSocket: THandle;
   AFamily, ASockType, AProtocol: Integer);
 begin
   inherited;
-  FLock := TCritical.Create;
+  FLock := TCritical.Create(ClassName + 'FLock');
 end;
 
 { *
@@ -347,7 +347,7 @@ begin
   inherited;
 
   FSendQueue := TSendQueue.Create;
-  FLock := TCritical.Create;
+  FLock := TCritical.Create(ClassName + 'FLock');
 end;
 
 { *
@@ -490,7 +490,7 @@ constructor TKqueueCrossSocket.Create(AIoThreads: Integer);
 begin
   inherited;
 
-  FIdleLock := TCritical.Create;
+  FIdleLock := TCritical.Create(ClassName + 'FIdleLock');
 end;
 
 { *

@@ -1894,7 +1894,7 @@ constructor TMemoryStream64ThreadList.Create;
 { * Initialises the critical section. }
 begin
   inherited Create;
-  FCritical := TCritical.Create;
+  FCritical := TCritical.Create('TMemoryStream64ThreadList.FCritical');
   AutoFree_Stream := False;
 end;
 

@@ -265,7 +265,7 @@ constructor TEpollListen.Create(AOwner: ICrossSocket; AListenSocket: THandle;
 begin
   inherited;
 
-  FLock := TCritical.Create;
+  FLock := TCritical.Create(ClassName + 'FLock');
   FOpCode := EPOLL_CTL_ADD; // first registration is an ADD
 end;
 
@@ -351,7 +351,7 @@ begin
   inherited;
 
   FSendQueue := TSendQueue.Create;
-  FLock := TCritical.Create;
+  FLock := TCritical.Create(ClassName + 'FLock');
 
   FOpCode := EPOLL_CTL_ADD;
 end;
@@ -458,7 +458,7 @@ constructor TEpollCrossSocket.Create(AIoThreads: Integer);
 begin
   inherited;
 
-  FIdleLock := TCritical.Create;
+  FIdleLock := TCritical.Create(ClassName + 'FIdleLock');
 end;
 
 destructor TEpollCrossSocket.Destroy;

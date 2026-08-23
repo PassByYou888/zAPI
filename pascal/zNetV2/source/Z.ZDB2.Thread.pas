@@ -5037,7 +5037,7 @@ constructor TZDB2_Th_Engine_Marshal.Create(Owner_: TCore_Object);
 begin
   inherited Create;
   Owner := Owner_;
-  FCritical := TCritical.Create;
+  FCritical := TCritical.Create(ClassName + '.Critical');
   FLong_Loop_Num := 0;
   Data_Marshal := TZDB2_Th_Engine_Marshal_BigList___.Create;
   Data_Marshal.OnFree := DoFree;

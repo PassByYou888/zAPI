@@ -685,25 +685,20 @@ var
   tk: TTimeTick;
 begin
   Result := False;
-
   // Stop any existing server instance
   if FStarted then
       Stop;
-
   // If we already hold a valid handle, consider it already started
   if FHandle <> 0 then
       Exit(True);
-
   tmp.server := Self;
   tmp.QueueName := QueueName;
   tmp.ThreadCount := ThreadCount;
   tmp.MaxQueueLength := MaxQueueLength;
   tmp.MaxMsgSize := MaxMsgSize;
   tmp.Result_ := False;
-
   TCompute.RunC(@tmp, nil, Do_StartEx, @th_running, nil);
   tk := GetTimeTick() + 5000;
-
   while th_running do
     begin
       if GetTimeTick() > tk then

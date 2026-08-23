@@ -235,7 +235,7 @@ end;
 constructor TCriticalOrderStruct<T_>.Create;
 begin
   inherited Create;
-  FCritical__ := TCritical.Create;
+  FCritical__ := TCritical.Create(ClassName + '.Critical__');
   FFirst := nil;
   FLast := nil;
   FNum := 0;
@@ -370,7 +370,7 @@ end;
 constructor TCriticalOrderPtrStruct<T_>.Create;
 begin
   inherited Create;
-  FCritical__ := TCritical.Create;
+  FCritical__ := TCritical.Create(ClassName + '.Critical__');
   FFirst := nil;
   FLast := nil;
   FNum := 0;

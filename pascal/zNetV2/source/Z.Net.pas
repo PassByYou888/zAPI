@@ -5320,7 +5320,7 @@ var
   prefix: U_String;
   i: Integer;
 begin
-  Critical := TCritical.Create;
+  Critical := TCritical.Create('TZDB2_Swap_Space_Technology.Critical');
 {$IFDEF MSWINDOWS}
   path_ := umlGetFilePath(ParamStr(0));
   prefix := umlChangeFileExt(umlGetFileName(ParamStr(0)), '');
@@ -11136,7 +11136,7 @@ begin
   FBigStreamReceiveDoneSignal := ZNet_Def_DefaultBigStreamReceiveDoneSignal;
   FCompleteBufferToken := ZNet_Def_DefaultCompleteBufferToken;
 
-  FReceived_Physics_Critical := TCritical.Create;
+  FReceived_Physics_Critical := TCritical.Create(ClassName + '.FReceived_Physics_Critical');
   FReceived_Physics_Fragment_Pool := TPhysics_Fragment_Pool.Create;
 
   FLast_Process_Receive_Buffer_CPU_Is_Full := False;
@@ -11173,7 +11173,7 @@ begin
   FSendDataCipherSecurity := OwnerFramework.RandomCipherSecurity;
   FCanPauseResultSend := False;
 
-  FSend_Queue_Critical := TCritical.Create;
+  FSend_Queue_Critical := TCritical.Create(ClassName + '.FSend_Queue_Critical');
   FSend_Queue_Pool := TQueueData_Pool.Create;
 
   UpdateLastCommunicationTime;
@@ -14176,8 +14176,8 @@ var
   d: Double;
 begin
   inherited Create;
-  FCritical := TCritical.Create;
-  FSend_Critical := TCritical.Create;
+  FCritical := TCritical.Create(ClassName + '.FCritical');
+  FSend_Critical := TCritical.Create(ClassName + '.FSend_Critical');
   FZNet_Instance_Ptr__ := ZNet_Instance_Pool.Add(self);
   FCommand_Hash_Pool := TCommand_Hash_Pool.Create(1024, nil);
   FIDSeed := 1;

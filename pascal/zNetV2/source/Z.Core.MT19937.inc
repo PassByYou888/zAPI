@@ -264,7 +264,7 @@ begin
   if IsConsole then
       Writeln('Init MT19937');
 {$ENDIF DEBUG}
-  MT19937InternalCritical := TCritical.Create;
+  MT19937InternalCritical := TCritical.Create('MT19937InternalCritical');
   MT19937_POOL__ := TMT19937_Pool__.Create;
   MT19937CoreToDelphi_ := False;
   Randomize_Seed__ := 1;
@@ -524,7 +524,7 @@ end;
 constructor TMT19937Random.Create;
 begin
   inherited Create;
-  FInternalCritical := TCritical.Create;
+  FInternalCritical := TCritical.Create('TMT19937Random.InternalCritical');
   FRndInstance := InternalMT19937__();
   AtomInc(PMD19937Core(FRndInstance)^.Instance_TMT19937Random__);
 end;

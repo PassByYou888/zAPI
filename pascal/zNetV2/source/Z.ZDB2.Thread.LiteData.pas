@@ -442,7 +442,7 @@ begin
   inherited Create;
   FBatch_Post_Num := 0;
   FCurrent_Lite_Sequence_ID := 1;
-  FCritical := TCritical.Create;
+  FCritical := TCritical.Create(ClassName + '.Critical');
   FLite_Data_Class := TZDB2_Lite_Data;
   FLite_Th_Engine_Marshal_Class := TLite_Th_Engine_Marshal;
   FLite := FLite_Th_Engine_Marshal_Class.Create(Self);
@@ -458,7 +458,7 @@ begin
   inherited Create;
   FBatch_Post_Num := 0;
   FCurrent_Lite_Sequence_ID := 1;
-  FCritical := TCritical.Create;
+  FCritical := TCritical.Create(ClassName + '.Critical');
   FLite_Data_Class := Lite_Data_Class_;
   FLite_Th_Engine_Marshal_Class := TLite_Th_Engine_Marshal;
   FLite := FLite_Th_Engine_Marshal_Class.Create(Self);
@@ -474,7 +474,7 @@ begin
   inherited Create;
   FBatch_Post_Num := 0;
   FCurrent_Lite_Sequence_ID := 1;
-  FCritical := TCritical.Create;
+  FCritical := TCritical.Create(ClassName + '.Critical');
   FLite_Data_Class := Lite_Data_Class_;
   FLite_Th_Engine_Marshal_Class := Lite_Th_Engine_Marshal_ClasLite_;
   FLite := FLite_Th_Engine_Marshal_Class.Create(Self);

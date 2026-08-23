@@ -7267,7 +7267,7 @@ begin
   FHash.OnFreePtr := DoDataFreeProc;
   FHash.IgnoreCase := True;
   FHash.AccessOptimization := True;
-  Critical := TCritical.Create;
+  Critical := TCritical.Create('TFileMD5Cache.Critical');
 end;
 
 destructor TFileMD5Cache.Destroy;

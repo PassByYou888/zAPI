@@ -141,7 +141,7 @@ end;
 function TBigList<T_>.Get_Critical__: TCritical;
 begin
   if FCritical__ = nil then
-      FCritical__ := TCritical.Create;
+      FCritical__ := TCritical.Create('TBigList.FCritical__');
   Result := FCritical__;
 end;
 
@@ -1147,115 +1147,6 @@ begin
   FillPtr(@Result, SizeOf(T_), 0);
 end;
 
-{$IFDEF DEBUG}
-
-
-function TBigList<T_>.Test_Check__: Boolean;
-var
-  arry: PQueueArrayStruct;
-  i: Integer;
-  p, F_P, L_P, P_P, N_P: PQueueStruct;
-  P_P_i, N_P_i: Integer;
-begin
-  Result := True;
-  if Num = 0 then
-      exit;
-  arry := BuildArrayMemory();
-  F_P := arry^[0];
-  L_P := arry^[Num - 1];
-
-  if F_P <> First then
-      Result := False;
-  if L_P <> Last then
-      Result := False;
-
-  for i := 0 to Num - 1 do
-    begin
-      if i <= 0 then
-          P_P_i := Num - 1
-      else
-          P_P_i := i - 1;
-
-      if i >= Num - 1 then
-          N_P_i := 0
-      else
-          N_P_i := i + 1;
-
-      P_P := arry^[P_P_i];
-      N_P := arry^[N_P_i];
-
-      p := arry^[i];
-
-      if p^.Prev <> P_P then
-          Result := False;
-      if p^.Next <> N_P then
-          Result := False;
-
-      if not Result then
-          raiseInfo('error.');
-    end;
-  System.FreeMemory(arry);
-end;
-
-class procedure TBigList<T_>.Test;
-type
-  TTest_BigList = TBigList<Integer>;
-var
-  L: TTest_BigList;
-  i, j: Integer;
-begin
-  L := TTest_BigList.Create;
-
-  L.Add(3232);
-  L.Test_Check__;
-  L.Remove_P(L.List[0]);
-  L.Test_Check__;
-  L.Add(32321);
-  L.Test_Check__;
-  L.Insert(2323, L.List[0]);
-  L.Test_Check__;
-  L.Insert(2323, L.List[1]);
-  L.Test_Check__;
-  L.Remove_P(L.List[2]);
-  L.Test_Check__;
-  L.Remove_P(L.List[1]);
-  L.Test_Check__;
-
-  for i := 0 to 10 do
-    begin
-      L.Add(i);
-      L.Test_Check__;
-    end;
-  L.Insert(9999, L.List[5]);
-  L.Test_Check__;
-  L.Insert(9919, L.First);
-  L.Test_Check__;
-  L.Insert(9929, L.Last);
-  L.Test_Check__;
-
-  L.Move_Before(L.List[0], L.List[5]);
-  L.Test_Check__;
-  L.Move_Before(L.List[0], L.List[L.Num - 2]);
-  L.Test_Check__;
-  L.Move_Before(L.List[L.Num - 2], L.List[1]);
-  L.Test_Check__;
-  L.Move_Before(L.List[L.Num - 2], L.List[0]);
-  L.Test_Check__;
-  L.Move_Before(L.List[0], L.Last);
-  L.Test_Check__;
-  L.Move_Before(L.Last, L.First);
-  L.Test_Check__;
-
-  for i := 0 to L.Num - 1 do
-    begin
-      L.Next;
-      L.Test_Check__;
-    end;
-
-  L.Free;
-end;
-{$ENDIF DEBUG}
-
 // *****************************************************************************************************************
 
 procedure TCritical_BigList<T_>.TRepeat___.Init_(Instance_: T___);
@@ -1401,7 +1292,7 @@ end;
 function TCritical_BigList<T_>.Get_Critical__: TCritical;
 begin
   if FCritical__ = nil then
-      FCritical__ := TCritical.Create;
+      FCritical__ := TCritical.Create('TCritical_BigList.FCritical__');
   Result := FCritical__;
 end;
 
@@ -2541,121 +2432,6 @@ class function TCritical_BigList<T_>.Null_Data: T_;
 begin
   FillPtr(@Result, SizeOf(T_), 0);
 end;
-
-{$IFDEF DEBUG}
-
-
-function TCritical_BigList<T_>.Test_Check__: Boolean;
-var
-  arry: PQueueArrayStruct;
-  i: Integer;
-  p, F_P, L_P, P_P, N_P: PQueueStruct;
-  P_P_i, N_P_i: Integer;
-begin
-  Result := True;
-  if Num = 0 then
-      exit;
-  arry := BuildArrayMemory();
-  Critical__.Lock;
-  try
-    F_P := arry^[0];
-    L_P := arry^[Num - 1];
-
-    if F_P <> First then
-        Result := False;
-    if L_P <> Last then
-        Result := False;
-
-    for i := 0 to Num - 1 do
-      begin
-        if i <= 0 then
-            P_P_i := Num - 1
-        else
-            P_P_i := i - 1;
-
-        if i >= Num - 1 then
-            N_P_i := 0
-        else
-            N_P_i := i + 1;
-
-        P_P := arry^[P_P_i];
-        N_P := arry^[N_P_i];
-
-        p := arry^[i];
-
-        if p^.Prev <> P_P then
-            Result := False;
-        if p^.Next <> N_P then
-            Result := False;
-
-        if not Result then
-            raiseInfo('error.');
-      end;
-  finally
-      Critical__.UnLock;
-  end;
-  System.FreeMemory(arry);
-end;
-
-class procedure TCritical_BigList<T_>.Test;
-type
-  TCritical_Test_BigList___ = TCritical_BigList<Integer>;
-var
-  L: TCritical_Test_BigList___;
-  i, j: Integer;
-begin
-  L := TCritical_Test_BigList___.Create;
-
-  L.Add(3232);
-  L.Test_Check__;
-  L.Remove_P(L.List[0]);
-  L.Test_Check__;
-  L.Add(32321);
-  L.Test_Check__;
-  L.Insert(2323, L.List[0]);
-  L.Test_Check__;
-  L.Insert(2323, L.List[1]);
-  L.Test_Check__;
-  L.Remove_P(L.List[2]);
-  L.Test_Check__;
-  L.Remove_P(L.List[1]);
-  L.Test_Check__;
-
-  for i := 0 to 10 do
-    begin
-      L.Add(i);
-      L.Test_Check__;
-    end;
-  L.Insert(9999, L.List[5]);
-  L.Test_Check__;
-  L.Insert(9919, L.First);
-  L.Test_Check__;
-  L.Insert(9929, L.Last);
-  L.Test_Check__;
-
-  L.Move_Before(L.List[0], L.List[5]);
-  L.Test_Check__;
-  L.Move_Before(L.List[0], L.List[L.Num - 2]);
-  L.Test_Check__;
-  L.Move_Before(L.List[L.Num - 2], L.List[1]);
-  L.Test_Check__;
-  L.Move_Before(L.List[L.Num - 2], L.List[0]);
-  L.Test_Check__;
-  L.Move_Before(L.List[0], L.Last);
-  L.Test_Check__;
-  L.Move_Before(L.Last, L.First);
-  L.Test_Check__;
-
-  for i := 0 to L.Num - 1 do
-    begin
-      L.Next;
-      L.Test_Check__;
-    end;
-
-  L.Free;
-end;
-{$ENDIF DEBUG}
-
 
 constructor TBig_Object_List<T_>.Create(AutoFreeObject_: Boolean);
 begin

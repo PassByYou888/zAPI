@@ -51,7 +51,7 @@ begin
   try
     Depth := ThNum;
     Total := e - b + 1;
-    Critical := TCritical.Create;
+    Critical := TCritical.Create('FPCParallelFor_Block.Critical');
 
     Completed := 0;
 
@@ -171,7 +171,7 @@ begin
   try
     Depth := ThNum;
     Total := e - b + 1;
-    Critical := TCritical.Create;
+    Critical := TCritical.Create('FPCParallelFor_Block.Critical');
 
     Completed := 0;
 
@@ -289,7 +289,7 @@ begin
     end;
   Parallel_Overflow__.Acquire;
   try
-    Critical := TCritical.Create;
+    Critical := TCritical.Create('FPCParallelFor_Fold.Critical');
     Depth := Min(ThNum, e - b + 1);
     SetLength(states, Depth);
 
@@ -382,7 +382,7 @@ begin
     end;
   Parallel_Overflow__.Acquire;
   try
-    Critical := TCritical.Create;
+    Critical := TCritical.Create('FPCParallelFor_Fold.Critical');
     Depth := Min(ThNum, e - b + 1);
     SetLength(states, Depth);
 

@@ -1,7 +1,7 @@
 function TBig_Hash_Pair_Pool<TKey_, TValue_>.Get_Critical__: TCritical;
 begin
   if FCritical__ = nil then
-      FCritical__ := TCritical.Create;
+      FCritical__ := TCritical.Create('TBig_Hash_Pair_Pool.FCritical__');
   Result := FCritical__;
 end;
 
@@ -901,7 +901,7 @@ var
 begin
   inherited Create;
   CreateBefore();
-  FCritical__ := TCritical.Create;
+  FCritical__ := TCritical.Create('TCritical_Big_Hash_Pair_Pool.FCritical__');
   FQueue_Pool := TPool___.Create;
   FQueue_Pool.FOnFree := Internal_Do_Queue_Pool_Free;
   FHash_Buffer := TKey_Hash_Buffer.Create;

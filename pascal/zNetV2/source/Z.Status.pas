@@ -273,7 +273,7 @@ procedure DoStatus(const v: Int64); overload; // Outputs an Int64 value as a dec
 procedure DoStatus(const v: Integer); overload; // Outputs an Integer value as a decimal string.
 procedure DoStatus(const v: Single); overload; // Outputs a Single value as a string.
 procedure DoStatus(const v: Double); overload; // Outputs a Double value as a string.
-procedure DoStatus(const v: Pointer); overload; // Outputs a pointer address in hexadecimal format (0x...).
+procedure DoStatusPtr(const v: Pointer); overload; // Outputs a pointer address in hexadecimal format (0x...).
 
 {
   * Formats a string using SysUtils.Format and outputs the result.
@@ -319,6 +319,7 @@ procedure DoStatus(const p: Pointer; const siz: Integer); overload;
 procedure CheckDoStatus();
 
 procedure DoStatus(); overload; // Emits an empty line (calls CheckDoStatus).
+procedure Post_To_DoStatus_Queue(Th: TCore_Thread; Text_: SystemString; const ID: Integer);
 
 {
   * Retrieves and removes the next message from the queue, delivers it,
@@ -342,6 +343,12 @@ function Pick_One_Status(var Status: TPascalString): Boolean;
   * @param dest  The TCore_Strings collection to receive the messages.
 }
 procedure Pick_State_To(dest: TCore_Strings);
+
+{
+  * ConsoleWrite – Write a string to the console
+}
+procedure ConsoleWrite(const S: string);
+procedure ConsoleWriteLn(const S: string);
 
 {
   * Appends text to a per‑thread buffer that accumulates a line without
@@ -561,7 +568,7 @@ begin
   DoStatus(FloatToStr(v));
 end;
 
-procedure DoStatus(const v: Pointer);
+procedure DoStatusPtr(const v: Pointer);
 begin
   try
       DoStatus(Format('0x%p', [v]));
@@ -690,9 +697,7 @@ type
     * TEvent_Pool__ – A pool (extending TBigList) that stores hook records.
     * It overrides DoFree to dispose the PEvent_Struct__ correctly.
   }
-  TEvent_Pool___Decl = TBigList<PEvent_Struct__>;
-
-  TEvent_Pool__ = class(TEvent_Pool___Decl)
+  TEvent_Pool__ = class(TBigList<PEvent_Struct__>)
   public
     procedure DoFree(var Data: PEvent_Struct__); override;
   end;
@@ -700,9 +705,7 @@ type
   {
     * TText_Queue_Data_Pool__ – Pool for queued messages.
   }
-  TText_Queue_Data_Pool___Decl = TBigList<PText_Queue_Data>;
-
-  TText_Queue_Data_Pool__ = class(TText_Queue_Data_Pool___Decl)
+  TText_Queue_Data_Pool__ = class(TBigList<PText_Queue_Data>)
   public
     procedure DoFree(var Data: PText_Queue_Data); override;
   end;
@@ -710,9 +713,7 @@ type
   {
     * TNo_Ln_Text_Pool__ – Pool for no‑line buffers.
   }
-  TNo_Ln_Text_Pool___Decl = TBigList<PNo_Ln_Text>;
-
-  TNo_Ln_Text_Pool__ = class(TNo_Ln_Text_Pool___Decl)
+  TNo_Ln_Text_Pool__ = class(TBigList<PNo_Ln_Text>)
   public
     procedure DoFree(var Data: PNo_Ln_Text); override;
   end;
@@ -758,6 +759,7 @@ var
   Event_Pool__: TEvent_Pool__; // list of registered hooks
   Text_Queue_Data_Pool__: TText_Queue_Data_Pool__; // pending messages
   Status_Critical__: TCritical; // mutual exclusion for queues
+  Check_Status_Critical__: TCritical;
   No_Ln_Text_Pool__: TNo_Ln_Text_Pool__; // per‑thread no‑line buffers
 
   {
@@ -938,20 +940,30 @@ end;
 procedure CheckDoStatus();
 var
   i: Integer;
+  p: TText_Queue_Data_Pool__.PQueueStruct;
 begin
   if Status_Critical__ = nil then
       exit;
-  Status_Critical__.Acquire;
+
+  Check_Status_Critical__.Acquire;
   try
     i := 0;
     while (Text_Queue_Data_Pool__.Num > 0) and (i < One_Step_Status_Limit) do
       begin
-        Do_Trigger_Event_Output_(Text_Queue_Data_Pool__.First^.Data^.S, Text_Queue_Data_Pool__.First^.Data^.ID);
-        Text_Queue_Data_Pool__.Next; // Remove the processed message.
+        Status_Critical__.Acquire;
+        p := Text_Queue_Data_Pool__.First;
+        Status_Critical__.Release;
+
+        Do_Trigger_Event_Output_(p^.Data^.S, p^.Data^.ID);
+
+        Status_Critical__.Acquire;
+        Text_Queue_Data_Pool__.Next;
+        Status_Critical__.Release;
+
         inc(i);
       end;
   finally
-      Status_Critical__.Release;
+      Check_Status_Critical__.Release;
   end;
 end;
 
@@ -1070,6 +1082,23 @@ begin
 {$ENDIF}
 end;
 
+procedure Post_To_DoStatus_Queue(Th: TCore_Thread; Text_: SystemString; const ID: Integer);
+var
+  pSS: PText_Queue_Data;
+begin
+  new(pSS);
+  if StatusThreadID then
+      pSS^.S := '[' + IntToStr(Cardinal(Th.ThreadID)) + '] ' + umlReplace(Text_, #10, #10 + '[' + IntToStr(Cardinal(Th.ThreadID)) + '] ', False, False)
+  else
+      pSS^.S := Text_;
+  pSS^.Th := Th;
+  pSS^.TriggerTime := GetTimeTick();
+  pSS^.ID := ID;
+  Status_Critical__.Acquire;
+  Text_Queue_Data_Pool__.Add(pSS);
+  Status_Critical__.Release;
+end;
+
 {
   * InternalDoStatus – The default implementation of OnDoStatusHook.
   * It formats the message (optionally prepending thread ID), enqueues it,
@@ -1082,32 +1111,26 @@ end;
 procedure InternalDoStatus(Text_: SystemString; const ID: Integer);
 var
   Th: TCore_Thread;
-  pSS: PText_Queue_Data;
 begin
   if not Status_Active__ then
       exit;
 
   Th := TCore_Thread.CurrentThread;
 
-  new(pSS);
-  if StatusThreadID then
-      pSS^.S := '[' + IntToStr(Cardinal(Th.ThreadID)) + '] ' + umlReplace(Text_, #10, #10 + '[' + IntToStr(Cardinal(Th.ThreadID)) + '] ', False, False)
-  else
-      pSS^.S := Text_;
-  pSS^.Th := Th;
-  pSS^.TriggerTime := GetTimeTick();
-  pSS^.ID := ID;
-  Status_Critical__.Acquire;
-  Text_Queue_Data_Pool__.Add(pSS);
-  Status_Critical__.Release;
+  Post_To_DoStatus_Queue(Th, Text_, ID);
 
   if Th = Main_Thread then
-    begin
       CheckDoStatus(); // If we are on the main thread, process immediately.
-    end;
 
   if ConsoleOutput and IsConsole then
-      ConsoleWriteLn(Text_);
+    begin
+      Status_Critical__.Acquire;
+      try
+          ConsoleWriteLn(Text_); // safe writeln
+      finally
+          Status_Critical__.Release;
+      end;
+    end;
 end;
 
 { ******************************************************************************
@@ -1254,7 +1277,8 @@ procedure _DoInit;
 begin
   Event_Pool__ := TEvent_Pool__.Create;
   Text_Queue_Data_Pool__ := TText_Queue_Data_Pool__.Create;
-  Status_Critical__ := TCritical.Create;
+  Status_Critical__ := TCritical.Create('Status_Critical__');
+  Check_Status_Critical__ := TCritical.Create('Check_Status_Critical__');
   No_Ln_Text_Pool__ := TNo_Ln_Text_Pool__.Create;
 
   Status_Active__ := True;
@@ -1280,6 +1304,7 @@ begin
   Text_Queue_Data_Pool__.Free;
   No_Ln_Text_Pool__.Free;
   Status_Critical__.Free;
+  Check_Status_Critical__.Free;
   Status_Active__ := True;
   Status_Critical__ := nil;
   Z.Core.OnCheckThreadSynchronize := Hooked_OnCheckThreadSynchronize;

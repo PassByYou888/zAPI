@@ -225,6 +225,50 @@ procedure IPC_Disconnect_Handler(trigger: Pointer; data: Pointer; Size: TSize_t)
 implementation
 
 { ============================================================================== }
+{ Global callback functions (cdecl) }
+{ ============================================================================== }
+
+{ * Handler for incoming data (buffer) notifications from the server.
+  The payload format: [4‑byte ID] + [binary data].
+  We acquire the client's critical section to ensure that ClientIOIntf is not
+  modified during processing. The data is passed directly to Write_Physics_Fragment,
+  which will handle it as a network packet.
+}
+procedure IPC_Cli_Buff_Handler(trigger: Pointer; data: Pointer; Size: TSize_t);
+var
+  Inst: TZNet_Client_IPC;
+begin
+  if trigger = nil then
+      exit;
+  Inst := TZNet_Client_IPC(trigger);
+  Inst.Critical.Lock;
+  try
+    if Inst.ClientIOIntf = nil then
+        exit;
+    if Size > 0 then
+        Inst.ClientIOIntf.Write_Physics_Fragment(data, Size);
+    Inst.ClientIOIntf.UpdateLastCommunicationTime; { * Update activity timestamp }
+  finally
+      Inst.Critical.UnLock;
+  end;
+end;
+
+{
+  * Handler for disconnection notification from the server.
+  * This is triggered when the server explicitly tells the client to disconnect.
+  * Simply calls Disconnect on the client.
+}
+procedure IPC_Disconnect_Handler(trigger: Pointer; data: Pointer; Size: TSize_t);
+var
+  Inst: TZNet_Client_IPC;
+begin
+  if trigger = nil then
+      exit;
+  Inst := TZNet_Client_IPC(trigger);
+  Inst.Disconnect; { * Initiate client disconnection }
+end;
+
+{ ============================================================================== }
 { TZNet_Client_IPC_PeerIO }
 { ============================================================================== }
 
@@ -363,7 +407,7 @@ begin
   TimeOut := 10 * 1000; { * 10 seconds timeout (for underlying TCP emulation) }
   SendFlushSize := 32 * 1024; { * Flush size: 32KB }
   SwitchMaxPerformance; { * Optimize for performance }
-  Critical := TCritical.Create;
+  Critical := TCritical.Create(ClassName + '.Critical');
   ipc_cli := nil;
   FIPC_queue_name := '';
   FRespQueueName := '';
@@ -496,49 +540,6 @@ begin
   inherited Progress;
 end;
 
-{ ============================================================================== }
-{ Global callback functions (cdecl) }
-{ ============================================================================== }
-
-{ * Handler for incoming data (buffer) notifications from the server.
-  The payload format: [4‑byte ID] + [binary data].
-  We acquire the client's critical section to ensure that ClientIOIntf is not
-  modified during processing. The data is passed directly to Write_Physics_Fragment,
-  which will handle it as a network packet.
-}
-procedure IPC_Cli_Buff_Handler(trigger: Pointer; data: Pointer; Size: TSize_t);
-var
-  Inst: TZNet_Client_IPC;
-begin
-  if trigger = nil then
-      exit;
-  Inst := TZNet_Client_IPC(trigger);
-  Inst.Critical.Lock;
-  try
-    if Inst.ClientIOIntf = nil then
-        exit;
-    if Size > 0 then
-        Inst.ClientIOIntf.Write_Physics_Fragment(data, Size);
-    Inst.ClientIOIntf.UpdateLastCommunicationTime; { * Update activity timestamp }
-  finally
-      Inst.Critical.UnLock;
-  end;
-end;
-
-{
-  * Handler for disconnection notification from the server.
-  * This is triggered when the server explicitly tells the client to disconnect.
-  * Simply calls Disconnect on the client.
-}
-procedure IPC_Disconnect_Handler(trigger: Pointer; data: Pointer; Size: TSize_t);
-var
-  Inst: TZNet_Client_IPC;
-begin
-  if trigger = nil then
-      exit;
-  Inst := TZNet_Client_IPC(trigger);
-  Inst.Disconnect; { * Initiate client disconnection }
-end;
 
 initialization
 
