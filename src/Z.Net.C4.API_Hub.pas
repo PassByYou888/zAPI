@@ -1,11 +1,11 @@
 ﻿{ ******************************************************************************
-  * Z.Net.C4.API_Hub – Bridges the language‑neutral API Hub framework with the
+  * Z.Net.C4.API_Hub – Bridges the language-neutral API Hub framework with the
   * C4 distributed service mesh.
   *
   * This unit provides a service (TC40_API_HUB_Service) that routes API calls
   * and notifications between connected clients, and a client
   * (TC40_API_HUB_Client) that can host a local application (TAPI_APP) and call
-  * remote ones over the network. All communication uses C4's P2PVM double‑
+  * remote ones over the network. All communication uses C4's P2PVM double-
   * tunnel infrastructure with no authentication (for simplicity, though
   * authentication can be added by changing the base class).
   *
@@ -13,19 +13,19 @@
   * Key Concepts
   * ===========================================================================
   *
-  *   – API Hub: A language‑neutral RPC framework where applications expose
-  *     functions (APIs) as either request‑response (Call) or one‑way (Notify)
-  *     endpoints.  Each endpoint is identified by a unique name.
+  *   – API Hub: A language-neutral RPC framework where applications expose
+  *     functions (APIs) as either request-response (Call) or one-way (Notify)
+  *     endpoints. Each endpoint is identified by a unique name.
   *
   *   – TAPI_APP: A logical container that groups a set of APIs under one name.
   *     This is the object that gets registered with the network.
   *
   *   – C4 Service Mesh: The underlying distributed framework that provides
   *     service discovery, automatic reconnection, load balancing, and P2PVM
-  *     tunnelling.  The API Hub sits on top of C4, using its transport layer.
+  *     tunnelling. The API Hub sits on top of C4, using its transport layer.
   *
-  *   – Double‑Tunnel I/O: Each client maintains two separate tunnels
-  *     (receive and send) for full‑duplex communication.  The service uses
+  *   – Double-Tunnel I/O: Each client maintains two separate tunnels
+  *     (receive and send) for full-duplex communication. The service uses
   *     these to route messages.
   *
   * ===========================================================================
@@ -34,7 +34,7 @@
   *
   *   ┌─────────────────────────────────────────────────────────────────────────┐
   *   │                     TC40_API_HUB_Service (Hub)                          │
-  *   │  - Accepts client connections via C4 no‑auth double‑tunnel              │
+  *   │  - Accepts client connections via C4 no-auth double-tunnel              │
   *   │  - Maintains a registry of all connected applications                   │
   *   │     (APP_Name, APP_Desc, process info, list of exported API names)      │
   *   │  - Routes incoming 'Call' and 'Notify' requests to the correct client   │
@@ -50,8 +50,8 @@
   *   │  - Sends notifications (Send_Execute_Notify) and synchronous calls      │
   *   │     (Wait_Execute_Call) to remote applications                          │
   *   │  - Detects local clients (same process) and executes directly without   │
-  *   │     network round‑trip (optimisation)                                   │
-  *   │  - Reports thread‑load statistics to the Hub for load‑aware routing     │
+  *   │     network round-trip (optimisation)                                   │
+  *   │  - Reports thread-load statistics to the Hub for load-aware routing     │
   *   └─────────────────────────────────────────────────────────────────────────┘
   *
   * ===========================================================================
@@ -62,7 +62,7 @@
   *                              Handles registration, routing, and forwarding.
   *   – TC40_API_HUB_Client    : The client component that connects to a hub.
   *                              Can host a local app and call remote ones.
-  *   – TC40_API_HUB_Service_RecvTunnel_NoAuth : Per‑connection registry data.
+  *   – TC40_API_HUB_Service_RecvTunnel_NoAuth : Per-connection registry data.
   *   – TCall_Bridge__         : Internal helper for asynchronous call results.
   *
   * ===========================================================================
@@ -97,30 +97,30 @@
   *        DisposeObject(Result);
   *      end;
   *
-  * 4. To send a one‑way notification:
+  * 4. To send a one-way notification:
   *      Client.Send_Execute_Notify('Logger', Param);  // Param is consumed.
   *
   * ===========================================================================
   * Local Execution Optimisation
   * ===========================================================================
   *
-  *   The system always checks for a local (same‑process) client that matches
-  *   the target app name and API.  If found, the call/notification is executed
-  *   directly without going over the network.  This greatly reduces latency
-  *   for inter‑module communication within the same process.
+  *   The system always checks for a local (same-process) client that matches
+  *   the target app name and API. If found, the call/notification is executed
+  *   directly without going over the network. This greatly reduces latency
+  *   for inter-module communication within the same process.
   *
   *   The check uses the global C40_ClientPool and the `Find_Local_API_Hub`
   *   function, which supports wildcard patterns.
   *
   * ===========================================================================
-  * Load‑Aware Routing
+  * Load-Aware Routing
   * ===========================================================================
   *
-  *   Each client reports two thread‑count statistics to the service every
+  *   Each client reports two thread-count statistics to the service every
   *   second: Host_Running_Thread_Num (threads handling incoming requests) and
-  *   Wait_Reponse_Thread_Num (threads waiting for remote replies).  When
+  *   Wait_Reponse_Thread_Num (threads waiting for remote replies). When
   *   multiple clients match the target app, the service selects the one with
-  *   the lowest combined load (Host + Wait).  This helps distribute work
+  *   the lowest combined load (Host + Wait). This helps distribute work
   *   evenly across clients.
   *
   * ===========================================================================
@@ -131,7 +131,7 @@
   *     – Z.Core                (foundation: threads, containers, memory)
   *     – Z.Net                 (base network framework)
   *     – Z.Net.C4              (C4 service mesh)
-  *     – Z.Net.DoubleTunnelIO.NoAuth  (double‑tunnel no‑auth I/O)
+  *     – Z.Net.DoubleTunnelIO.NoAuth  (double-tunnel no-auth I/O)
   *     – API_HubTool           (core API Hub types and registry)
   *
   *   It also includes the 'Z.System_ProcessID.inc' file for process identification.
@@ -140,22 +140,22 @@
   * Important Notes & Restrictions
   * ===========================================================================
   *
-  *   – THREAD SAFETY: The library is NOT thread‑safe.  All API calls must be
+  *   – THREAD SAFETY: The library is NOT thread-safe. All API calls must be
   *     made from the same thread that runs the C4 progress loop (usually the
-  *     simulated main thread).  Callbacks may be executed in background
-  *     threads (from the thread pool), so they must be thread‑safe and must
+  *     simulated main thread). Callbacks may be executed in background
+  *     threads (from the thread pool), so they must be thread-safe and must
   *     NOT block.
   *
   *   – CALLBACK BLOCKING: Inside a callback, do NOT call Wait_Execute_Call
-  *     or any blocking operation – this may cause deadlocks.  Offload heavy
+  *     or any blocking operation – this may cause deadlocks. Offload heavy
   *     work to separate threads.
   *
   *   – DATA HANDLE LIFETIME: TDataHnd and TAppHnd handles must be explicitly
-  *     freed using API_Free_DataHnd / API_Free_APPHnd.  The library does NOT
+  *     freed using API_Free_DataHnd / API_Free_APPHnd. The library does NOT
   *     automatically free them, even after a remote call.
   *
-  *   – APPLICATION NAMES: App names are case‑sensitive and should be unique
-  *     within the network.  Wildcards ('*') are supported for matching but
+  *   – APPLICATION NAMES: App names are case-sensitive and should be unique
+  *     within the network. Wildcards ('*') are supported for matching but
   *     should not be used as actual app names.
   *
   *   – REGISTRATION ORDER: Clients should set the APP property before the
@@ -163,9 +163,9 @@
   *     APP to ensure registration occurs.
   *
   *   – TIMEOUTS: A timeout of 0 in Wait_Execute_Call means infinite wait.
-  *     On timeout, the function returns nil.  Always check the result.
+  *     On timeout, the function returns nil. Always check the result.
   *
-  *   – MAXIMUM BUFFER SIZE: The service limits complete‑buffer size to
+  *   – MAXIMUM BUFFER SIZE: The service limits complete-buffer size to
   *     500 MB by default (configurable via the 'MaxBuffer' parameter).
   *
   * ===========================================================================
@@ -231,10 +231,10 @@
   * ===========================================================================
   *
   *   – If the client fails to register, check the status logs via
-  *     API_Get_Status or the C4 status output.  Common issues: APP name empty,
+  *     API_Get_Status or the C4 status output. Common issues: APP name empty,
   *     duplicate API names, or network connectivity problems.
   *   – If a remote call times out, verify that the target client is online
-  *     and that its APP is correctly registered.  Also check that the API name
+  *     and that its APP is correctly registered. Also check that the API name
   *     matches exactly.
   *   – If callbacks are not triggered, ensure the callback functions are
   *     assigned to the correct API and that the APP is online.
@@ -243,7 +243,7 @@
   * Author / Version
   * ===========================================================================
   *
-  *   Part of the Z.Net.C4 library suite.  See the main project documentation
+  *   Part of the Z.Net.C4 library suite. See the main project documentation
   *   for version and licensing information.
   ****************************************************************************** }
 unit Z.Net.C4.API_Hub;
@@ -275,30 +275,30 @@ type
   TC40_API_HUB_Service = class;
 
   { * TC40_API_HUB_Service_RecvTunnel_NoAuth
-    * Custom user‑defined object attached to each receive‑tunnel connection
-    * on the service side.  It stores all registered information about the
-    * application that this client exposes, plus runtime thread statistics
-    * for load‑aware routing.
+    * Per-connection user-defined object attached to each receive-tunnel
+    * connection on the service side. Stores all registration information
+    * about the application that this client exposes, plus runtime thread
+    * statistics for load-aware routing.
     *
     * @Field API_HUB_Service       – Owning service instance.
-    * @Field APP_Name              – Registered application name (case‑sensitive).
-    * @Field APP_Desc              – Human‑readable description.
+    * @Field APP_Name              – Registered application name (case-sensitive).
+    * @Field APP_Desc              – Human-readable description.
     * @Field APP_Process_Info      – Process identifier (e.g., "MyApp(1234)").
-    * @Field api_info_data         – List of API names (keys) exported by this app.
+    * @Field api_info_data         – Hash list where keys are exported API names.
     * @Field Host_Running_Thread_Num – Number of active threads handling requests from this client.
     * @Field Wait_Reponse_Thread_Num – Number of threads waiting for responses from this client. }
   TC40_API_HUB_Service_RecvTunnel_NoAuth = class(TService_RecvTunnel_UserDefine_NoAuth)
   private
-    Last_Selected_Time: TTimeTick;
+    Last_Selected_Time: TTimeTick; // Timestamp of last selection for load balancing
   public
-    API_HUB_Service: TC40_API_HUB_Service; // Back‑reference to the owning service.
-    APP_Name: TAPI_String; // Unique application name.
-    APP_Desc: TAPI_String; // Human‑readable description.
-    APP_Process_Info: TAPI_String; // Process info (e.g., "MyApp(1234)").
-    api_info_data: THashList; // Hash list where keys are API names.
-    Host_Running_Thread_Num: Integer; // Number of threads currently processing requests.
-    Wait_Reponse_Thread_Num: Integer; // Number of threads waiting for remote replies.
-    Is_Local: Boolean; // is ipc-mode or internal loopback network or local network
+    API_HUB_Service: TC40_API_HUB_Service;
+    APP_Name: TAPI_String;
+    APP_Desc: TAPI_String;
+    APP_Process_Info: TAPI_String;
+    api_info_data: THashList; // API names (keys only, values are nil)
+    Host_Running_Thread_Num: Integer;
+    Wait_Reponse_Thread_Num: Integer;
+    Is_Local: Boolean; // True if connected via IPC or local network
 
     constructor Create(Owner_: TPeerIO); override;
     destructor Destroy; override;
@@ -311,13 +311,13 @@ type
     * Used for broadcasting service information to other service instances. }
   TAPI_Service_Info__ = class
   public
-    APP_Name: TAPI_String; // Application name.
-    APP_Desc: TAPI_String; // Description.
-    APP_Process_Info: TAPI_String; // Process info.
-    api_info_data: THashList; // API names.
-    Host_Running_Thread_Num: Integer; // Number of threads currently processing requests.
-    Wait_Reponse_Thread_Num: Integer; // Number of threads waiting for remote replies.
-    Is_Local: Boolean; // is ipc-mode or internal loopback network or local network
+    APP_Name: TAPI_String;
+    APP_Desc: TAPI_String;
+    APP_Process_Info: TAPI_String;
+    api_info_data: THashList;
+    Host_Running_Thread_Num: Integer;
+    Wait_Reponse_Thread_Num: Integer;
+    Is_Local: Boolean;
 
     constructor Create;
     destructor Destroy; override;
@@ -326,7 +326,7 @@ type
     procedure LoadFromStream(stream: TCore_Stream);
   end;
 
-  { * TAPI_Service_Info_Pool__: A list of TAPI_Service_Info__ objects,
+  { * TAPI_Service_Info_Pool__: List of TAPI_Service_Info__ objects,
     * used to build and store a snapshot of all currently registered
     * applications for broadcasting to other service instances. }
   TAPI_Service_Info_Pool__ = class(TBig_Object_List<TAPI_Service_Info__>)
@@ -337,14 +337,15 @@ type
     procedure SaveToStream(d: TDFE);
     procedure LoadFromStream(d: TDFE);
     function Find_API(appName, apiName: TAPI_String): Boolean;
+    function Find_APP(appName: TAPI_String): Boolean;
   end;
 
   { * TC40_API_HUB_Service_SendTunnel_NoAuth
-    * Simple user‑defined object for the send‑tunnel side; holds a back‑
-    * reference to the owning service for housekeeping. }
+    * User-defined object for the send-tunnel side; holds a back-reference
+    * to the owning service for housekeeping. }
   TC40_API_HUB_Service_SendTunnel_NoAuth = class(TService_SendTunnel_UserDefine_NoAuth)
   public
-    API_HUB_Service: TC40_API_HUB_Service; // Owning service instance.
+    API_HUB_Service: TC40_API_HUB_Service;
     constructor Create(Owner_: TPeerIO); override;
     destructor Destroy; override;
   end;
@@ -357,7 +358,7 @@ type
     * Routing logic:
     *   1. For a 'Call' or 'Notify', the service extracts the target application
     *      name and the API name.
-    *   2. It first tries to find a local (same‑process) API Hub client using
+    *   2. It first tries to find a local (same-process) API Hub client using
     *      Find_Local_API_Hub – if found, the request is executed locally
     *      (bypassing the network) for optimal performance.
     *   3. Otherwise, it scans all connected clients (including those on other
@@ -371,21 +372,21 @@ type
     *   // Clients can then connect and register their applications. }
   TC40_API_HUB_Service = class(TC40_Base_NoAuth_Service)
   private
-    FDelay_Broadcast_API_Info_Time: TTimeTick; // Time when the next broadcast is allowed.
-    FNeed_Broadcast_API_Info: Boolean; // Flag indicating a broadcast is pending.
+    FDelay_Broadcast_API_Info_Time: TTimeTick; // Earliest time when the next broadcast is allowed
+    FNeed_Broadcast_API_Info: Boolean; // Flag indicating a broadcast is pending
     procedure Do_Delay_Broadcast_API_Info;
   protected
     procedure DoLinkSuccess_Event(Sender: TDTService_NoAuth; UserDefineIO: TService_RecvTunnel_UserDefine_NoAuth); override;
     procedure DoUserOut_Event(Sender: TDTService_NoAuth; UserDefineIO: TService_RecvTunnel_UserDefine_NoAuth); override;
 
     { * cmd_Init_APP_Info
-      * Registers an application from a client.  Reads the application name,
+      * Registers an application from a client. Reads the application name,
       * description, process info and a list of API names, and stores them in
-      * the receive‑tunnel user object for later routing.
+      * the receive-tunnel user object for later routing.
       *
       * @Param Sender:   The bridge that contains the incoming data.
       * @Param InData:   DFE containing: appName, appDesc, processInfo, and a
-      *                  Pascal‑string list of API names.
+      *                  Pascal-string list of API names.
       * @Param OutData:  Unused (this command expects no reply).
       *
       * @Example (client side):
@@ -403,8 +404,8 @@ type
     procedure cmd_No_App_Info(Sender: TPeerIO; InData: SystemString);
 
     { * cmd_Thread_State
-      * Receives runtime thread‑count updates from a client.  These are used
-      * for load‑aware routing: the service may prefer clients with lower
+      * Receives runtime thread-count updates from a client. These are used
+      * for load-aware routing: the service may prefer clients with lower
       * thread load when multiple match the target app.
       *
       * @Param Sender:   The peer I/O that sent the command.
@@ -413,19 +414,19 @@ type
     procedure cmd_Thread_State(Sender: TPeerIO; InData: TDFE);
 
     { * Do_Run_Notify_Th
-      * Background thread worker that executes a local notification.  Runs inside
-      * a THPC_StreamNotify context.  It decodes the incoming DFE to retrieve the
-      * target application name and the payload, finds the local TAPI_APP from the
-      * thread's UserObject, and executes the notification.
+      * Background thread worker that executes a local notification. Runs inside
+      * a THPC_StreamNotify context. Decodes the incoming DFE to retrieve the
+      * target application name and the payload, finds the local TAPI_APP from
+      * the thread's UserObject, and executes the notification.
       *
       * @Param thSender:  The HPC thread object containing the UserObject (TAPI_APP).
       * @Param ThInData:  DFE containing: appName and a TMem64 payload. }
     procedure Do_Run_Notify_Th(thSender: THPC_StreamNotify; ThInData: TDFE);
 
     { * cmd_Notify
-      * Handles an incoming notification from a client.  Extracts the target
+      * Handles an incoming notification from a client. Extracts the target
       * application name and payload, then routes it to a matching local or
-      * remote client.  If a local API Hub client matches, the notification is
+      * remote client. If a local API Hub client matches, the notification is
       * executed directly in a background thread; otherwise it is forwarded to
       * the appropriate service instance/client.
       *
@@ -434,8 +435,8 @@ type
     procedure cmd_Notify(Sender: TPeerIO; InData: TDFE);
 
     { * Do_Run_Call_Th
-      * Background thread worker that executes a synchronous call locally.  Runs
-      * inside a THPC_CompleteBuffer_Stream context.  It decodes the incoming DFE
+      * Background thread worker that executes a synchronous call locally. Runs
+      * inside a THPC_CompleteBuffer_Stream context. Decodes the incoming DFE
       * to get the target application and payload, invokes the local API, and
       * writes the result back into ThOutData.
       *
@@ -445,9 +446,9 @@ type
     procedure Do_Run_Call_Th(thSender: THPC_CompleteBuffer_Stream; ThInData, ThOutData: TDFE);
 
     { * cmd_Call
-      * Handles an incoming synchronous call from a client.  Extracts the target
+      * Handles an incoming synchronous call from a client. Extracts the target
       * app and payload, attempts local execution (via Find_Local_API_Hub) or
-      * forwards to a matching remote client.  If a remote client is found, the
+      * forwards to a matching remote client. If a remote client is found, the
       * call is forwarded and the result is returned via the bridge (the caller
       * waits for the response).
       *
@@ -469,12 +470,12 @@ type
 
     { * Find_API
       * Searches all connected clients (receive tunnels) for one that hosts the
-      * specified application and exposes the given API name.  Wildcards are
+      * specified application and exposes the given API name. Wildcards are
       * supported in appName (e.g., '*' matches any).
       *
-      * @Param appName   Application name to match (case‑sensitive, supports wildcards).
+      * @Param appName   Application name to match (case-sensitive, supports wildcards).
       * @Param apiName   Exact API name to look for.
-      * @Returns         The receive‑tunnel user object of the first matching
+      * @Returns         The receive-tunnel user object of the first matching
       *                  client, or nil if none found.
       *
       * @Example:
@@ -486,9 +487,9 @@ type
   end;
 
   { * TC40_API_HUB_Client
-    * Client‑side component that connects to a TC40_API_HUB_Service.  It can host
+    * Client-side component that connects to a TC40_API_HUB_Service. It can host
     * a local TAPI_APP (set via APP property) and provides methods to send
-    * notifications and calls to remote or local applications.  The client
+    * notifications and calls to remote or local applications. The client
     * automatically registers its application with the service upon connection.
     *
     * @Example:
@@ -505,14 +506,14 @@ type
     *   // Result contains the response TMem64. }
   TC40_API_HUB_Client = class(TC40_Base_NoAuth_Client)
   private
-    Last_Selected_Time: TTimeTick;
+    Last_Selected_Time: TTimeTick; // timestamp of last selection for load balancing
   protected
-    FService_Info: TAPI_Service_Info_Pool__; // Cached service info received from the hub.
-    FHost_Running_Thread_Num: TAtomInt32; // Number of active threads handling incoming calls/notifications.
-    FWait_Reponse_Thread_Num: TAtomInt32; // Number of threads waiting for remote call responses.
-    FLast_Update_Thread_State_TimeTick: TTimeTick; // Last time thread state was sent to the service (for throttling).
-    FAPP: TAPI_APP; // The local application to be registered.
-    FAPI_APP_Is_Online: Boolean; // True after successful registration with the service.
+    FService_Info: TAPI_Service_Info_Pool__; // Cached service info received from the hub
+    FHost_Running_Thread_Num: TAtomInt32; // Number of active threads handling incoming calls/notifications
+    FWait_Reponse_Thread_Num: TAtomInt32; // Number of threads waiting for remote call responses
+    FLast_Update_Thread_State_TimeTick: TTimeTick; // Last time thread state was sent to the service (throttling)
+    FAPP: TAPI_APP; // The local application to be registered
+    FAPI_APP_Is_Online: Boolean; // True after successful registration with the service
 
     procedure Do_DT_P2PVM_NoAuth_Custom_Client_TunnelLink(Sender: TDT_P2PVM_NoAuth_Custom_Client); override;
 
@@ -522,7 +523,7 @@ type
     procedure cmd_update_service_api_info(Sender: TPeerIO; InData: PByte; DataSize: NativeInt);
 
     { * Do_Notify
-      * Background thread worker for executing a local notification.  It maps the
+      * Background thread worker for executing a local notification. Maps the
       * raw input buffer to a TMem64 and invokes Execute_Notify on the local APP.
       *
       * @Param thSender:   HPC thread context.
@@ -541,7 +542,7 @@ type
     procedure cmd_Notify(Sender: TPeerIO; InData: PByte; DataSize: NativeInt);
 
     { * cmd_Call
-      * Handler for incoming 'Call' commands.  Decodes the request, executes the
+      * Handler for incoming 'Call' commands. Decodes the request, executes the
       * local API call synchronously (in the main thread), and writes the result
       * back to OutData.
       *
@@ -562,14 +563,14 @@ type
     property Service_Info: TAPI_Service_Info_Pool__ read FService_Info; // Cached service info.
 
     { * Update_LocalThread_State_To_Service
-      * Sends the current thread‑count statistics (Host_Running_Thread_Num and
-      * Wait_Reponse_Thread_Num) to the service.  The service can use these for
-      * load‑aware routing.  This is called automatically every second while
+      * Sends the current thread-count statistics (Host_Running_Thread_Num and
+      * Wait_Reponse_Thread_Num) to the service. The service can use these for
+      * load-aware routing. This is called automatically every second while
       * the client is online. }
     procedure Update_LocalThread_State_To_Service;
 
     { * Init_App_Info
-      * Sends the current application registration to the service.  This is
+      * Sends the current application registration to the service. This is
       * called automatically when the tunnel is linked and APP is set.
       * You may call it manually after changing APP.
       *
@@ -578,7 +579,7 @@ type
     procedure Init_App_Info;
 
     { * Do_Init_App_Info_Result
-      * Callback for the 'Init_APP_Info' command's response.  Sets the online
+      * Callback for the 'Init_APP_Info' command's response. Sets the online
       * flag to True, indicating the registration was successful.
       *
       * @Param Sender:   The peer I/O that sent the response.
@@ -588,19 +589,19 @@ type
     property API_APP_Is_Online: Boolean read FAPI_APP_Is_Online; // True if registration is complete.
 
     { * Set_API_APP
-      * Binds a local application to this client.  The client will automatically
+      * Binds a local application to this client. The client will automatically
       * register the app's APIs with the service upon connection (or immediately
       * if already connected).
       *
-      * @Param Value:  A TAPI_APP instance (must have a non‑empty Name). }
+      * @Param Value:  A TAPI_APP instance (must have a non-empty Name). }
     procedure Set_API_APP(const Value: TAPI_APP);
     property APP: TAPI_APP read FAPP write Set_API_APP;
 
     { * Send_Execute_Notify___
-      * Sends a one‑way notification to the specified application.  The
-      * notification is delivered asynchronously; no response is expected.
-      * If the target application matches the local one (or another local
-      * client), execution is performed locally without network overhead.
+      * Internal method that sends a one-way notification to the specified
+      * application. The notification is delivered asynchronously; no response
+      * is expected. If the target application matches the local one (or another
+      * local client), execution is performed locally without network overhead.
       *
       * @Param appName  Target application name (wildcards supported).
       * @Param Param    Binary payload (will be consumed; a clone is sent if
@@ -616,8 +617,8 @@ type
 
     { * Wait_Execute_Call___
       * Performs a synchronous call to the specified application and waits for
-      * the result.  If the target application is local, the call is executed
-      * directly.  Otherwise, a request is sent to the service and the call
+      * the result. If the target application is local, the call is executed
+      * directly. Otherwise, a request is sent to the service and the call
       * blocks until the response arrives or the timeout expires.
       *
       * @Param appName   Target application name (wildcards supported).
@@ -642,82 +643,46 @@ type
 
   { * TCall_Bridge__
     * Internal helper used by Wait_Execute_Call to capture the asynchronous
-    * result from a complete‑buffer stream response.  It holds an output
-    * TMem64 and a flag indicating whether the call is still pending. }
+    * result from a complete-buffer stream response. Holds an output TMem64
+    * and a flag indicating whether the call is still pending. }
   TCall_Bridge__ = class
   private
-    Cli: TC40_API_HUB_Client; // Back reference to the client (unused).
-    Output: TMem64; // Buffer for the result.
-    IsRunning: Boolean; // True while waiting for the response.
-    Error_: Boolean; // True if the response indicates an error.
-    procedure Do_Result(Sender: TPeerIO; Result_: TDFE); // Called when the response arrives.
+    Cli: TC40_API_HUB_Client; // Back reference to the client
+    Output: TMem64; // Buffer for the result
+    IsRunning: Boolean; // True while waiting for the response
+    Error_: Boolean; // True if the response indicates an error
+    procedure Do_Result(Sender: TPeerIO; Result_: TDFE); // Called when the response arrives
   public
     constructor Create;
     destructor Destroy; override;
   end;
 
-function Find_Local_API_Hub(appName, apiName: TAPI_String): TC40_API_HUB_Client;
-function Find_Remote_API_Hub(appName, apiName: TAPI_String): TC40_API_HUB_Client;
+function Find_Local_APP_Hub(appName: TAPI_String; Update_Selected_Time: Boolean): TC40_API_HUB_Client;
+function Find_Remote_APP_Hub(appName: TAPI_String; Update_Selected_Time: Boolean): TC40_API_HUB_Client;
+function Find_Local_API_Hub(appName, apiName: TAPI_String; Update_Selected_Time: Boolean): TC40_API_HUB_Client;
+function Find_Remote_API_Hub(appName, apiName: TAPI_String; Update_Selected_Time: Boolean): TC40_API_HUB_Client;
 
 implementation
 
 {$I Z.System_ProcessID.inc} // Include file that provides MakeProcessName() function.
 
+var
+  Find_Hub_Safe_Critical: TCritical = nil; // Critical section protecting Find_*_Hub functions
+
 function Do_Cmp_Last_Selected_Time(var L, R: TC40_API_HUB_Client): Integer;
+{ * Comparison function for sorting TC40_API_HUB_Client by Last_Selected_Time.
+  * Used to implement load balancing by selecting the least recently used client. }
 begin
   Result := CompareUInt64(L.Last_Selected_Time, R.Last_Selected_Time);
 end;
 
-{ * Find_Local_API_Hub – Implementation
-  * Iterates over all TC40_API_HUB_Client objects in the global C40_ClientPool
-  * and checks if each has a valid APP whose Name matches appName (using
-  * umlMultipleMatch for wildcard support) and whose API pool contains the
-  * given apiName.  Returns the first matching client.  If multiple clients
-  * match, it sorts them by thread load (lowest first) and returns the
-  * least loaded one.
+function Find_Local_APP_Hub(appName: TAPI_String; Update_Selected_Time: Boolean): TC40_API_HUB_Client;
+{ * Finds a local application hub client (same process) that hosts the given
+  * application name. Wildcards are supported.
   *
   * @Param appName: Target application name (wildcard allowed).
-  * @Param apiName: Exact API name to look for.
+  * @Param Update_Selected_Time: If True, updates Last_Selected_Time of the found client.
   * @Returns: The matching TC40_API_HUB_Client, or nil if none found. }
-function Find_Local_API_Hub(appName, apiName: TAPI_String): TC40_API_HUB_Client;
-var
-  arry: TC40_Custom_Client_Array; // Array of all C4 clients.
-  i: Integer;
-  Cli: TC40_API_HUB_Client;
-  L: TC40_API_HUB_Client_List; // Temporary list for sorting.
-begin
-  Result := nil;
-  L := TC40_API_HUB_Client_List.Create;
-
-  // Get all TC40_API_HUB_Client instances from the global pool.
-  arry := C40_ClientPool.SearchClass(TC40_API_HUB_Client);
-
-  for i := 0 to length(arry) - 1 do
-    begin
-      Cli := arry[i] as TC40_API_HUB_Client;
-      // Skip clients that do not have an application assigned.
-      if Cli.APP <> nil then
-        begin
-          // Check if the app name matches (wildcard) and the API exists.
-          if umlMultipleMatch(appName.Text, Cli.APP.Name.Text) and Cli.APP.API.API_Pool.Exists_Key(apiName) then
-              L.Add(Cli);
-        end;
-    end;
-  // Sort by load (lowest first) and return the first.
-  L.Sort_C(Do_Cmp_Last_Selected_Time);
-  if L.Num > 0 then
-    begin
-      Result := L.First^.Data;
-      Result.Last_Selected_Time := GetTimeTick();
-    end;
-
-  DisposeObject(L);
-end;
-
-{ * Find_Remote_API_Hub – Similar to Find_Local_API_Hub but searches using the
-  * service‑info cache (FService_Info) rather than local APP objects.
-  * This is used for remote clients that are not in the same process. }
-function Find_Remote_API_Hub(appName, apiName: TAPI_String): TC40_API_HUB_Client;
 var
   arry: TC40_Custom_Client_Array;
   i: Integer;
@@ -726,45 +691,179 @@ var
 begin
   Result := nil;
   L := TC40_API_HUB_Client_List.Create;
-  // Get all TC40_API_HUB_Client instances from the global pool.
-  arry := C40_ClientPool.SearchClass(TC40_API_HUB_Client, True);
-  // Search by service info.
-  for i := 0 to length(arry) - 1 do
-    begin
-      Cli := arry[i] as TC40_API_HUB_Client;
-      if Cli.Service_Info.Find_API(appName, apiName) then
-          L.Add(Cli);
-    end;
+
+  Find_Hub_Safe_Critical.Lock;
+  try
+    arry := C40_ClientPool.SearchClass(TC40_API_HUB_Client);
+    for i := 0 to length(arry) - 1 do
+      begin
+        Cli := arry[i] as TC40_API_HUB_Client;
+        if Cli.APP <> nil then
+          begin
+            if umlMultipleMatch(appName.Text, Cli.APP.Name.Text) then
+                L.Add(Cli);
+          end;
+      end;
+  finally
+      Find_Hub_Safe_Critical.UnLock;
+  end;
+
   L.Sort_C(Do_Cmp_Last_Selected_Time);
   if L.Num > 0 then
     begin
       Result := L.First^.Data;
-      Result.Last_Selected_Time := GetTimeTick();
+      if Update_Selected_Time then
+          Result.Last_Selected_Time := GetTimeTick();
     end;
 
   DisposeObject(L);
 end;
 
-{ * TC40_API_HUB_Service_RecvTunnel_NoAuth
-  * Constructor: initializes the API info hash list. }
+function Find_Remote_APP_Hub(appName: TAPI_String; Update_Selected_Time: Boolean): TC40_API_HUB_Client;
+{ * Finds a remote application hub client (different process) that hosts the given
+  * application name. Wildcards are supported.
+  *
+  * @Param appName: Target application name (wildcard allowed).
+  * @Param Update_Selected_Time: If True, updates Last_Selected_Time of the found client.
+  * @Returns: The matching TC40_API_HUB_Client, or nil if none found. }
+var
+  arry: TC40_Custom_Client_Array;
+  i: Integer;
+  Cli: TC40_API_HUB_Client;
+  L: TC40_API_HUB_Client_List;
+begin
+  Result := nil;
+  L := TC40_API_HUB_Client_List.Create;
+
+  Find_Hub_Safe_Critical.Lock;
+  try
+    arry := C40_ClientPool.SearchClass(TC40_API_HUB_Client, True);
+    for i := 0 to length(arry) - 1 do
+      begin
+        Cli := arry[i] as TC40_API_HUB_Client;
+        if Cli.Service_Info.Find_APP(appName) then
+            L.Add(Cli);
+      end;
+  finally
+      Find_Hub_Safe_Critical.UnLock;
+  end;
+
+  L.Sort_C(Do_Cmp_Last_Selected_Time);
+  if L.Num > 0 then
+    begin
+      Result := L.First^.Data;
+      if Update_Selected_Time then
+          Result.Last_Selected_Time := GetTimeTick();
+    end;
+
+  DisposeObject(L);
+end;
+
+function Find_Local_API_Hub(appName, apiName: TAPI_String; Update_Selected_Time: Boolean): TC40_API_HUB_Client;
+{ * Finds a local application hub client that hosts the given application name
+  * AND exports the specified API. Wildcards are supported for appName.
+  *
+  * @Param appName: Target application name (wildcard allowed).
+  * @Param apiName: Exact API name to look for.
+  * @Param Update_Selected_Time: If True, updates Last_Selected_Time of the found client.
+  * @Returns: The matching TC40_API_HUB_Client, or nil if none found. }
+var
+  arry: TC40_Custom_Client_Array;
+  i: Integer;
+  Cli: TC40_API_HUB_Client;
+  L: TC40_API_HUB_Client_List;
+begin
+  Result := nil;
+  L := TC40_API_HUB_Client_List.Create;
+
+  Find_Hub_Safe_Critical.Lock;
+  try
+    arry := C40_ClientPool.SearchClass(TC40_API_HUB_Client);
+    for i := 0 to length(arry) - 1 do
+      begin
+        Cli := arry[i] as TC40_API_HUB_Client;
+        if Cli.APP <> nil then
+          begin
+            if umlMultipleMatch(appName.Text, Cli.APP.Name.Text) and Cli.APP.API.API_Pool.Exists_Key(apiName) then
+                L.Add(Cli);
+          end;
+      end;
+  finally
+      Find_Hub_Safe_Critical.UnLock;
+  end;
+
+  L.Sort_C(Do_Cmp_Last_Selected_Time);
+  if L.Num > 0 then
+    begin
+      Result := L.First^.Data;
+      if Update_Selected_Time then
+          Result.Last_Selected_Time := GetTimeTick();
+    end;
+
+  DisposeObject(L);
+end;
+
+function Find_Remote_API_Hub(appName, apiName: TAPI_String; Update_Selected_Time: Boolean): TC40_API_HUB_Client;
+{ * Finds a remote application hub client that hosts the given application name
+  * AND exports the specified API. Wildcards are supported for appName.
+  *
+  * @Param appName: Target application name (wildcard allowed).
+  * @Param apiName: Exact API name to look for.
+  * @Param Update_Selected_Time: If True, updates Last_Selected_Time of the found client.
+  * @Returns: The matching TC40_API_HUB_Client, or nil if none found. }
+var
+  arry: TC40_Custom_Client_Array;
+  i: Integer;
+  Cli: TC40_API_HUB_Client;
+  L: TC40_API_HUB_Client_List;
+begin
+  Result := nil;
+  L := TC40_API_HUB_Client_List.Create;
+
+  Find_Hub_Safe_Critical.Lock;
+  try
+    arry := C40_ClientPool.SearchClass(TC40_API_HUB_Client, True);
+    for i := 0 to length(arry) - 1 do
+      begin
+        Cli := arry[i] as TC40_API_HUB_Client;
+        if Cli.Service_Info.Find_API(appName, apiName) then
+            L.Add(Cli);
+      end;
+  finally
+      Find_Hub_Safe_Critical.UnLock;
+  end;
+
+  L.Sort_C(Do_Cmp_Last_Selected_Time);
+  if L.Num > 0 then
+    begin
+      Result := L.First^.Data;
+      if Update_Selected_Time then
+          Result.Last_Selected_Time := GetTimeTick();
+    end;
+
+  DisposeObject(L);
+end;
+
+{ * TC40_API_HUB_Service_RecvTunnel_NoAuth }
 constructor TC40_API_HUB_Service_RecvTunnel_NoAuth.Create(Owner_: TPeerIO);
+{ * Initializes the API info hash list. }
 begin
   inherited Create(Owner_);
-  API_HUB_Service := nil; // Will be set later by the service.
-  APP_Name := ''; // Initially empty.
+  API_HUB_Service := nil;
+  APP_Name := '';
   APP_Desc := '';
   APP_Process_Info := '';
-  api_info_data := THashList.Create; // Create the list for API names.
+  api_info_data := THashList.Create;
   Host_Running_Thread_Num := 0;
   Wait_Reponse_Thread_Num := 0;
   Is_Local := False;
   Last_Selected_Time := 0;
 end;
 
-{ * Destructor: frees the API info list. }
 destructor TC40_API_HUB_Service_RecvTunnel_NoAuth.Destroy;
+{ * Frees the API info hash list. }
 begin
-  DisposeObject(api_info_data); // Free the hash list.
+  DisposeObject(api_info_data);
   inherited Destroy;
 end;
 
@@ -788,6 +887,7 @@ begin
 end;
 
 procedure TAPI_Service_Info__.Assign(source: TC40_API_HUB_Service_RecvTunnel_NoAuth);
+{ * Copies registration data from a receive-tunnel user object. }
 begin
   APP_Name := source.APP_Name;
   APP_Desc := source.APP_Desc;
@@ -799,6 +899,7 @@ begin
 end;
 
 procedure TAPI_Service_Info__.SaveToStream(stream: TCore_Stream);
+{ * Serializes this service info to a stream using DFE encoding. }
 var
   d: TDFE;
   pl: TPascalStringList;
@@ -818,11 +919,11 @@ begin
   d.WriteBool(Is_Local);
 
   d.FastEncodeTo(stream);
-
   DisposeObject(d);
 end;
 
 procedure TAPI_Service_Info__.LoadFromStream(stream: TCore_Stream);
+{ * Deserializes service info from a stream. }
 var
   d: TDFE;
   pl: TPascalStringList;
@@ -851,7 +952,7 @@ end;
 { * TAPI_Service_Info_Pool__ Implementation }
 constructor TAPI_Service_Info_Pool__.Create;
 begin
-  inherited Create(True); // Auto‑free objects.
+  inherited Create(True);
 end;
 
 destructor TAPI_Service_Info_Pool__.Destroy;
@@ -860,6 +961,8 @@ begin
 end;
 
 procedure TAPI_Service_Info_Pool__.Build_Info_Form(Inst: TC40_API_HUB_Service_RecvTunnel_NoAuth);
+{ * Builds a snapshot entry from a client's registration data.
+  * Only adds the entry if the client has at least one registered API. }
 var
   tmp: TAPI_Service_Info__;
 begin
@@ -872,6 +975,7 @@ begin
 end;
 
 procedure TAPI_Service_Info_Pool__.SaveToStream(d: TDFE);
+{ * Saves the entire pool to a DFE stream. }
 var
   m64: TMS64;
 begin
@@ -889,6 +993,7 @@ begin
 end;
 
 procedure TAPI_Service_Info_Pool__.LoadFromStream(d: TDFE);
+{ * Loads the pool from a DFE stream. }
 var
   m64: TMS64;
   Inst: TAPI_Service_Info__;
@@ -910,6 +1015,7 @@ begin
 end;
 
 function TAPI_Service_Info_Pool__.Find_API(appName, apiName: TAPI_String): Boolean;
+{ * Checks if any entry has the given appName and exports the given API. }
 begin
   Result := False;
   if Num <= 0 then exit;
@@ -923,11 +1029,26 @@ begin
     until not Next;
 end;
 
+function TAPI_Service_Info_Pool__.Find_APP(appName: TAPI_String): Boolean;
+{ * Checks if any entry has the given appName (regardless of APIs). }
+begin
+  Result := False;
+  if Num <= 0 then exit;
+  with repeat_ do
+    repeat
+      if appName.Same(queue^.Data.APP_Name) then
+        begin
+          Result := True;
+          exit;
+        end;
+    until not Next;
+end;
+
 { * TC40_API_HUB_Service_SendTunnel_NoAuth }
 constructor TC40_API_HUB_Service_SendTunnel_NoAuth.Create(Owner_: TPeerIO);
 begin
   inherited Create(Owner_);
-  API_HUB_Service := nil; // Will be set later.
+  API_HUB_Service := nil;
 end;
 
 destructor TC40_API_HUB_Service_SendTunnel_NoAuth.Destroy;
@@ -938,130 +1059,115 @@ end;
 { TC40_API_HUB_Service }
 
 procedure TC40_API_HUB_Service.Do_Delay_Broadcast_API_Info;
+{ * Schedules a broadcast of API info after a 2-second delay.
+  * This coalesces multiple registration changes into a single broadcast. }
 begin
-  FDelay_Broadcast_API_Info_Time := GetTimeTick() + 2000; // Broadcast in 2 seconds.
+  FDelay_Broadcast_API_Info_Time := GetTimeTick() + 2000;
   FNeed_Broadcast_API_Info := True;
 end;
 
-{ * DoLinkSuccess_Event
-  * Overridden to set the back references in the receive and send tunnel user
-  * objects to the owning service instance. }
 procedure TC40_API_HUB_Service.DoLinkSuccess_Event(Sender: TDTService_NoAuth;
   UserDefineIO: TService_RecvTunnel_UserDefine_NoAuth);
+{ * Sets back-references in the receive and send tunnel user objects. }
 var
   user_io: TC40_API_HUB_Service_RecvTunnel_NoAuth;
 begin
   inherited DoLinkSuccess_Event(Sender, UserDefineIO);
   user_io := UserDefineIO as TC40_API_HUB_Service_RecvTunnel_NoAuth;
-  user_io.API_HUB_Service := Self; // Set back reference for receive tunnel.
-  // Also set back reference for the corresponding send tunnel.
+  user_io.API_HUB_Service := Self;
   (user_io.SendTunnel as TC40_API_HUB_Service_SendTunnel_NoAuth).API_HUB_Service := Self;
 end;
 
-{ * DoUserOut_Event
-  * Overridden; no extra logic needed because the user object will be freed
-  * automatically when the connection drops. }
 procedure TC40_API_HUB_Service.DoUserOut_Event(Sender: TDTService_NoAuth;
   UserDefineIO: TService_RecvTunnel_UserDefine_NoAuth);
+{ * Overridden; no extra logic needed because the user object will be freed
+  * automatically when the connection drops. }
 begin
   inherited DoUserOut_Event(Sender, UserDefineIO);
 end;
 
-{ * cmd_Init_APP_Info
-  * Reads the registration data from the client and stores it in the receive‑
-  * tunnel user object for future routing. }
 procedure TC40_API_HUB_Service.cmd_Init_APP_Info(Sender: TCommandCompleteBuffer_NoWait_Bridge; InData, OutData: TDFE);
+{ * Registers an application from a client. Stores the registration data
+  * in the receive-tunnel user object for future routing.
+  * The registration contains: app name, description, process info,
+  * a list of API names, and a local flag. }
 var
   user_io: TC40_API_HUB_Service_RecvTunnel_NoAuth;
   L: TPascalStringList;
   i: Integer;
 begin
-  // Obtain the receive‑tunnel user object for the client that sent the command.
   user_io := DTNoAuthService.GetUserDefineRecvTunnel(Sender.R_IO) as TC40_API_HUB_Service_RecvTunnel_NoAuth;
   if user_io = nil then
       exit;
 
-  // Extract the registration fields from the DFE.
   user_io.APP_Name := InData.R.ReadString;
   user_io.APP_Desc := InData.R.ReadString;
   user_io.APP_Process_Info := InData.R.ReadString;
 
-  // Clear any previous API list and read the new list.
   user_io.api_info_data.Clear;
   L := TPascalStringList.Create;
   InData.R.ReadPascalStrings(L);
   for i := 0 to L.Count - 1 do
-      user_io.api_info_data.Add(L[i], nil, False); // Store API names as keys.
+      user_io.api_info_data.Add(L[i], nil, False);
   DisposeObject(L);
 
   user_io.Is_Local := InData.R.ReadBool;
 
-  Do_Delay_Broadcast_API_Info(); // Schedule a broadcast of the updated service info.
+  Do_Delay_Broadcast_API_Info();
 end;
 
 procedure TC40_API_HUB_Service.cmd_No_App_Info(Sender: TPeerIO; InData: SystemString);
+{ * Handles a client that has no application to register (or an empty app).
+  * Clears the registration data and schedules a broadcast. }
 var
   user_io: TC40_API_HUB_Service_RecvTunnel_NoAuth;
 begin
-  // Obtain the receive‑tunnel user object for the client that sent the command.
   user_io := DTNoAuthService.GetUserDefineRecvTunnel(Sender) as TC40_API_HUB_Service_RecvTunnel_NoAuth;
   if user_io = nil then
       exit;
 
-  // Extract the registration fields from the DFE.
   user_io.APP_Name := '';
   user_io.APP_Desc := '';
   user_io.APP_Process_Info := InData;
-  // Clear any previous API list and read the new list.
   user_io.api_info_data.Clear;
   user_io.Host_Running_Thread_Num := 0;
   user_io.Wait_Reponse_Thread_Num := 0;
   user_io.Is_Local := False;
 
-  Do_Delay_Broadcast_API_Info(); // Schedule a broadcast of the updated service info.
+  Do_Delay_Broadcast_API_Info();
 end;
 
-{ * cmd_Thread_State
-  * Receives runtime thread‑count updates from a client and stores them in the
-  * user object for load‑aware routing. }
 procedure TC40_API_HUB_Service.cmd_Thread_State(Sender: TPeerIO; InData: TDFE);
+{ * Receives runtime thread-count updates from a client and stores them in the
+  * user object for load-aware routing. }
 var
   user_io: TC40_API_HUB_Service_RecvTunnel_NoAuth;
 begin
-  // Obtain the receive‑tunnel user object for the client that sent the command.
   user_io := DTNoAuthService.GetUserDefineRecvTunnel(Sender) as TC40_API_HUB_Service_RecvTunnel_NoAuth;
   if user_io = nil then
       exit;
 
-  // Extract the registration fields from the DFE.
   user_io.Host_Running_Thread_Num := InData.R.ReadInteger;
   user_io.Wait_Reponse_Thread_Num := InData.R.ReadInteger;
 end;
 
-{ * Do_Run_Notify_Th
-  * Thread worker: executes a local notification using the TAPI_APP stored in
-  * thSender.UserObject. }
 procedure TC40_API_HUB_Service.Do_Run_Notify_Th(thSender: THPC_StreamNotify; ThInData: TDFE);
+{ * Background thread worker for executing a local notification.
+  * Uses the TAPI_APP stored in thSender.UserObject.
+  * Increments/decrements Host_Running_Thread_Num around the call. }
 var
   tmp_cli__: TC40_API_HUB_Client;
   appName: TAPI_String;
   Param: TMem64;
   apiName: TAPI_String;
 begin
-  // The local application is stored in the thread's UserObject.
   tmp_cli__ := thSender.UserObject as TC40_API_HUB_Client;
 
-  // Read the target application name (not used here because we already matched it).
   appName := ThInData.R.ReadString;
-
-  // Extract the binary payload.
   Param := TMem64.Create;
   ThInData.R.ReadMem64_As_Mapping(Param);
-
-  // Retrieve the API name from the payload (the first field).
   apiName := TMemory_Param_Tool.Get_apiName(Param);
 
-  // Execute the notification synchronously in this thread.
   tmp_cli__.FHost_Running_Thread_Num.UnLock(tmp_cli__.FHost_Running_Thread_Num.LockP^ + 1);
   try
       tmp_cli__.APP.API.Execute_Notify(Param);
@@ -1069,13 +1175,14 @@ begin
       tmp_cli__.FHost_Running_Thread_Num.UnLock(tmp_cli__.FHost_Running_Thread_Num.LockP^ - 1);
   end;
 
-  // Clean up the temporary payload.
   DisposeObject(Param);
 end;
 
-{ * cmd_Notify
-  * Routes an incoming notification to the appropriate destination. }
 procedure TC40_API_HUB_Service.cmd_Notify(Sender: TPeerIO; InData: TDFE);
+{ * Routes an incoming notification to the appropriate destination.
+  * 1) Tries local execution (same process) via Find_Local_API_Hub.
+  * 2) If not found, forwards to other service instances (IPC first, then remote).
+  * 3) Logs an error if no matching destination is found. }
 var
   user_io: TC40_API_HUB_Service_RecvTunnel_NoAuth;
   appName: TAPI_String;
@@ -1084,10 +1191,6 @@ var
   arry: TC40_Custom_Service_Array;
   tmp_cli__: TC40_API_HUB_Client;
 
-  { * Search_API_And_Send
-    * Helper that iterates over an array of service instances, searches for a
-    * matching application/API, and forwards the notification to the first
-    * matching client.  Returns True if forwarding succeeded. }
   function Search_API_And_Send(): Boolean;
   var
     i: Integer;
@@ -1103,8 +1206,6 @@ var
             IO__ := serv.Find_API(appName, apiName);
             if IO__ <> nil then
               begin
-                // Forward the notification as a CompleteBuffer command.
-                // Param.NewClone creates a copy of the TMem64 (the original is disposed later).
                 IO__.SendTunnel.Owner.SendCompleteBuffer('Notify', Param.NewClone, True);
                 Result := True;
                 exit;
@@ -1114,134 +1215,22 @@ var
   end;
 
 begin
-  // Get the user object of the sending client (not strictly needed here).
   user_io := DTNoAuthService.GetUserDefineRecvTunnel(Sender) as TC40_API_HUB_Service_RecvTunnel_NoAuth;
 
-  // Read the target application name and the payload.
   appName := InData.R.ReadString;
   Param := TMem64.Create;
   InData.R.ReadMem64_As_Mapping(Param);
   apiName := TMemory_Param_Tool.Get_apiName(Param);
 
-  // First, try to find a local API Hub (same process) to execute directly.
-  tmp_cli__ := Find_Local_API_Hub(appName, apiName);
+  tmp_cli__ := Find_Local_API_Hub(appName, apiName, True);
   if tmp_cli__ <> nil then
     begin
-      // Reset the DFE reader to the beginning and execute in a background thread.
       InData.R.Index := 0;
       DisposeObject(Param);
       RunHPC_StreamNotifyM(Sender, nil, tmp_cli__, InData, Do_Run_Notify_Th);
       exit;
     end;
 
-  // If no local app found, search other service instances.
-  try
-    // Search only IPC (same‑machine) service instances first for efficiency.
-    arry := Z.Net.C4.C40_ServicePool.GetFromClass(TC40_API_HUB_Service, True);
-    if Search_API_And_Send then
-        exit;
-
-    // If not found, search all service instances (including remote).
-    arry := Z.Net.C4.C40_ServicePool.GetFromClass(TC40_API_HUB_Service, False);
-    if Search_API_And_Send then
-        exit;
-
-    // No matching destination found; log an error.
-    DoStatus('no found app("%s") api("%s")', [appName.Text, apiName.Text]);
-  finally
-    DisposeObject(Param);
-    SetLength(arry, 0); // Free the array.
-  end;
-end;
-
-{ * Do_Run_Call_Th
-  * Thread worker that executes a local synchronous call. }
-procedure TC40_API_HUB_Service.Do_Run_Call_Th(thSender: THPC_CompleteBuffer_Stream; ThInData, ThOutData: TDFE);
-var
-  tmp_cli__: TC40_API_HUB_Client;
-  appName: TAPI_String;
-  Param, Output: TMem64;
-  apiName: TAPI_String;
-begin
-  tmp_cli__ := thSender.UserObject as TC40_API_HUB_Client;
-  appName := ThInData.R.ReadString;
-  Param := TMem64.Create;
-  ThInData.R.ReadMem64_As_Mapping(Param);
-  apiName := TMemory_Param_Tool.Get_apiName(Param);
-
-  // Execute the call and get the result TMem64.
-  tmp_cli__.FHost_Running_Thread_Num.UnLock(tmp_cli__.FHost_Running_Thread_Num.LockP^ + 1);
-  try
-      Output := tmp_cli__.APP.API.Execute_Call(Param);
-  finally
-      tmp_cli__.FHost_Running_Thread_Num.UnLock(tmp_cli__.FHost_Running_Thread_Num.LockP^ - 1);
-  end;
-  DisposeObject(Param);
-
-  // Write the result into the output DFE.
-  ThOutData.WriteMem64(Output);
-  DisposeObject(Output);
-end;
-
-{ * cmd_Call
-  * Routes an incoming synchronous call. }
-procedure TC40_API_HUB_Service.cmd_Call(Sender: TCommandCompleteBuffer_NoWait_Bridge; InData, OutData: TDFE);
-var
-  appName: TAPI_String;
-  Param, Output: TMem64;
-  apiName: TAPI_String;
-  arry: TC40_Custom_Service_Array;
-  tmp_cli__: TC40_API_HUB_Client;
-
-  { * Search_API_And_Send
-    * Helper that forwards the call to a matching client.  It uses a
-    * TCompleteBuffer_Stream_Event_Bridge to capture the result and return it
-    * via the original bridge (Sender).  Returns True if forwarding succeeded. }
-  function Search_API_And_Send(): Boolean;
-  var
-    i: Integer;
-    serv: TC40_API_HUB_Service;
-    IO__: TC40_API_HUB_Service_RecvTunnel_NoAuth;
-  begin
-    Result := False;
-    if length(arry) > 0 then
-      begin
-        for i := 0 to length(arry) - 1 do
-          begin
-            serv := arry[i] as TC40_API_HUB_Service;
-            IO__ := serv.Find_API(appName, apiName);
-            if IO__ <> nil then
-              begin
-                // Forward the 'Call' command to the matching client.
-                // The result will be sent back to the original sender via the bridge.
-                IO__.SendTunnel.Owner.SendCompleteBuffer_NoWait_StreamM('Call', InData,
-                  TCompleteBuffer_Stream_Event_Bridge.Create(Sender, True).DoStreamEvent);
-                Result := True;
-                exit;
-              end;
-          end;
-      end;
-  end;
-
-begin
-  // Read the target app and payload.
-  appName := InData.R.ReadString;
-  Param := TMem64.Create;
-  InData.R.ReadMem64_As_Mapping(Param);
-  apiName := TMemory_Param_Tool.Get_apiName(Param);
-  InData.R.Index := 0; // Reset for re‑use if forwarded.
-
-  // Try local execution first.
-  tmp_cli__ := Find_Local_API_Hub(appName, apiName);
-  if tmp_cli__ <> nil then
-    begin
-      DisposeObject(Param);
-      // Offload to a background thread to avoid blocking the main loop.
-      RunHPC_CompleteBuffer_StreamM(Sender, nil, tmp_cli__, InData, OutData, Do_Run_Call_Th);
-      exit;
-    end;
-
-  // Otherwise, forward to other service instances.
   try
     arry := Z.Net.C4.C40_ServicePool.GetFromClass(TC40_API_HUB_Service, True);
     if Search_API_And_Send then
@@ -1258,14 +1247,108 @@ begin
   end;
 end;
 
-{ * TC40_API_HUB_Service.Create
-  * Constructor: sets up the service with custom user‑defined classes, configures
-  * buffer sizes, and registers the command handlers. }
+procedure TC40_API_HUB_Service.Do_Run_Call_Th(thSender: THPC_CompleteBuffer_Stream; ThInData, ThOutData: TDFE);
+{ * Background thread worker for executing a local synchronous call.
+  * Uses the TAPI_APP stored in thSender.UserObject.
+  * Increments/decrements Host_Running_Thread_Num around the call. }
+var
+  tmp_cli__: TC40_API_HUB_Client;
+  appName: TAPI_String;
+  Param, Output: TMem64;
+  apiName: TAPI_String;
+begin
+  tmp_cli__ := thSender.UserObject as TC40_API_HUB_Client;
+  appName := ThInData.R.ReadString;
+  Param := TMem64.Create;
+  ThInData.R.ReadMem64_As_Mapping(Param);
+  apiName := TMemory_Param_Tool.Get_apiName(Param);
+
+  tmp_cli__.FHost_Running_Thread_Num.UnLock(tmp_cli__.FHost_Running_Thread_Num.LockP^ + 1);
+  try
+      Output := tmp_cli__.APP.API.Execute_Call(Param);
+  finally
+      tmp_cli__.FHost_Running_Thread_Num.UnLock(tmp_cli__.FHost_Running_Thread_Num.LockP^ - 1);
+  end;
+  DisposeObject(Param);
+
+  ThOutData.WriteMem64(Output);
+  DisposeObject(Output);
+end;
+
+procedure TC40_API_HUB_Service.cmd_Call(Sender: TCommandCompleteBuffer_NoWait_Bridge; InData, OutData: TDFE);
+{ * Routes an incoming synchronous call to the appropriate destination.
+  * 1) Tries local execution (same process) via Find_Local_API_Hub.
+  * 2) If not found, forwards to other service instances (IPC first, then remote).
+  * 3) Logs an error if no matching destination is found. }
+var
+  appName: TAPI_String;
+  Param, Output: TMem64;
+  apiName: TAPI_String;
+  arry: TC40_Custom_Service_Array;
+  tmp_cli__: TC40_API_HUB_Client;
+
+  function Search_API_And_Send(): Boolean;
+  var
+    i: Integer;
+    serv: TC40_API_HUB_Service;
+    IO__: TC40_API_HUB_Service_RecvTunnel_NoAuth;
+  begin
+    Result := False;
+    if length(arry) > 0 then
+      begin
+        for i := 0 to length(arry) - 1 do
+          begin
+            serv := arry[i] as TC40_API_HUB_Service;
+            IO__ := serv.Find_API(appName, apiName);
+            if IO__ <> nil then
+              begin
+                IO__.SendTunnel.Owner.SendCompleteBuffer_NoWait_StreamM('Call', InData,
+                  TCompleteBuffer_Stream_Event_Bridge.Create(Sender, True).DoStreamEvent);
+                Result := True;
+                exit;
+              end;
+          end;
+      end;
+  end;
+
+begin
+  appName := InData.R.ReadString;
+  Param := TMem64.Create;
+  InData.R.ReadMem64_As_Mapping(Param);
+  apiName := TMemory_Param_Tool.Get_apiName(Param);
+  InData.R.Index := 0;
+
+  tmp_cli__ := Find_Local_API_Hub(appName, apiName, True);
+  if tmp_cli__ <> nil then
+    begin
+      DisposeObject(Param);
+      RunHPC_CompleteBuffer_StreamM(Sender, nil, tmp_cli__, InData, OutData, Do_Run_Call_Th);
+      exit;
+    end;
+
+  try
+    arry := Z.Net.C4.C40_ServicePool.GetFromClass(TC40_API_HUB_Service, True);
+    if Search_API_And_Send then
+        exit;
+
+    arry := Z.Net.C4.C40_ServicePool.GetFromClass(TC40_API_HUB_Service, False);
+    if Search_API_And_Send then
+        exit;
+
+    DoStatus('no found app("%s") api("%s")', [appName.Text, apiName.Text]);
+  finally
+    DisposeObject(Param);
+    SetLength(arry, 0);
+  end;
+end;
+
 constructor TC40_API_HUB_Service.Create(PhysicsService_: TC40_PhysicsService; ServiceTyp, Param_: U_String);
+{ * Constructor: sets up the service with custom user-defined classes,
+  * configures buffer sizes, and registers the command handlers.
+  * Temporarily disables per-service directories to avoid clutter. }
 var
   bak_: Boolean;
 begin
-  // Temporarily disable per‑service directories (to avoid clutter).
   bak_ := C40_EnablePerServiceDirectory;
   C40_EnablePerServiceDirectory := False;
   inherited Create(PhysicsService_, ServiceTyp, Param_);
@@ -1274,25 +1357,20 @@ begin
   FDelay_Broadcast_API_Info_Time := 0;
   FNeed_Broadcast_API_Info := False;
 
-  // Allow multiple service instances for scalability.
   ServiceInfo.OnlyInstance := False;
 
-  // Assign custom user‑defined classes for receive and send tunnels.
   DTNoAuth.RecvTunnel.UserDefineClass := TC40_API_HUB_Service_RecvTunnel_NoAuth;
   DTNoAuth.SendTunnel.UserDefineClass := TC40_API_HUB_Service_SendTunnel_NoAuth;
 
-  // Configure buffer size limit (default 500 MB) and disable compression for speed.
   DTNoAuth.RecvTunnel.MaxCompleteBufferSize := EStrToInt64(ParamList.GetDefaultValue('MaxBuffer', '500*1024*1024'), 500 * 1024 * 1024);
   DTNoAuth.RecvTunnel.CompleteBufferCompressed := False;
 
-  // Register command handlers.
   DTNoAuth.RecvTunnel.RegisterCompleteBuffer_NoWait_Bridge_Stream('Init_APP_Info').OnExecute := cmd_Init_APP_Info;
   DTNoAuth.RecvTunnel.RegisterConsoleNotify('No_App_Info').OnExecute := cmd_No_App_Info;
   DTNoAuth.RecvTunnel.RegisterCompleteBuffer_StreamNotify('Thread_State').OnExecute := cmd_Thread_State;
   DTNoAuth.RecvTunnel.RegisterCompleteBuffer_StreamNotify('Notify').OnExecute := cmd_Notify;
   DTNoAuth.RecvTunnel.RegisterCompleteBuffer_NoWait_Bridge_Stream('Call').OnExecute := cmd_Call;
 
-  // Suppress verbose logging for these commands.
   DTNoAuth.RecvTunnel.PrintParams.Add('update_service_api_info', False, True);
   DTNoAuth.RecvTunnel.PrintParams.Add('Init_APP_Info', False, True);
   DTNoAuth.RecvTunnel.PrintParams.Add('No_App_Info', False, True);
@@ -1308,20 +1386,19 @@ begin
   DTNoAuth.SendTunnel.PrintParams.Add('Call', False, True);
 end;
 
-{ * Destructor: nothing extra needed. }
 destructor TC40_API_HUB_Service.Destroy;
 begin
   inherited Destroy;
 end;
 
-{ * SafeCheck: periodic safety check – inherited implementation is sufficient. }
 procedure TC40_API_HUB_Service.SafeCheck;
 begin
   inherited SafeCheck;
 end;
 
-{ * Progress: main loop – inherited progress drives the network. }
 procedure TC40_API_HUB_Service.Progress;
+{ * Main progress method. Drives the network and triggers broadcast
+  * when the scheduled broadcast time is reached. }
 begin
   inherited Progress;
   if FNeed_Broadcast_API_Info then
@@ -1334,9 +1411,9 @@ begin
     end;
 end;
 
-{ * Broadcast_API_Info – Builds a snapshot of all registered applications and
-  * sends it to every connected client using the 'update_service_api_info' command. }
 procedure TC40_API_HUB_Service.Broadcast_API_Info();
+{ * Builds a snapshot of all registered applications and sends it to every
+  * connected client using the 'update_service_api_info' command. }
 var
   info_pool: TAPI_Service_Info_Pool__;
   arry: TIO_Array;
@@ -1383,20 +1460,18 @@ begin
   DisposeObject(final_data);
 end;
 
-{ * Do_CmpIOThNum – Comparison function for sorting TC40_API_HUB_Service_RecvTunnel_NoAuth
-  * by total thread load (Host_Running_Thread_Num + Wait_Reponse_Thread_Num).
-  * Used to prefer clients with lower load when multiple match the target app. }
 function TC40_API_HUB_Service.Do_CmpIOThNum(var L, R: TC40_API_HUB_Service_RecvTunnel_NoAuth): Integer;
+{ * Comparison function for sorting connected clients by Last_Selected_Time.
+  * Used to implement load balancing by selecting the least recently used client. }
 begin
   Result := CompareUInt64(L.Last_Selected_Time, R.Last_Selected_Time);
 end;
 
-{ * Find_API
-  * Scans all connected clients and returns the receive‑tunnel user object of
-  * the first one that matches the given application name (wildcard) and
-  * exposes the specified API.  If multiple clients match, the one with the
-  * lowest total thread load is returned. }
 function TC40_API_HUB_Service.Find_API(appName, apiName: TAPI_String): TC40_API_HUB_Service_RecvTunnel_NoAuth;
+{ * Scans all connected clients and returns the receive-tunnel user object of
+  * the first one that matches the given application name (wildcard) and
+  * exposes the specified API. If multiple clients match, the one with the
+  * lowest Last_Selected_Time is returned (load balancing). }
 var
   arry: TIO_Array;
   ID_: Cardinal;
@@ -1405,7 +1480,6 @@ var
   L: TC40_API_HUB_Service_RecvTunnel_NoAuth_List;
 begin
   Result := nil;
-  // Get a snapshot of all active I/O IDs on the receive tunnel.
   DTNoAuth.RecvTunnel.GetIO_Array(arry);
   L := TC40_API_HUB_Service_RecvTunnel_NoAuth_List.Create;
   for ID_ in arry do
@@ -1414,12 +1488,10 @@ begin
       if IO_ <> nil then
         begin
           tmp := IO_.Define as TC40_API_HUB_Service_RecvTunnel_NoAuth;
-          // Check app name match (with wildcard) and presence of the API.
           if umlMultipleMatch(appName.Text, tmp.APP_Name.Text) and tmp.api_info_data.Exists(apiName) then
               L.Add(tmp);
         end;
     end;
-  // Sort by load (lowest first) and return the first.
   if L.Num > 1 then
       L.Sort_M(Do_CmpIOThNum);
   if L.Num > 0 then
@@ -1432,19 +1504,18 @@ end;
 
 { TC40_API_HUB_Client }
 
-{ * Do_DT_P2PVM_NoAuth_Custom_Client_TunnelLink
-  * Called when the double‑tunnel link is established.  If an APP is set,
-  * automatically registers it with the service. }
 procedure TC40_API_HUB_Client.Do_DT_P2PVM_NoAuth_Custom_Client_TunnelLink(Sender: TDT_P2PVM_NoAuth_Custom_Client);
+{ * Called when the double-tunnel link is established. If an APP is set,
+  * automatically registers it with the service. }
 begin
   inherited Do_DT_P2PVM_NoAuth_Custom_Client_TunnelLink(Sender);
   if APP <> nil then
-      Init_App_Info; // Register the application with the service.
+      Init_App_Info;
 end;
 
-{ * cmd_update_service_api_info
-  * Receives service info broadcast and updates the local cache. }
 procedure TC40_API_HUB_Client.cmd_update_service_api_info(Sender: TPeerIO; InData: PByte; DataSize: NativeInt);
+{ * Receives service info broadcast and updates the local cache.
+  * The data is DFE-encoded and contains a snapshot of all registered apps. }
 var
   m64: TMS64;
   d: TDFE;
@@ -1458,10 +1529,9 @@ begin
   DisposeObject(d);
 end;
 
-{ * Do_Notify
-  * Thread worker for executing a local notification.  It maps the raw input
-  * buffer to a TMem64 and invokes Execute_Notify on the local APP. }
 procedure TC40_API_HUB_Client.Do_Notify(thSender: THPC_CompleteBuffer; ThInData: PByte; ThDataSize: NativeInt);
+{ * Background thread worker for executing a local notification.
+  * Maps the raw input buffer to a TMem64 and invokes Execute_Notify on the local APP. }
 var
   m64: TMem64;
 begin
@@ -1471,7 +1541,7 @@ begin
   FHost_Running_Thread_Num.UnLock(FHost_Running_Thread_Num.LockP^ + 1);
   try
     m64 := TMem64.Create;
-    m64.Mapping(ThInData, ThDataSize); // Map without copying.
+    m64.Mapping(ThInData, ThDataSize);
     FAPP.API.Execute_Notify(m64);
     DisposeObject(m64);
   finally
@@ -1479,20 +1549,19 @@ begin
   end;
 end;
 
-{ * cmd_Notify
-  * Handles incoming 'Notify' commands by offloading processing to a background
-  * thread using RunHPC_CompleteBufferM. }
 procedure TC40_API_HUB_Client.cmd_Notify(Sender: TPeerIO; InData: PByte; DataSize: NativeInt);
+{ * Handles incoming 'Notify' commands by offloading processing to a background
+  * thread using RunHPC_CompleteBufferM. }
 begin
   if FAPP = nil then
       exit;
   RunHPC_CompleteBufferM(Sender, nil, nil, InData, DataSize, Do_Notify);
 end;
 
-{ * cmd_Call
-  * Handles incoming 'Call' commands synchronously.  Decodes the request,
-  * executes the API call locally, and writes the result back. }
 procedure TC40_API_HUB_Client.cmd_Call(Sender: TPeerIO; InData, OutData: TDFE);
+{ * Handles incoming 'Call' commands synchronously. Decodes the request,
+  * executes the API call locally, and writes the result back.
+  * This runs in the main thread (not background). }
 var
   appName: TAPI_String;
   m64, Output: TMem64;
@@ -1502,14 +1571,11 @@ begin
 
   FHost_Running_Thread_Num.UnLock(FHost_Running_Thread_Num.LockP^ + 1);
   try
-    // Read the target app name (not used further because we already matched).
     appName := InData.R.ReadString;
     m64 := TMem64.Create;
     InData.R.ReadMem64_As_Mapping(m64);
-    // Execute the call and get the result.
     Output := FAPP.API.Execute_Call(m64);
     DisposeObject(m64);
-    // Write the result to the output DFE.
     OutData.WriteMem64(Output);
     DisposeObject(Output);
   finally
@@ -1518,14 +1584,14 @@ begin
 end;
 
 procedure TC40_API_HUB_Client.Do_APP_Update(Sender: TAPI_APP);
+{ * Called when the APP's API list changes. Re-registers the app with the service. }
 begin
   Init_App_Info;
 end;
 
-{ * TC40_API_HUB_Client.Create
-  * Constructor: initialises the client and registers command handlers for
-  * incoming calls and notifications. }
 constructor TC40_API_HUB_Client.Create(PhysicsTunnel_: TC40_PhysicsTunnel; source_: TC40_Info; Param_: U_String);
+{ * Constructor: initialises the client and registers command handlers for
+  * incoming calls and notifications. }
 begin
   inherited Create(PhysicsTunnel_, source_, Param_);
   FService_Info := TAPI_Service_Info_Pool__.Create;
@@ -1538,12 +1604,10 @@ begin
 
   Last_Selected_Time := 0;
 
-  // Register handlers on the receive tunnel.
   DTNoAuth.RecvTunnel.RegisterCompleteBuffer('update_service_api_info').OnExecute := cmd_update_service_api_info;
   DTNoAuth.RecvTunnel.RegisterCompleteBuffer('Notify').OnExecute := cmd_Notify;
   DTNoAuth.RecvTunnel.RegisterCompleteBuffer_NoWait_Stream_Thread('Call').OnExecute := cmd_Call;
 
-  // Suppress verbose logging for these commands.
   DTNoAuth.RecvTunnel.PrintParams.Add('update_service_api_info', False, True);
   DTNoAuth.RecvTunnel.PrintParams.Add('Init_APP_Info', False, True);
   DTNoAuth.RecvTunnel.PrintParams.Add('No_App_Info', False, True);
@@ -1559,15 +1623,14 @@ begin
   DTNoAuth.SendTunnel.PrintParams.Add('Call', False, True);
 end;
 
-{ * Destructor: waits for any background threads to finish (with a 2‑second
-  * timeout) before freeing the thread counters. }
 destructor TC40_API_HUB_Client.Destroy;
+{ * Destructor: waits for any background threads to finish (with a 2-second
+  * timeout) before freeing the thread counters. }
 var
   tk: TTimeTick;
 begin
   if FAPP <> nil then
       FAPP.Remove_Update(Self);
-  // wait thread and check timeout
   tk := GetTimeTick() + 2000;
   while (FHost_Running_Thread_Num.V + FWait_Reponse_Thread_Num.V > 0) and (GetTimeTick() < tk) do
       TCompute.Sleep(100);
@@ -1577,15 +1640,14 @@ begin
   inherited Destroy;
 end;
 
-{ * SafeCheck: inherited implementation. }
 procedure TC40_API_HUB_Client.SafeCheck;
 begin
   inherited SafeCheck;
 end;
 
-{ * Progress: inherited progress.  Additionally, if the client is online,
-  * sends thread‑state updates to the service every second. }
 procedure TC40_API_HUB_Client.Progress;
+{ * Main progress method. If the client is online, sends thread-state updates
+  * to the service every second (throttled to 100ms check interval). }
 var
   tk: TTimeTick;
 begin
@@ -1602,26 +1664,21 @@ begin
   inherited Progress;
 end;
 
-{ * DoNetworkOnline
-  * Called when the client connects successfully; overridden to call inherited. }
 procedure TC40_API_HUB_Client.DoNetworkOnline;
 begin
   inherited;
 end;
 
-{ * DoNetworkOffline
-  * Called when the client disconnects; resets the online flag. }
 procedure TC40_API_HUB_Client.DoNetworkOffline;
+{ * Called when the client disconnects; resets the online flag. }
 begin
   inherited;
   FAPI_APP_Is_Online := False;
 end;
 
-{ * Update_LocalThread_State_To_Service
-  * Sends the current thread‑count statistics to the service using the
-  * 'Thread_State' command.  This allows the service to perform load‑aware
-  * routing. }
 procedure TC40_API_HUB_Client.Update_LocalThread_State_To_Service;
+{ * Sends the current thread-count statistics to the service using the
+  * 'Thread_State' command. This allows the service to perform load-aware routing. }
 begin
   if not API_APP_Is_Online then
       exit;
@@ -1629,58 +1686,53 @@ begin
     TDFE.Create.WriteInteger(FHost_Running_Thread_Num.V).WriteInteger(FWait_Reponse_Thread_Num.V).DelayFree);
 end;
 
-{ * Do_Init_App_Info_Result
-  * Callback for the 'Init_APP_Info' command's response.  Sets the online flag
-  * to True, indicating the registration was successful. }
 procedure TC40_API_HUB_Client.Do_Init_App_Info_Result(Sender: TPeerIO; Result_: TDFE);
+{ * Callback for the 'Init_APP_Info' command's response. Sets the online flag
+  * to True, indicating the registration was successful, and subscribes to APP updates. }
 begin
   FAPI_APP_Is_Online := True;
   FAPP.Subscribe_Update(Self, Do_APP_Update);
 end;
 
-{ * Init_App_Info
-  * Builds a list of API names from the current TAPI_APP and sends the
-  * registration to the service using the 'Init_APP_Info' command. }
 procedure TC40_API_HUB_Client.Init_App_Info;
+{ * Builds a list of API names from the current TAPI_APP and sends the
+  * registration to the service using the 'Init_APP_Info' command.
+  * If APP is nil or has no name, sends a 'No_App_Info' notification instead. }
 var
   api_info_data: TPascalStringList;
   R: TAPI_Info_Pool.TRepeat___;
 begin
-  // Ensure APP is assigned and has a name.
   if (APP = nil) or (APP.Name.TrimChar(#32#9) = '') then
     begin
       DTNoAuth.SendTunnel.SendConsoleNotifyCmd('No_App_Info', MakeProcessName());
       exit;
     end;
 
-  // Create a string list of all API names registered in the app.
   api_info_data := TPascalStringList.Create;
   if APP.API.API_Pool.Num > 0 then
     begin
-      R := APP.API.API_Pool.Queue_Pool.repeat_; // Iterate over the API pool.
+      R := APP.API.API_Pool.Queue_Pool.repeat_;
       repeat
           api_info_data.Add(R.queue^.Data.Data.Primary);
       until not R.Next;
     end;
 
-  // Send the registration data using the 'Init_APP_Info' command (no‑wait stream).
   DTNoAuth.SendTunnel.SendCompleteBuffer_NoWait_StreamM('Init_APP_Info',
     TDFE.Create
-      .WriteString(APP.Name.Text) // app name
-      .WriteString(APP.Desc.Text) // description
-      .WriteString(MakeProcessName()) // process info (PID, etc.)
-      .WritePascalStrings(api_info_data) // list of API names
+      .WriteString(APP.Name.Text)
+      .WriteString(APP.Desc.Text)
+      .WriteString(MakeProcessName())
+      .WritePascalStrings(api_info_data)
       .WriteBool(IsLocal())
-      .DelayFree, // auto‑free the DFE after sending
-    Do_Init_App_Info_Result); // callback when registration is acknowledged
+      .DelayFree,
+    Do_Init_App_Info_Result);
 
   DisposeObject(api_info_data);
 end;
 
-{ * Set_API_APP
-  * Binds a new TAPI_APP to the client.  If the client is already connected,
-  * immediately registers the new app with the service. }
 procedure TC40_API_HUB_Client.Set_API_APP(const Value: TAPI_APP);
+{ * Binds a new TAPI_APP to the client. If the client is already connected,
+  * immediately registers the new app with the service. }
 begin
   if FAPP <> nil then
       FAPP.Remove_Update(Self);
@@ -1689,60 +1741,60 @@ begin
       Init_App_Info;
 end;
 
-{ * Send_Execute_Notify___
-  * Sends a notification to the target application.  Performs local execution
-  * if the target matches the local app or another local client. }
 procedure TC40_API_HUB_Client.Send_Execute_Notify___(const appName: TAPI_String; Param: TMem64);
+{ * Internal method that sends a notification by forwarding to the service.
+  * The payload is wrapped in a DFE and sent via the send tunnel.
+  * If the payload is large (>100KB), sends a NULL packet to flush the buffer. }
 begin
-  // No local match: forward to the service.
   DTNoAuth.SendTunnel.SendCompleteBuffer_StreamNotify('Notify',
     TDFE.Create
-      .WriteString(appName) // target application name
-      .WriteMem64(Param) // payload
-      .DelayFree // auto‑free after sending
+      .WriteString(appName)
+      .WriteMem64(Param)
+      .DelayFree
     );
   if Param.Size > 100 * 1024 then
       DTNoAuth.SendTunnel.SendNULL;
 end;
 
 procedure TC40_API_HUB_Client.Send_Execute_Notify(const appName: TAPI_String; Param: TMem64);
+{ * Sends a notification to the target application. Performs local execution
+  * if the target matches a local client; otherwise forwards to the service. }
 var
   apiName: TAPI_String;
   tmp_cli__: TC40_API_HUB_Client;
 begin
   apiName := TMemory_Param_Tool.Get_apiName(Param);
-  tmp_cli__ := Find_Local_API_Hub(appName, apiName);
+  tmp_cli__ := Find_Local_API_Hub(appName, apiName, True);
   if tmp_cli__ <> nil then
     begin
-      tmp_cli__.FHost_Running_Thread_Num.UnLock(FHost_Running_Thread_Num.LockP^ + 1);
+      tmp_cli__.FHost_Running_Thread_Num.UnLock(tmp_cli__.FHost_Running_Thread_Num.LockP^ + 1);
       try
           tmp_cli__.APP.API.Execute_Notify(Param);
       finally
-          tmp_cli__.FHost_Running_Thread_Num.UnLock(FHost_Running_Thread_Num.LockP^ - 1);
+          tmp_cli__.FHost_Running_Thread_Num.UnLock(tmp_cli__.FHost_Running_Thread_Num.LockP^ - 1);
       end;
       exit;
     end;
 
-  tmp_cli__ := Find_Remote_API_Hub(appName, apiName);
+  tmp_cli__ := Find_Remote_API_Hub(appName, apiName, True);
   if tmp_cli__ <> nil then
       tmp_cli__.Send_Execute_Notify___(appName, Param)
   else
       Send_Execute_Notify___(appName, Param);
 end;
 
-{ * Wait_Execute_Call___
-  * Performs a synchronous call to the target application.  Returns the result
-  * TMem64, or nil on timeout/failure. }
 function TC40_API_HUB_Client.Wait_Execute_Call___(const appName: TAPI_String; Param: TMem64; TimeOut__: TTimeTick): TMem64;
+{ * Internal method that performs a synchronous call by forwarding to the service.
+  * Blocks until the response arrives or the timeout expires.
+  * Uses TCall_Bridge__ to capture the asynchronous result. }
 var
   apiName: TAPI_String;
   tmp: TCall_Bridge__;
   tk: TTimeTick;
 begin
   Result := nil;
-  // Check other local clients.
   apiName := TMemory_Param_Tool.Get_apiName(Param);
-  // No local match: forward to the service and wait for response.
+
   FWait_Reponse_Thread_Num.UnLock(FWait_Reponse_Thread_Num.LockP^ + 1);
   tmp := TCall_Bridge__.Create;
   tmp.Cli := Self;
@@ -1753,7 +1805,7 @@ begin
       .WriteString(appName)
       .WriteMem64(Param)
       .DelayFree,
-    tmp.Do_Result); // result callback
+    tmp.Do_Result);
 
   if Param.Size > 100 * 1024 then
       DTNoAuth.SendTunnel.SendNULL;
@@ -1766,16 +1818,18 @@ begin
         begin
           FWait_Reponse_Thread_Num.UnLock(FWait_Reponse_Thread_Num.LockP^ - 1);
           DoStatus('%s -> %s call timeout', [appName.Text, apiName.Text]);
-          exit; // timeout: returns nil
+          exit;
         end;
     end;
-  // Return the output, swapping ownership.
+
   Result := tmp.Output.Swap_To_New_Instance;
   FWait_Reponse_Thread_Num.UnLock(FWait_Reponse_Thread_Num.LockP^ - 1);
   DisposeObject(tmp);
 end;
 
 function TC40_API_HUB_Client.Wait_Execute_Call(const appName: TAPI_String; Param: TMem64; TimeOut__: TTimeTick): TMem64;
+{ * Performs a synchronous call to the target application. First tries local
+  * execution (same process), then remote execution via the service. }
 var
   apiName: TAPI_String;
   tmp_cli__: TC40_API_HUB_Client;
@@ -1783,19 +1837,19 @@ begin
   Result := nil;
 
   apiName := TMemory_Param_Tool.Get_apiName(Param);
-  tmp_cli__ := Find_Local_API_Hub(appName, apiName);
+  tmp_cli__ := Find_Local_API_Hub(appName, apiName, True);
   if tmp_cli__ <> nil then
     begin
-      tmp_cli__.FHost_Running_Thread_Num.UnLock(FHost_Running_Thread_Num.LockP^ + 1);
+      tmp_cli__.FHost_Running_Thread_Num.UnLock(tmp_cli__.FHost_Running_Thread_Num.LockP^ + 1);
       try
           Result := tmp_cli__.APP.API.Execute_Call(Param);
       finally
-          tmp_cli__.FHost_Running_Thread_Num.UnLock(FHost_Running_Thread_Num.LockP^ - 1);
+          tmp_cli__.FHost_Running_Thread_Num.UnLock(tmp_cli__.FHost_Running_Thread_Num.LockP^ - 1);
       end;
       exit;
     end;
 
-  tmp_cli__ := Find_Remote_API_Hub(appName, apiName);
+  tmp_cli__ := Find_Remote_API_Hub(appName, apiName, True);
   if tmp_cli__ <> nil then
       Result := tmp_cli__.Wait_Execute_Call___(appName, Param, TimeOut__)
   else
@@ -1804,8 +1858,8 @@ end;
 
 { TCall_Bridge__ }
 
-{ * Constructor: initialises an empty output and sets IsRunning to False. }
 constructor TCall_Bridge__.Create;
+{ * Initialises an empty output and sets IsRunning to False. }
 begin
   inherited Create;
   Cli := nil;
@@ -1814,17 +1868,16 @@ begin
   Error_ := False;
 end;
 
-{ * Destructor: frees the output memory. }
 destructor TCall_Bridge__.Destroy;
+{ * Frees the output memory. }
 begin
   DisposeObjectAndNil(Output);
   inherited Destroy;
 end;
 
-{ * Do_Result
-  * Called when the asynchronous response for a call arrives.  Reads the result
-  * TMem64 from the DFE and signals completion by setting IsRunning to False. }
 procedure TCall_Bridge__.Do_Result(Sender: TPeerIO; Result_: TDFE);
+{ * Called when the asynchronous response for a call arrives. Reads the result
+  * TMem64 from the DFE and signals completion by setting IsRunning to False. }
 begin
   Error_ := Result_.Count <= 0;
   if not Error_ then
@@ -1834,7 +1887,11 @@ end;
 
 initialization
 
-// Register the API Hub service and client with the C4 framework.
 RegisterC40('APIHub', TC40_API_HUB_Service, TC40_API_HUB_Client);
+Find_Hub_Safe_Critical := TCritical.Create('Find_Hub_Safe_Critical');
+
+finalization
+
+DisposeObjectAndNil(Find_Hub_Safe_Critical);
 
 end.
