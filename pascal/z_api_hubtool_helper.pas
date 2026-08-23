@@ -141,6 +141,7 @@ type
         { 包装一个已有的句柄。
           @param AHandle 已存在的句柄
           @param Owned 是否拥有所有权，若为 True 则析构时释放该句柄
+          注意：若 Owned=False，调用者需自行释放原句柄。
         }
         constructor Create(AHandle: TDataHnd; Owned: boolean = True); overload;
 
@@ -246,6 +247,7 @@ type
           @return 缓冲区首地址，若无效则返回 nil
         }
         function GetBufferEx(out Size: int64): Pointer;
+        function GetBuffer(): Pointer;
 
         { 原始句柄（只读） }
         property Handle: TDataHnd read FHandle;
@@ -437,12 +439,36 @@ type
       建议顺序：先 ExitMainThread，再 Shutdown。
     }
     class procedure Shutdown;
+
+    // ----- 新增的全局辅助函数（与 import 同步）-----
+    { 获取状态队列中的下一条日志消息（自动转换为 Pascal string）。
+      @return 日志内容，若队列为空则返回空字符串。
+      注意：内部自动复制数据，不受缓冲区覆盖影响。
+    }
+    class function GetStatus: string;
+
+    { 向状态队列写入一条自定义日志消息。
+      @param Status 要写入的消息（Pascal string）
+    }
+    class procedure PostStatus(const Status: string);
+
+    { 检查模拟主线程（C4 事件循环）是否正在运行。
+      @return True 表示正在运行，False 表示已停止或未启动。
+    }
+    class function CheckMainThread: Boolean;
+
+    { 检查网络中是否存在指定名称的应用（区分大小写）。
+      @param AppName 应用名
+      @return True 表示存在至少一个实例，False 表示不存在。
+      注意：此函数基于本地缓存，不保证实时性。
+    }
+    class function CheckApp(const AppName: string): Boolean;
   end;
 
 {=============================================================================
   API__ 容器类（底层 import 静态映射）
   ═════════════════════════════════════════════════════════════════════════════
-  本类直接映射 z_api_hubtool_import 中的所有 external 函数，
+  本类直接映射 z_api_hubtool_import 中的所有 external 函数和 Pascal 辅助函数，
   供需要绕过 RAII 封装的高级用户使用。
   所有方法均为 static，直接转发至 import 单元。
 
@@ -987,6 +1013,35 @@ type
       线程安全：是，但通常主线程调用。
     **************************************************************************}
     class procedure API_shutdown; static;
+
+    // ==================== 新增的 Pascal 辅助函数映射 ====================
+    {**************************************************************************
+      【直接映射】API_Get_Status2 – 获取状态队列中的下一条日志消息。
+      返回：UTF‑8 字符串（已解码为 Pascal string）。
+      注意：内部自动复制数据，不受缓冲区覆盖影响。
+    **************************************************************************}
+    class function API_Get_Status2: string; static;
+
+    {**************************************************************************
+      【直接映射】API_Post_Status2 – 向状态队列写入自定义日志消息。
+      参数：status : string – 要写入的消息（Pascal string）。
+      线程安全：是。
+    **************************************************************************}
+    class procedure API_Post_Status2(const status: string); static;
+
+    {**************************************************************************
+      【直接映射】API_Check_MainThread2 – 检查模拟主线程是否运行。
+      返回：True 表示运行中，False 表示已停止。
+    **************************************************************************}
+    class function API_Check_MainThread2: Boolean; static;
+
+    {**************************************************************************
+      【直接映射】API_Check_App2 – 检查网络中是否存在指定应用。
+      参数：appName : string – 应用名。
+      返回：True 存在，False 不存在。
+      注意：基于本地缓存，不保证实时性。
+    **************************************************************************}
+    class function API_Check_App2(const appName: string): Boolean; static;
   end;
 
 implementation
@@ -1555,6 +1610,23 @@ begin
   end;
 end;
 
+function API.TDataHandle.GetBuffer(): Pointer;
+begin
+  FLock.Enter;
+  try
+    if not IsValid then
+    begin
+      Result := nil;
+    end
+    else
+    begin
+      Result := API_GetBuffer(FHandle);
+    end;
+  finally
+    FLock.Leave;
+  end;
+end;
+
 {=============================================================================
   API.TAppHandle 实现
 =============================================================================}
@@ -1713,6 +1785,26 @@ end;
 class procedure API.Shutdown;
 begin
   API_shutdown;
+end;
+
+class function API.GetStatus: string;
+begin
+  Result := API_Get_Status2;
+end;
+
+class procedure API.PostStatus(const Status: string);
+begin
+  API_Post_Status2(Status);
+end;
+
+class function API.CheckMainThread: Boolean;
+begin
+  Result := API_Check_MainThread2;
+end;
+
+class function API.CheckApp(const AppName: string): Boolean;
+begin
+  Result := API_Check_App2(AppName);
 end;
 
 {=============================================================================
@@ -2092,6 +2184,26 @@ end;
 class procedure API__.API_shutdown;
 begin
   z_api_hubtool_import.API_shutdown;
+end;
+
+class function API__.API_Get_Status2: string;
+begin
+  Result := z_api_hubtool_import.API_Get_Status2;
+end;
+
+class procedure API__.API_Post_Status2(const status: string);
+begin
+  z_api_hubtool_import.API_Post_Status2(status);
+end;
+
+class function API__.API_Check_MainThread2: Boolean;
+begin
+  Result := z_api_hubtool_import.API_Check_MainThread2;
+end;
+
+class function API__.API_Check_App2(const appName: string): Boolean;
+begin
+  Result := z_api_hubtool_import.API_Check_App2(appName);
 end;
 
 end.

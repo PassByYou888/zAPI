@@ -2,8 +2,8 @@
 ════════════════════════════════════════════════════════════════════════════════
   z_api_hubtool_import – Pascal 核心绑定单元（所有语言绑定的权威参考）
 
-  版本: 2.0 (UTF‑8 + #0 字符串协议)
-  更新: 2026-08-17
+  版本: 2.1
+  更新: 2026-08-23
 
   ═══════════════════════════════════════════════════════════════════════════════
   设计哲学总览（AI 必读）
@@ -15,6 +15,9 @@
        必须使用 UTF‑8 编码，并以 #0 结尾。
      • 旧版“4 字节长度前缀”规范已废弃，新规范与 C ABI 完全对齐。
      • 跨语言绑定时，字符串读写必须遵循“逐字节扫描直到 #0”的规则。
+     • 注意：Pascal 辅助函数 API_WriteString / API_ReadString 封装了
+       UTF‑8 编解码和 #0 处理，但它们是 Pascal 语法糖，其他语言应
+       自行实现等效逻辑（使用原生 UTF‑8 字符串函数）。
 
   2. 线程模型与回调上下文
      ──────────────────────────
@@ -24,13 +27,15 @@
          ✅ 可以调用 API_Call / API_Notify（不会死锁，但需防止死循环）。
          ❌ 不可执行长时间阻塞操作（Sleep、等待同步对象、密集循环），
             否则将阻塞线程池，导致其他请求超时。
+         ❌ 不可调用 API_Prepare_Done、API_shutdown 等全局控制函数。
+         ❌ 不可修改 Input 句柄的内容（只读），Output 句柄只写。
      • 若回调中需耗时任务，应将其异步提交到应用层工作队列。
 
   3. 句柄生命周期（强制显式管理）
      ──────────────────────────────
      • TDataHnd 和 TAppHnd 由用户显式创建和释放。
      • API_Call 返回的 TDataHnd 永远非 nil，但可能大小为 0，
-       调用者必须始终释放它（即使大小为 0）。
+       调用者必须始终释放它（即使大小为 0），否则内存泄漏。
      • 回调传入的 Input/Output 句柄由库管理，回调内不得释放。
 
   4. 网络部署模式
@@ -40,6 +45,9 @@
        客户端就绪（Wait_Connection_ReadyOk）。
      • 支持 TCP（跨机）和 IPC（同机，低延迟）两种地址格式。
      • 自动服务发现、负载均衡、断线重连、NAT 穿透。
+     • 若 ListeningAddr_ 与 PhysicsAddr_ 不同（NAT 环境），
+       PhysicsAddr_ 必须是客户端可访问的外部地址。
+     • IPC 地址格式为 "ipc:任意名称"，在同一主机上需保证唯一性。
 
   5. 动态 API 注销（热更新支持）
      ──────────────────────────────
@@ -62,6 +70,19 @@
      ──────────
      • 库会自动将详细日志（连接状态、注册信息、错误原因）打印到控制台。
      • 可通过 .ini 文件控制日志级别和输出目标。
+     • 大多数失败场景（如注册重复、地址格式错误）都会输出日志，
+       调用者可检查控制台输出获取详细信息。
+
+  9. 常见陷阱与注意事项
+     ─────────────────────
+     • API_Call 超时后返回 nil，但网络请求可能仍在后台进行，
+       应避免短时间内重复发起相同请求。
+     • API_Get_Status 队列最多缓存 1000 条消息，超过会丢弃旧消息。
+     • API_Sync 软同步机制建议在主循环中每 1~10ms 调用一次，
+       否则积压的回调可能耗尽线程池资源。
+     • API_Check_App 基于本地缓存查询，不保证实时性。
+     • 动态库应放置在系统库路径或可执行文件同目录下，
+       若需自定义路径可修改 libapi_hub 常量或使用 LoadLibrary 动态加载。
 
   ═══════════════════════════════════════════════════════════════════════════════
   作者：老张 (qq600585), 友情维护: 精灵 (qq289161766), 高勇 (qq120180714)
@@ -131,6 +152,7 @@ type
         否则将阻塞线程池，降低系统吞吐。
       • 不可直接访问 UI（需通过 TThread.Synchronize 等同步到主线程）。
       • 耗时任务应异步提交到工作队列。
+      • 不可调用 API_Prepare_Done、API_shutdown 等全局控制函数。
     AI 翻译提示：其他语言应使用 C 函数指针或委托（delegate），
                   并注意调用约定的匹配（必须为 cdecl 或等效）。
     设计意图：此类型专为 FFI 导出而设计，确保回调地址可被 C 层正确调用。
@@ -554,7 +576,7 @@ procedure API_Free_APPHnd(appHnd: TAppHnd); cdecl; external libapi_hub name 'API
       Desc     : PAnsiChar – 描述（UTF‑8 + #0，可选）。
       Trigger  : Pointer – 用户数据，回调时原样传回。
       OnCall   : TAPI_Call – 回调函数指针（cdecl）。
-    返回：1 成功，0 失败（名称重复）。
+    返回：1 成功，0 失败（名称重复）。失败时控制台会输出错误信息。
     设计意图：暴露业务逻辑给远程调用者。
     线程安全：是。
     回调约束：见 TAPI_Call 说明。
@@ -618,6 +640,7 @@ function API_Reg_Sync_Notify_M(appHnd: TAppHnd; APIName, Desc: string; OnNotify:
     返回值：处理的任务数量。
     设计意图：配合 TSoft_Synchronize_Tool 使用，实现用户态线程同步。
     AI 翻译提示：其他语言若需要类似机制，应使用其平台的原生同步原语。
+    建议：在主循环中每 1~10ms 调用一次，否则积压可能影响性能。
   ****************************************************************************}
 function API_Sync(): integer;
 
@@ -681,6 +704,15 @@ procedure API_Reset_Prepare(); cdecl; external libapi_hub name 'API_Reset_Prepar
   {****************************************************************************
     API_Prepare_Service
     【external 导入】准备一个服务监听器（可多次调用启动多个服务）。
+
+    调用时机与行为：
+      • 在调用 API_Prepare_Done 之前调用：该服务会被加入准备队列，
+        等到 API_Prepare_Done 启动时统一创建并开始监听。
+      • 在 API_Prepare_Done 已经执行且主线程（C4 事件循环）已启动之后调用：
+        该服务会立即被创建并开始监听，无需重启框架或再次调用
+        API_Prepare_Done。这允许在运行时动态添加新的服务实例，
+        实现热扩展。
+
     参数：
       ListeningAddr_ : PAnsiChar – 本地绑定地址（UTF‑8 + #0）。
                                     TCP  示例：'0.0.0.0:9898'
@@ -689,10 +721,26 @@ procedure API_Reset_Prepare(); cdecl; external libapi_hub name 'API_Reset_Prepar
                                     若只给主机名（无端口），默认使用 9898。
       PhysicsAddr_   : PAnsiChar – 对外公布的地址（UTF‑8 + #0）。
                                     客户端必须使用此地址连接。
-    返回：内部标签（可忽略）。
-    设计意图：启动服务并广播自身存在，供服务发现。
-    线程安全：是。
-    AI 翻译提示：其他语言应提供等价方法，地址字符串需为 UTF‑8。
+                                    如果 ListeningAddr_ 与 PhysicsAddr_ 不同
+                                    （如 NAT 环境），PhysicsAddr_ 必须是
+                                    客户端可访问的外部地址。
+
+    返回：
+      内部标签（可忽略，当前版本未使用）。若重复准备相同监听地址，
+      返回 -1 并输出错误日志。
+
+    设计意图：
+      启动服务并广播自身存在，供服务发现。支持在运行时动态添加服务，
+      而无需重建整个网络。
+
+    注意事项：
+      • 重复准备相同监听地址（包括已运行的服务）会返回 -1 并报错。
+      • 在运行时调用时，新服务会立即生效，客户端可通过服务发现
+        自动感知到新服务实例（存在约 3 秒的广播延迟）。
+      • 线程安全：是。
+
+    AI 翻译提示：
+      其他语言应提供等价方法，地址字符串需为 UTF‑8。
   ****************************************************************************}
 function API_Prepare_Service(ListeningAddr_, PhysicsAddr_: pansichar): integer; cdecl; external libapi_hub name 'API_Prepare_Service';
 
@@ -705,13 +753,38 @@ function API_Prepare_Service2(ListeningAddr_, PhysicsAddr_: string): integer;
   {****************************************************************************
     API_Prepare_Client
     【external 导入】准备一个客户端连接。
+
+    调用时机与行为：
+      • 在调用 API_Prepare_Done 之前调用：该客户端会被加入准备队列，
+        等到 API_Prepare_Done 启动时统一建立连接并注册应用（如果有）。
+      • 在 API_Prepare_Done 已经执行且主线程（C4 事件循环）已启动之后调用：
+        该客户端会立即尝试连接远程服务，并自动注册应用（如果有）。
+        这允许在运行时动态添加新的客户端连接，实现热扩展。
+
     参数：
       PhysicsAddr_ : PAnsiChar – 远程服务地址（必须与服务的公布地址一致）。
-      appHnd       : TAppHnd – 可选应用句柄。若提供，客户端会将该应用注册
-                                到服务网格（暴露 API）；若为 nil，则纯消费。
-    返回：内部标签。
-    设计意图：建立连接并自动注册应用，支持断线重连。
-    线程安全：是。
+      appHnd       : TAppHnd   – 可选应用句柄。
+                                 若提供（非 nil），客户端会将该应用注册到
+                                 服务网格（暴露 API 给其他节点）。
+                                 若为 nil，则纯消费，不暴露任何 API。
+
+    返回：
+      内部标签（可忽略）。若重复准备相同地址的客户端，返回 -1 并输出错误日志。
+
+    设计意图：
+      建立连接并自动注册应用，支持断线重连。允许在运行时动态添加客户端，
+      无需重建整个网络。
+
+    注意事项：
+      • 重复准备相同地址的客户端（包括已运行的连接）会返回 -1 并报错。
+      • 在运行时调用时，新客户端会立即尝试连接，如果服务尚未就绪，
+        会自动重试（受 C40_PhysicsReconnectionDelayTime 控制）。
+      • 若 appHnd 非 nil，客户端会在连接成功后自动注册该应用的所有 API，
+        并持续保持注册状态（断线重连后自动重新注册）。
+      • 线程安全：是。
+
+    AI 翻译提示：
+      其他语言应提供等价方法，地址字符串需为 UTF‑8。
   ****************************************************************************}
 function API_Prepare_Client(PhysicsAddr_: pansichar; appHnd: TAppHnd): integer; cdecl; external libapi_hub name 'API_Prepare_Client';
 
@@ -730,21 +803,56 @@ function API_Prepare_Client2(PhysicsAddr_: string): integer; overload;
   {****************************************************************************
     API_Prepare_Done
     【external 导入】启动 C4 网络框架，阻塞直到所有准备的服务/客户端初始化完成。
-    返回：1 成功，0 失败（错误信息会打印到控制台）。
-    设计意图：调用后方可进行远程调用。
+
+    调用行为：
+      • 当主线程尚未启动时：启动模拟主线程（C4 事件循环），并等待所有准备
+        的服务/客户端就绪（取决于 Wait_Connection_ReadyOk 设置）。
+      • 当主线程已经启动时（即框架已在运行）：再次调用此函数会立即返回 1
+        （不做任何操作），不会产生副作用。
+      • 在调用 API_shutdown 之后，框架被完全关闭，此时可以再次调用
+        API_Prepare_Done 重新启动框架（需先调用 API_Reset_Prepare 重新配置）。
+
+    返回：
+      1 成功，0 失败（错误信息会打印到控制台）。
+
+    设计意图：
+      启动网络框架，使远程调用功能可用。
+
     注意事项：
-      • 只能调用一次（除非重置）。
+      • 只能有效启动一次（除非在 shutdown 后重新准备）。
       • 可通过 API_SetOption 控制是否等待客户端就绪（Wait_Connection_ReadyOk）。
-    线程安全：是，但建议主线程调用。
-    AI 翻译提示：其他语言应提供等价的启动函数，通常阻塞。
+      • 该函数只在初始化时生效，选项修改仅在调用前有效。
+      • 在应用程序或动态库退出前，必须调用 API_shutdown 释放资源，否则可能导致
+        资源泄漏或进程无法正常退出。
+
+    线程安全：
+      是，但建议主线程调用。
+
+    AI 翻译提示：
+      其他语言应提供等价的启动函数，通常阻塞。
   ****************************************************************************}
 function API_Prepare_Done: integer; cdecl; external libapi_hub name 'API_Prepare_Done';
 
   {****************************************************************************
     API_Exit_MainThread
     【external 导入】通知内部事件循环退出，停止网络处理。
-    设计意图：优雅关闭的第一步，通常后接 API_shutdown。
-    线程安全：是。
+
+    调用行为：
+      • 如果主线程正在运行，它会发出退出信号，并等待主线程结束。
+      • 如果主线程已经停止，再次调用此函数无任何效果，直接返回。
+      • 该函数可以安全地多次调用。
+
+    设计意图：
+      优雅关闭的第一步，停止网络事件循环，通常后接 API_shutdown。
+      也可以单独使用，但建议与 API_shutdown 配合。
+
+    注意事项：
+      • 调用后，API_Call 等远程调用将不再可用。
+      • 必须与 API_shutdown 配合完成完整清理。
+      • 在应用程序退出前，务必调用 API_shutdown 以释放所有资源。
+
+    线程安全：
+      是。
   ****************************************************************************}
 procedure API_Exit_MainThread; cdecl; external libapi_hub name 'API_Exit_MainThread';
 
@@ -758,8 +866,9 @@ procedure API_Exit_MainThread; cdecl; external libapi_hub name 'API_Exit_MainThr
     返回：新 TDataHnd – 结果句柄，永远非 nil。若超时或失败，大小 = 0。
     设计意图：主要 RPC 入口，自动路由、负载均衡、重试。
     注意事项：
-      • 调用者必须释放返回的句柄（即使大小为 0）。
+      • 调用者必须释放返回的句柄（即使大小为 0），否则内存泄漏。
       • 在回调中调用此函数不会死锁，但需防死循环，且不可阻塞。
+      • 超时后返回 nil，但网络请求可能仍在后台继续，应避免短时间重复调用。
     线程安全：完全线程安全。
     AI 翻译提示：其他语言应提供同步调用方法，注意超时参数和句柄释放。
   ****************************************************************************}
@@ -811,15 +920,19 @@ procedure API_Notify2(appName: string; Param: TDataHnd);
     │   进行握手。服务端和客户端必须匹配，否则连接失败。                │
     │   ⚠️ 仅影响新建连接，已有连接不受影响。                           │
     │   ⚠️ 日志中密码会以掩码（* 和 **）显示，防止泄露。                │
+    │   生效时机：立即生效（新建连接）。                                 │
     ├───────────────────────────────────────────────────────────────────┤
     │ 2. 日志与调试                                                     │
     ├───────────────────────────────────────────────────────────────────┤
     │ • "Quiet"                                                         │
     │   启用/禁用静默模式（True/False）。True 时抑制大多数调试日志。    │
+    │   生效时机：立即生效。                                             │
     │ • "ConsoleOutput" / "Console_Output"                              │
     │   启用/禁用控制台（stdout/stderr）日志输出（True/False）。        │
+    │   生效时机：立即生效。                                             │
     │ • "ShowThreadID" / "ShowThread" / "Show_Thread"                   │
     │   控制状态日志是否显示线程 ID（True/False）。                     │
+    │   生效时机：立即生效。                                             │
     ├───────────────────────────────────────────────────────────────────┤
     │ 3. 网络启动与部署                                                 │
     ├───────────────────────────────────────────────────────────────────┤
@@ -830,29 +943,34 @@ procedure API_Notify2(appName: string; Param: TDataHnd);
     │   True（默认）：阻塞直到所有客户端完成连接和注册。                │
     │   False：立即返回，客户端将自动重连（适用于弹性部署）。           │
     │   ⚠️ 此选项仅在 API_Prepare_Done 调用前设置有效。                 │
+    │   生效时机：仅在 API_Prepare_Done 前设置有效。                     │
     │ • "Wait_Connection_Timeout" / "Wait_TimeOut" /                    │
     │   "API_Prepare_Done_TimeOut" / "WaitTimeOut"                      │
     │   当 Wait_Connection_ReadyOk=True 时的最大等待时间（毫秒）。      │
     │   默认 30000。仅 API_Prepare_Done 前设置有效。                    │
+    │   生效时机：仅在 API_Prepare_Done 前设置有效。                     │
     ├───────────────────────────────────────────────────────────────────┤
     │ 4. IPC（进程间通信）调优                                          │
     ├───────────────────────────────────────────────────────────────────┤
     │ • "IPC_Serv_ThreadCount" / "IPC_ThreadCount" /                    │
     │   "IPC_Server_ThreadCount"                                        │
     │   IPC 服务线程池大小（整数）。影响后续新建的 IPC 服务。           │
-    │   默认 4。                                                        │
+    │   默认 4。生效时机：对新创建的 IPC 服务生效，已有不受影响。      │
     │ • "IPC_Serv_MaxQueueLength" / "IPC_MaxQueueLength" /              │
     │   "IPC_Server_MaxQueueLength"                                     │
     │   IPC 消息队列最大长度（整数）。默认 4096。                       │
+    │   生效时机：对新创建的 IPC 服务生效，已有不受影响。              │
     │ • "IPC_Serv_MaxMsgSize" / "IPC_MaxMsgSize" /                      │
     │   "IPC_Server_MaxMsgSize"                                         │
     │   单条 IPC 消息最大大小（字节）。默认 32768。                     │
+    │   生效时机：对新创建的 IPC 服务生效，已有不受影响。              │
     ├───────────────────────────────────────────────────────────────────┤
     │ 5. 配置文件保存                                                   │
     ├───────────────────────────────────────────────────────────────────┤
     │ • "External_Conf_Auto_Save" / "Conf_Auto_Save"                    │
     │   程序退出时自动保存当前配置到 .api-tool.ini 文件                 │
     │   （True/False）。默认 True。                                     │
+    │   生效时机：程序退出时。                                           │
     └───────────────────────────────────────────────────────────────────┘
 
   返回值：
@@ -905,11 +1023,124 @@ procedure API_SetOption(Option, Value: pansichar); cdecl; external libapi_hub na
 procedure API_SetOption2(Option, Value: string);
 
   {****************************************************************************
+    API_Get_Status_Num
+    【external 导入】获取状态队列中待读取的日志消息数量。
+    返回：待读消息条数。
+    线程安全：是。
+  ****************************************************************************}
+function API_Get_Status_Num(): integer; cdecl; external libapi_hub name 'API_Get_Status_Num';
+
+  {****************************************************************************
+    API_Get_Status
+    【external 导入】从状态队列中取出一条日志消息（FIFO 顺序）。
+    返回：PAnsiChar – 指向内部静态缓冲区的 UTF‑8 字符串，有效至下一次调用。
+          若队列为空，返回空字符串（指向一个空字节）。
+    注意事项：
+      • 消息最大长度 64KB，超长会被截断。
+      • 返回的指针无需释放，但数据会被后续调用覆盖。
+      • 若需保留消息，调用者应立即复制。
+      • 队列最大容量为 1000 条，超出时旧消息会被丢弃（FIFO）。
+    线程安全：是，但同一句柄的多次调用可能返回不同消息。
+    AI 翻译提示：其他语言应通过 FFI 获取指针后立即复制到本地字符串。
+  ****************************************************************************}
+function API_Get_Status(): pansichar; cdecl; external libapi_hub name 'API_Get_Status';
+
+  {****************************************************************************
+    API_Get_Status2
+    【Pascal 辅助】调用 API_Get_Status 并自动转换为 Pascal string。
+    返回：当前队列中的下一条日志消息，若队列为空则返回空字符串。
+    内部自动复制缓冲区内容，不受内部缓冲覆盖影响。
+    线程安全：是。
+  ****************************************************************************}
+function API_Get_Status2(): string;
+
+  {****************************************************************************
+    API_Post_Status
+    【external 导入】向状态队列中写入一条自定义日志消息。
+    参数：
+      status : PAnsiChar – UTF‑8 编码、#0 结尾的日志内容。
+    设计意图：允许外部程序将自身日志汇入 API Hub 的统一日志流。
+    线程安全：是。
+  ****************************************************************************}
+procedure API_Post_Status(status: pansichar); cdecl; external libapi_hub name 'API_Post_Status';
+
+  {****************************************************************************
+    API_Post_Status2
+    【Pascal 辅助】调用 API_Post_Status，自动将 Pascal string 转换为 UTF‑8。
+    参数：
+      status : string – 要写入状态队列的日志内容。
+    设计意图：为 Pascal 开发者提供便利，避免手动调用 UTF8Encode。
+    线程安全：是。
+  ****************************************************************************}
+procedure API_Post_Status2(status: string);
+
+  {****************************************************************************
+    API_Check_MainThread
+    【external 导入】检查模拟主线程（C4 事件循环）是否正在运行。
+    返回：1 表示正在运行，0 表示已停止或未启动。
+    用途：用于确认网络框架是否已就绪（API_Prepare_Done 成功且未退出）。
+    线程安全：是。
+  ****************************************************************************}
+function API_Check_MainThread(): integer; cdecl; external libapi_hub name 'API_Check_MainThread';
+
+  {****************************************************************************
+    API_Check_MainThread2
+    【Pascal 辅助】调用 API_Check_MainThread 并返回 Boolean。
+    返回：True 表示主线程正在运行，False 表示已停止。
+  ****************************************************************************}
+function API_Check_MainThread2(): boolean;
+
+  {****************************************************************************
+    API_Check_App
+    【external 导入】检查网络中是否存在某个应用（名称匹配，区分大小写）。
+    参数：
+      appName : PAnsiChar – 目标应用名（UTF‑8 + #0）。
+    返回：1 表示存在至少一个实例，0 表示不存在。
+    设计意图：在调用 API_Call 前快速探测目标是否可达。
+    注意事项：此函数基于本地缓存查询，不保证实时性，可能过时。
+    线程安全：是。
+  ****************************************************************************}
+function API_Check_App(appName: pansichar): integer; cdecl; external libapi_hub name 'API_Check_App';
+
+  {****************************************************************************
+    API_Check_App2
+    【Pascal 辅助】调用 API_Check_App，自动转换 string 为 UTF‑8。
+    参数：
+      appName : string – 应用名称（Pascal 字符串）。
+    返回：True 表示存在该应用，False 表示不存在。
+  ****************************************************************************}
+function API_Check_App2(appName: string): boolean;
+
+  {****************************************************************************
     API_shutdown
     【external 导入】完全关闭框架，停止所有服务、断开客户端、释放资源。
-    设计意图：清理后状态重置，可重新初始化。
-    建议顺序：先 API_Exit_MainThread，再 API_shutdown。
-    线程安全：是，但通常主线程调用。
+
+    调用行为：
+      • 如果框架正在运行，会首先停止主线程（相当于调用 API_Exit_MainThread），
+        然后释放所有内部资源（网络连接、线程池、内存等）。
+      • 如果框架已经停止，再次调用此函数无任何效果，直接返回。
+      • 该函数可以安全地多次调用。
+
+    设计意图：
+      清理所有资源，使框架恢复到未初始化的状态。之后可以重新调用
+      API_Reset_Prepare 和 API_Prepare_Done 重新启动。
+
+    ⚠️ 重要：
+      在应用程序退出（或动态库卸载）之前，必须调用此函数！
+      否则可能导致：
+        • 资源泄漏（内存、套接字、线程等）
+        • 进程无法正常退出（线程未终止）
+        • 动态库卸载时崩溃（未清理的全局对象）
+
+    建议顺序：
+      先调用 API_Exit_MainThread（可选，因为 shutdown 内部会调用），
+      然后调用 API_shutdown。
+
+    线程安全：
+      是，但通常由主线程调用。
+
+    AI 翻译提示：
+      其他语言必须在程序退出前调用对应的清理函数。
   ****************************************************************************}
 procedure API_shutdown; cdecl; external libapi_hub name 'API_shutdown';
 
@@ -1231,9 +1462,37 @@ begin
   API_SetOption(pansichar(UTF8Encode(Option)), pansichar(UTF8Encode(Value)));
 end;
 
+{-------------------------------------------------------------------------------
+  6.4  新增辅助函数实现（这些是辅助函数，已经在 interface 中声明）
+-------------------------------------------------------------------------------}
+function API_Get_Status2(): string;
+var
+  p: pansichar;
+begin
+  p := API_Get_Status();
+  if p = nil then
+    Result := ''
+  else
+    Result := UTF8Decode(p);
+end;
+
+procedure API_Post_Status2(status: string);
+begin
+  API_Post_Status(pansichar(UTF8Encode(status)));
+end;
+
+function API_Check_MainThread2(): boolean;
+begin
+  Result := API_Check_MainThread() <> 0;
+end;
+
+function API_Check_App2(appName: string): boolean;
+begin
+  Result := API_Check_App(pansichar(UTF8Encode(appName))) <> 0;
+end;
 
 {-------------------------------------------------------------------------------
-  6.4  内部工具：线程安全队列、软同步等（从 Z.Core 移植的迷你内核）
+  6.5  内部工具：线程安全队列、软同步等（从 Z.Core 移植的迷你内核）
   以下类型和工具是从作者自有的 Z.Core 库中提取的轻量级内核代码，
   用于支持对象方法回调的桥接（将对象方法适配为 cdecl 回调）以及
   用户态软同步（仅供测试或特定场景使用）。
@@ -1269,6 +1528,7 @@ type
     FOnFreeCriticalOrderStruct: TOnFreeCriticalOrderStruct;
     procedure DoInternalFree(const p: POrderStruct); public
     property Critical__: TCritical read FCritical__;
+  public
     constructor Create; virtual;
     destructor Destroy; override;
     procedure DoFree(var Data: T_); virtual;
@@ -1278,7 +1538,6 @@ type
     property First: POrderStruct read GetCurrent;
     procedure Next;
     function Push(const Data: T_): POrderStruct;
-    function Push_Null: POrderStruct;
     function GetNum: nativeint;
     property Num: nativeint read GetNum;
     property OnFree: TOnFreeCriticalOrderStruct read FOnFreeCriticalOrderStruct write FOnFreeCriticalOrderStruct;
@@ -1315,8 +1574,7 @@ type
     constructor Create;
     destructor Destroy; override;
     function Check_Synchronize(): nativeint;
-    procedure Synchronize(OnSync: TOnSynchronize_P_NP); overload;
-    procedure Synchronize_P(Thread_: TCore_Thread; OnSync: TOnSynchronize_P_NP);
+    procedure Synchronize(OnSync: TOnSynchronize_P_NP);
   end;
 
 {-------------------------------------------------------------------------------
@@ -1472,29 +1730,6 @@ begin
   Result := p;
 end;
 
-function TCriticalOrderStruct<T_>.Push_Null: POrderStruct;
-var
-  p: POrderStruct;
-begin
-  new(p);
-  FillPtr(p, SizeOf(TOrderStruct_), 0);
-  p^.Next := nil;
-  FCritical__.Lock;
-  Inc(FNum);
-  if (FFirst = nil) and (FLast = nil) then
-  begin
-    FFirst := p;
-    FLast := p;
-  end
-  else if FLast <> nil then
-    begin
-      FLast^.Next := p;
-      FLast := p;
-    end;
-  FCritical__.UnLock;
-  Result := p;
-end;
-
 function TCriticalOrderStruct<T_>.GetNum: nativeint;
 begin
   FCritical__.Lock;
@@ -1548,15 +1783,10 @@ begin
 end;
 
 procedure TSoft_Synchronize_Tool.Synchronize(OnSync: TOnSynchronize_P_NP);
-begin
-  Synchronize_P(TCore_Thread.CurrentThread, OnSync);
-end;
-
-procedure TSoft_Synchronize_Tool.Synchronize_P(Thread_: TCore_Thread; OnSync: TOnSynchronize_P_NP);
 var
   Wait_Signal__: boolean;
 begin
-  if Thread_ = Soft_Synchronize_Main_Thread then
+  if TCore_Thread.CurrentThread = Soft_Synchronize_Main_Thread then
   begin
     try
       OnSync();
@@ -1572,7 +1802,7 @@ begin
 end;
 
 {-------------------------------------------------------------------------------
-  6.5  对象方法回调桥接
+  6.6  对象方法回调桥接
   这些函数将 Pascal 对象方法（TAPI_Call_M / TAPI_Notify_M）适配为
   cdecl 回调，以便注册到 C 动态库。
   非同步版本直接在 C 线程池执行，同步版本则通过 TSoft_Synchronize_Tool
@@ -1668,7 +1898,7 @@ begin
 end;
 
 {-------------------------------------------------------------------------------
-  6.6  主线程同步处理
+  6.7  主线程同步处理
   API_Sync 由外部主线程周期性调用，以处理排队到主线程的回调任务。
 -------------------------------------------------------------------------------}
 function API_Sync(): integer;
@@ -1677,7 +1907,7 @@ begin
 end;
 
 {-------------------------------------------------------------------------------
-  6.7  初始化与终结
+  6.8  初始化与终结
 -------------------------------------------------------------------------------}
 procedure Do_Init();
 begin
