@@ -1,5 +1,9 @@
 # 🐹 API Hub for Go 从零到一掌握多语言互调
 
+**版本：** 2.1（与 ZAPI 核心 v2.1 同步）
+
+---
+
 ## 📖 目录
 
 1. [概述：API Hub 是什么](#1-概述api-hub-是什么)
@@ -9,15 +13,16 @@
 5. [数据句柄（DataHnd）详解](#5-数据句柄datahnd详解)
 6. [应用与服务端（Server）详解](#6-应用与服务端server详解)
 7. [客户端（Client）详解](#7-客户端client详解)
-8. [动态注销 API（新增）](#8-动态注销-api新增)
-9. [运行时配置（新增）](#9-运行时配置新增)
-10. [线程安全与回调约束（⚠️ 关键）](#10-线程安全与回调约束-关键)
-11. [序列化与自定义载荷](#11-序列化与自定义载荷)
-12. [日志与调试](#12-日志与调试)
-13. [高级主题](#13-高级主题)
-14. [完整示例集](#14-完整示例集)
-15. [常见问题与排错](#15-常见问题与排错)
-16. [开源与社区](#16-开源与社区)
+8. [状态与检查 API（新增）](#8-状态与检查-api新增)
+9. [动态注销 API](#9-动态注销-api)
+10. [运行时配置](#10-运行时配置)
+11. [线程安全与回调约束（⚠️ 关键）](#11-线程安全与回调约束-关键)
+12. [序列化与自定义载荷](#12-序列化与自定义载荷)
+13. [日志与调试](#13-日志与调试)
+14. [高级主题](#14-高级主题)
+15. [完整示例集](#15-完整示例集)
+16. [常见问题与排错](#16-常见问题与排错)
+17. [开源与社区](#17-开源与社区)
 
 ---
 
@@ -25,7 +30,7 @@
 
 API Hub 是一个**基于 C4 分布式服务网格的轻量级 RPC 框架**，它通过一组纯 C 函数（ABI）让不同语言、不同进程、不同机器之间能够**像调用本地函数一样**进行通信。
 
-- **核心 C 动态库**：`z_api_hub64.dll` / `libz_api_hub.so` / `libz_api_hub.dylib`，导出约 20 个 API。
+- **核心 C 动态库**：`z_api_hub64.dll` / `libz_api_hub.so` / `libz_api_hub.dylib`，导出 30 个 API（含 v2.1 新增）。
 - **Pascal 绑定**：`z_api_hubtool_import.pas` —— 这是**所有语言绑定的参考实现**，Go 绑定完全遵循其语义。
 - **Go 绑定**：基于 `cgo` 封装，提供 `DataHnd`、`Client`、`Server` 等类型，让 Go 开发者无痛接入跨语言 RPC 世界。
 
@@ -34,7 +39,8 @@ API Hub 是一个**基于 C4 分布式服务网格的轻量级 RPC 框架**，�
 - ✅ 将任意 Go 函数暴露为远程 API，供 Python/C++/Java/Rust/C#/PHP/Node.js 等语言调用。
 - ✅ 用 Go 透明地调用其他语言编写的服务，无需 HTTP、不写 IDL、无需生成桩代码。
 - ✅ 自动处理服务发现、负载均衡、断线重连、NAT 穿透。
-- ✅ **新增**动态注销 API（`Server.Unregister`）和运行时配置（`SetOption`）。
+- ✅ **v2.1 新增**状态与检查 API（`CheckMainThread`, `CheckApp`, `GetStatusNum`, `GetStatus`, `PostStatus`），方便调试和监控。
+- ✅ 支持动态注销 API（`Server.Unregister`）和运行时配置（`SetOption`）。
 
 ## 2. 核心概念（必读）
 
@@ -46,8 +52,9 @@ API Hub 是一个**基于 C4 分布式服务网格的轻量级 RPC 框架**，�
 | **应用句柄（AppHnd）**  | 代表一个逻辑应用，可注册多个 API（Call 或 Notify），在网络中具有唯一名称。客户端通过 `应用名 + API 名` 路由请求。                 |
 | **Call（请求-响应）**   | 同步调用，发送请求并等待响应。对应 `Call` 函数。                                                                                  |
 | **Notify（单向通知）**  | 异步通知，不等待响应。对应 `Notify` 函数。                                                                                        |
-| **回调（Callback）**    | 服务端注册的函数，当远程调用到达时执行。**所有回调都在后台线程池中运行**（非 Go 主线程），因此必须遵守线程安全规则（见第 10 节）。 |
-| **线程安全**            | 除日志函数外，所有 API 均可并发调用。但单个 DataHnd 的写操作需串行化。                                               |
+| **回调（Callback）**    | 服务端注册的函数，当远程调用到达时执行。**所有回调都在后台线程池中运行**（非 Go 主线程），因此必须遵守线程安全规则（见第 11 节）。 |
+| **状态与检查（v2.1）**  | `CheckMainThread`、`CheckApp` 查询框架运行状态；`GetStatusNum`、`GetStatus`、`PostStatus` 提供日志队列访问。                      |
+| **线程安全**            | 除少数日志辅助函数外，所有 API 均可并发调用。但单个 DataHnd 的写操作需串行化。                                                    |
 
 ## 3. 环境准备与安装
 
@@ -215,10 +222,10 @@ defer client.FreeDataHnd(param)  // 必须释放
 // 写入整数（小端序）
 _ = client.WriteInt32(param, 12345)
 
-// 写入字符串（长度前缀 + UTF-8）
-_ = client.WriteString(param, "hello")
+// 写入 UTF-8 字符串（以空终止符结尾）
+_ = client.WriteStringZ(param, "hello")
 
-// 写入字节数组
+// 写入字节数组（长度前缀）
 _ = client.WriteBytes(param, []byte{0x01, 0x02, 0x03})
 
 // 写入布尔值
@@ -236,10 +243,10 @@ _, _ = client.WriteBuffer(param, data)
 client.SetPos(result, 0)
 val, _ := client.ReadInt32(result)
 
-// 读取字符串
-str, _ := client.ReadString(result)
+// 读取空终止字符串
+str, _ := client.ReadStringZ(result)
 
-// 读取字节数组
+// 读取长度前缀字节数组
 bytes, _ := client.ReadBytes(result)
 
 // 读取布尔值
@@ -288,13 +295,13 @@ err := server.RegisterCall("add", "a + b", func(input, output api_hub.DataHnd) {
 ```
 
 **回调签名**：`func(input DataHnd, output DataHnd)`  
-**重要**：回调运行在 C 线程池中，**不能阻塞**，**不能调用 `Call` 或 `Notify`**（见第 10 节）。
+**重要**：回调运行在 C 线程池中，**不能阻塞**，**不能调用 `Call` 或 `Notify`**（见第 11 节）。
 
 ### 6.3 注册 Notify API（单向通知）
 
 ```go
 err := server.RegisterNotify("log", "Logger", func(input api_hub.DataHnd) {
-    msg, _ := api_hub.ReadString(input)
+    msg, _ := api_hub.ReadStringZ(input)
     fmt.Printf("[LOG] %s\n", msg)
 })
 ```
@@ -376,23 +383,111 @@ sum, _ := client.ReadInt32(result)
 param, _ := client.CreateDataHnd("log")
 defer client.FreeDataHnd(param)
 
-_ = client.WriteString(param, "INFO")
-_ = client.WriteString(param, "Service started")
+_ = client.WriteStringZ(param, "INFO")
+_ = client.WriteStringZ(param, "Service started")
 
 client.Notify("TargetApp", param)
 ```
 
-## 8. 动态注销 API（新增）
+## 8. 状态与检查 API（新增）
+
+v2.1 新增了五个函数，用于查询框架运行状态和获取日志信息，极大方便了调试和运维。
+
+### 8.1 `CheckMainThread`
+
+```go
+func CheckMainThread() int
+```
+
+检查模拟主线程（C4 事件循环）是否正在运行。
+
+- **返回值**：`1` 表示运行中，`0` 表示已停止或未启动。
+- **用途**：在调用远程 API 前确认框架已就绪，或在退出前确认主循环状态。
+- **示例**：
+  ```go
+  if api_hub.CheckMainThread() == 1 {
+      fmt.Println("主线程正在运行")
+  } else {
+      fmt.Println("主线程已停止")
+  }
+  ```
+
+### 8.2 `CheckApp`
+
+```go
+func CheckApp(appName string) int
+```
+
+检查网络中是否存在指定名称的应用（基于本地缓存，可能有短暂滞后）。
+
+- **参数**：`appName` – 应用名称（UTF‑8，区分大小写）。
+- **返回值**：`1` 表示存在至少一个实例，`0` 表示不存在。
+- **用途**：在调用 `Call` 前探测目标应用是否在线，避免无效超时。
+- **示例**：
+  ```go
+  if api_hub.CheckApp("MyService") == 1 {
+      // 安全调用
+      result, _ := client.Call("MyService", param, 5000)
+  } else {
+      fmt.Println("MyService 当前不可用")
+  }
+  ```
+
+### 8.3 日志队列 API
+
+库内部维护一个 FIFO 日志队列，最多存储 **1000 条**消息，溢出时丢弃最旧的消息。
+
+#### `GetStatusNum`
+
+```go
+func GetStatusNum() int
+```
+
+返回当前队列中待读取的日志条数。
+
+#### `GetStatus`
+
+```go
+func GetStatus() string
+```
+
+取出队列头部的一条日志消息（UTF‑8 编码，已复制到 Go 字符串）。
+
+- **返回**：若队列为空，返回空字符串。
+- **示例**：
+  ```go
+  for api_hub.GetStatusNum() > 0 {
+      msg := api_hub.GetStatus()
+      fmt.Printf("[库日志] %s\n", msg)
+  }
+  ```
+
+#### `PostStatus`
+
+```go
+func PostStatus(status string)
+```
+
+向队列中注入一条自定义日志消息，与库自身日志混合输出。
+
+- **参数**：`status` – UTF‑8 字符串。
+- **用途**：将应用层日志统一纳入 API Hub 的日志流。
+- **示例**：
+  ```go
+  api_hub.PostStatus("应用初始化完成")
+  ```
+
+## 9. 动态注销 API
 
 `Server.Unregister()` 方法允许您在运行时移除已注册的 API。
 
-### 8.1 方法签名
+### 9.1 方法签名
 
 ```go
 func (s *Server) Unregister(apiName string) error
 ```
 
-### 8.2 使用示例
+### 9.2 使用示例
 
 ```go
 server, _ := api_hub.NewServer("MyService", "")
@@ -409,29 +504,29 @@ if err := server.Unregister("add"); err != nil {
 }
 ```
 
-### 8.3 关键行为
+### 9.3 关键行为
 
 - **本地立即生效**：API 从本地注册表中同步删除。
 - **网络异步广播**：删除操作触发 C4 服务网格广播，传播时间约 3 秒。
 - **传播延迟窗口**：在广播传播期间，远程调用可能仍然到达并收到"未找到"错误。
 
-### 8.4 使用场景
+### 9.4 使用场景
 
 - **热卸载插件**：动态库插件可先注销自身 API，再安全卸载。
 - **临时维护模式**：临时下线某些功能 API，无需重启整个应用。
 - **权限动态调整**：根据用户角色或运行时条件，移除敏感 API 暴露。
 
-## 9. 运行时配置（新增）
+## 10. 运行时配置
 
 `SetOption()` 函数允许您在运行时动态调整 API Hub 框架的全局配置选项。
 
-### 9.1 函数签名
+### 10.1 函数签名
 
 ```go
 func SetOption(option, value string)
 ```
 
-### 9.2 支持的选项
+### 10.2 支持的选项
 
 | 选项键（主名） | 别名 | 值类型 | 说明 |
 |---------------|------|--------|------|
@@ -446,7 +541,7 @@ func SetOption(option, value string)
 | `IPC_Serv_MaxQueueLength` | `IPC_MaxQueueLength` | 整数 | IPC 消息队列最大长度，默认 `4096`。 |
 | `IPC_Serv_MaxMsgSize` | `IPC_MaxMsgSize` | 整数（字节） | 单条 IPC 消息最大大小，默认 `32768`。 |
 
-### 9.3 使用示例
+### 10.3 使用示例
 
 ```go
 // 设置认证密码
@@ -459,14 +554,14 @@ api_hub.SetOption("Wait_Connection_ReadyOk", "False")
 api_hub.SetOption("IPC_Serv_ThreadCount", "8")
 ```
 
-## 10. 线程安全与回调约束（⚠️ 关键）
+## 11. 线程安全与回调约束（⚠️ 关键）
 
-### 10.1 导出函数线程安全
+### 11.1 导出函数线程安全
 
-- ✅ `Call`、`Notify`、`WriteBuffer`、`ReadBuffer`、`Prepare*`、`Shutdown` 等**全部**可被多线程并发调用。
-- ❌ 唯一例外：`GetStatus()` **非线程安全**，必须从调用 `PrepareDone` 的同一线程串行调用（注：库日志已改为自动打印到控制台，此函数仅用于兼容性）。
+- ✅ `Call`、`Notify`、`WriteBuffer`、`ReadBuffer`、`Prepare*`、`Shutdown`、`CheckMainThread`、`CheckApp`、`GetStatusNum`、`GetStatus`、`PostStatus` 等**全部**可被多线程并发调用。
+- ✅ 所有新增状态与检查 API 均为线程安全。
 
-### 10.2 回调执行上下文
+### 11.2 回调执行上下文
 
 你的回调函数（通过 `RegisterCall`/`RegisterNotify` 注册）**运行在底层 C4 线程池的工作线程中**，而不是 Go 的 goroutine。
 
@@ -506,35 +601,53 @@ server.RegisterCall("process", func(input, output DataHnd) {
 })
 ```
 
-## 11. 序列化与自定义载荷
+## 12. 序列化与自定义载荷
 
 Go 绑定提供了便捷的序列化辅助函数，全部使用**小端序**编码：
 
 | 函数                         | 说明                            |
 | ---------------------------- | ------------------------------- |
 | `WriteInt32` / `ReadInt32`   | 32 位整数                       |
-| `WriteString` / `ReadString` | 长度前缀（int32）+ UTF-8 字符串 |
+| `WriteStringZ` / `ReadStringZ` | UTF-8 字符串（空终止符 `#0`） |
 | `WriteBool` / `ReadBool`     | 单字节布尔值                    |
 | `WriteBytes` / `ReadBytes`   | 长度前缀（int32）+ 字节数组     |
 | `WriteBuffer` / `ReadBuffer` | 原始字节读写                    |
 
 **自定义序列化**：你可以使用 `WriteBuffer` 和 `ReadBuffer` 直接读写原始字节，实现任意格式（JSON、Protobuf、MsgPack 等）。
 
-## 12. 日志与调试
+## 13. 日志与调试
 
-库会在控制台自动输出详细的运行日志（包括连接状态、注册信息、错误原因）。你可以在 `<可执行文件名>.api-tool.ini` 配置文件中调整日志行为。
+库会输出大量运行时日志（连接状态、注册结果、错误信息等）。您可以通过以下方式获取：
+
+1. **控制台自动输出**（默认开启）：库会将日志打印到标准输出，无需额外处理。
+2. **程序化拉取（v2.1 新增）**：使用 `GetStatusNum` / `GetStatus` 在您的循环中拉取日志，实现自定义日志处理（如写入文件、网络传输）。
+3. **注入自定义日志**：使用 `PostStatus` 将您的日志混合到库的日志流中。
+
+**典型用法（主循环中拉取日志）**：
+
+```go
+func PollLogs() {
+    for api_hub.GetStatusNum() > 0 {
+        msg := api_hub.GetStatus()
+        // 将 msg 写入文件、网络或控制台
+        fmt.Println("[库日志]", msg)
+    }
+}
+```
+
+**控制台日志配置**：通过 `SetOption("ConsoleOutput", "False")` 可关闭控制台输出，完全由您的代码接管日志处理。也可通过 `<可执行文件名>.api-tool.ini` 配置文件调整日志行为。
 
 常见日志含义：
 
 | 日志                             | 含义                | 解决                   |
 | -------------------------------- | ------------------- | ---------------------- |
 | `bind address already in use`    | 端口/IPC 名称被占用 | 更换地址或终止其他进程 |
-| `no found app("XXX") api("YYY")` | 目标应用/API 不存在 | 检查名称大小写         |
+| `no found app("XXX") api("YYY")` | 目标应用/API 不存在 | 检查名称大小写，使用 `CheckApp` 提前探测 |
 | `timeout`                        | 调用超时            | 增加超时，检查网络     |
 
-## 13. 高级主题
+## 14. 高级主题
 
-### 13.1 并发调用
+### 14.1 并发调用
 
 由于所有 API 都是线程安全的，你可以轻松实现高并发：
 
@@ -558,7 +671,7 @@ for i := 0; i < 100; i++ {
 wg.Wait()
 ```
 
-### 13.2 超时与重试
+### 14.2 超时与重试
 
 `Call` 的超时参数（毫秒）可自定义。超时返回的句柄大小为 0，此时可重试：
 
@@ -574,14 +687,14 @@ if client.GetSize(result) == 0 {
 }
 ```
 
-### 13.3 多实例负载均衡
+### 14.3 多实例负载均衡
 
 只需在**不同进程**中启动多个服务端，注册**相同的应用名**。客户端调用时，C4 会自动将请求分发到负载最低的实例。
 
 - 每个服务端使用不同的监听地址（如不同的 IPC 名称或端口），但公布地址应相同。
 - 对于 IPC，多个服务端不能共用同一个 IPC 名称，需使用不同名称（如 `ipc:calc_1`、`ipc:calc_2`），但客户端可连接到任意一个。
 
-### 13.4 本地调用（无网络）
+### 14.4 本地调用（无网络）
 
 在开发测试阶段，可以使用 `LocalCall` 避免启动网络，快速验证逻辑：
 
@@ -599,7 +712,7 @@ sum, _ := client.ReadInt32(result)
 fmt.Printf("本地调用: %d\n", sum)
 ```
 
-## 14. 完整示例集
+## 15. 完整示例集
 
 项目 `Go/demos/` 目录下提供了 14 个场景示例：
 
@@ -616,19 +729,20 @@ fmt.Printf("本地调用: %d\n", sum)
 
 每个示例都是独立的可运行程序，建议按顺序学习。
 
-## 15. 常见问题与排错
+## 16. 常见问题与排错
 
 | 问题                     | 可能原因                    | 解决方案                                         |
 | ------------------------ | --------------------------- | ------------------------------------------------ |
 | `loadLibrary` 失败       | 动态库不在搜索路径          | 将 `z_api_hub64.dll` 等放在可执行目录或系统 PATH |
-| `PrepareDone` 返回 false | 地址已被占用或格式错误      | 检查地址，查看控制台输出获取详细错误             |
+| `PrepareDone` 返回 false | 地址已被占用或格式错误      | 检查地址，查看控制台输出或使用 `GetStatus` 获取详细错误 |
 | 回调未触发               | 应用名或 API 名大小写不一致 | 核对大小写，服务端与客户端完全一致               |
-| 远程调用超时             | 网络延迟或服务端未响应      | 增加超时时间，检查服务是否正常运行               |
+| 远程调用超时             | 网络延迟或服务端未响应      | 增加超时时间，检查服务是否正常运行，用 `CheckApp` 提前探测 |
 | 内存泄漏                 | 未释放 DataHnd              | 确保每个句柄都调用了 `FreeDataHnd`               |
 | 回调中调用 Call 导致死锁 | 违反了回调约束              | 将远程调用移至后台 goroutine                     |
 | 动态注销后仍有调用       | 广播传播延迟（约 3 秒）     | 正常行为，等待广播完成即可                       |
+| 如何查看库内部日志       | 使用新增的日志 API          | 调用 `GetStatusNum`/`GetStatus` 拉取日志        |
 
-## 16. 开源与社区
+## 17. 开源与社区
 
 本项目由**老张**主导，致力于打造多语言互调的通用基础设施。  
 Go 绑定只是其中一环，我们还有 Python、C++、Rust、Java、C#、Pascal、PHP、Node.js 等完整绑定，全部共享同一核心。
