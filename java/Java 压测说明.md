@@ -2,7 +2,7 @@
 
 > 本文档详细介绍如何使用 Java 绑定提供的 `FuncClient` 对 API Hub 服务进行**真正并发**的性能压测，帮助你评估系统在负载下的延迟、吞吐量和稳定性。
 >
-> **版本：** 2.0（与 ZAPI 核心 v2.0 同步）
+> **版本：** 2.1（与 ZAPI 核心 v2.1 同步）
 
 ---
 
@@ -12,6 +12,7 @@
 - **对比不同 API 类型**（整数运算、字符串处理、数组操作）的耗时差异。  
 - **为生产环境容量规划提供数据参考**（如选择 IPC 还是 TCP，线程池大小等）。  
 - **v2.0 新增**：验证 `API_UnReg` 动态注销对性能的影响，以及 `API_SetOption` 运行时配置的调优效果。
+- **v2.1 新增**：利用状态与检查 API（`checkMainThread`、`checkApp`、`getStatusNum`/`getStatus`/`postStatus`）在压测过程中实时监控框架状态、探测服务可用性、拉取和注入日志，辅助性能问题定位。
 
 ---
 
@@ -25,6 +26,7 @@
 - 客户端不暴露任何 API（纯消费端），只连接服务端。  
 - 依赖底层库的**线程安全**特性，无需加锁串行化。  
 - **v2.0 新增**：支持在压测过程中动态调整配置（通过 `API_SetOption`）和动态注销 API（通过 `API_UnReg`）。
+- **v2.1 新增**：压测期间可定期调用 `getStatusNum()` / `getStatus()` 拉取库日志，或使用 `checkApp` 探测目标服务是否在线，避免因服务宕机导致大量超时。
 
 ---
 
@@ -41,6 +43,7 @@ private static final int TIMEOUT_MS = 5000;   // 单次调用超时（毫秒）
 - **`TIMEOUT_MS`**：根据网络环境调整，IPC 通常 1000ms 足够，TCP 可设为 3000~5000ms。  
 - 若需调整 JVM 堆内存或 GC 参数，可在启动脚本中添加 `-Xmx2g -Xms2g` 等。  
 - **v2.0 新增**：可通过 `API_SetOption` 动态调整 IPC 线程池大小后再进行压测，对比性能差异。
+- **v2.1 新增**：可在压测前后调用 `checkMainThread()` 确认框架主循环运行状态，确保压测环境就绪。
 
 ---
 
@@ -94,7 +97,7 @@ sha3                 8.901     6.789    12.345     8.500     1.234        100   
 ```
 
 > **注意**：实际数值取决于硬件、网络、负载等。上述仅为示意。  
-> 这些状态日志由库自动输出到控制台，无需手动调用任何获取函数。
+> 这些状态日志由库自动输出到控制台，也可通过 `getStatusNum()` / `getStatus()` 程序化拉取。
 
 ---
 
@@ -173,17 +176,36 @@ ApiHub.setOption("Wait_Connection_ReadyOk", "False");
 // 然后进行压测...
 ```
 
+### 6.6 v2.1 新增：状态监控辅助调优
+
+在压测过程中，可启动一个独立线程定期拉取库日志，用于监控是否有异常或错误信息：
+
+```java
+new Thread(() -> {
+    while (!Thread.currentThread().isInterrupted()) {
+        while (ApiHub.getStatusNum() > 0) {
+            String msg = ApiHub.getStatus();
+            System.err.println("[监控] " + msg); // 或写入文件
+        }
+        Thread.sleep(100);
+    }
+}).start();
+```
+
+也可在压测前使用 `checkApp("FuncService")` 确认服务已注册，避免因服务未启动导致全部调用失败。
+
 ---
 
 ## ⚠️ 7. 注意事项
 
-1. **服务端必须先启动**，否则客户端会连接失败。  
+1. **服务端必须先启动**，否则客户端会连接失败。可使用 `checkApp("FuncService")` 提前验证。  
 2. **确保动态库路径正确**：脚本已设置 `PATH`，若手动运行需确保 `z_api_hub64.dll` 可被找到。  
 3. **避免在压测期间进行其他高负载操作**（如大文件读写、编译等），以免干扰结果。  
 4. **超时设置**：若 `TOTAL_CALLS` 很大，网络拥塞可能导致部分调用超时，返回空句柄。此时 `Calls` 会小于 `TOTAL_CALLS`，可适当增加 `TIMEOUT_MS`。  
 5. **线程数等于调用次数**：每个调用一个线程，对于 `TOTAL_CALLS=1000`，会创建 1000 个线程，系统资源消耗较大。可根据实际情况调整并发度（如使用线程池限制并发数），但本示例为了体现"真正并发"而采用此设计。  
 6. **结果受环境影响**：不同硬件、操作系统、网络协议（IPC vs TCP）结果差异明显，请基于实际部署环境测试。  
-7. **v2.0 新增**：如果压测过程中需要热卸载某个 API，可使用 `API_UnReg` 观察其对系统的影响。
+7. **v2.0 新增**：如果压测过程中需要热卸载某个 API，可使用 `API_UnReg` 观察其对系统的影响。  
+8. **v2.1 新增**：压测过程中若发现大量超时，可使用 `checkMainThread()` 检查框架主线程是否正常，或使用 `getStatusNum()` 拉取日志查看具体错误信息。
 
 ---
 
@@ -201,16 +223,20 @@ ApiHub.setOption("Wait_Connection_ReadyOk", "False");
 - **排查**：
   - 检查服务端是否有瓶颈（CPU、内存、网络）。  
   - 确认是否使用了 IPC（比 TCP 快很多）。  
-  - 检查控制台输出是否有错误日志。  
-  - 尝试减小 `TOTAL_CALLS` 排除线程创建开销的影响。
+  - 检查控制台输出或使用 `getStatus()` 拉取日志，查看是否有错误信息。  
+  - 尝试减小 `TOTAL_CALLS` 排除线程创建开销的影响。  
   - 尝试使用 `API_SetOption` 调整 IPC 线程池大小。
+  - 使用 `checkApp("FuncService")` 确认服务端已正常注册。
 
 ### Q4：压测过程中客户端或服务端崩溃
 - **原因**：可能是动态库版本不匹配、内存泄漏或线程冲突。  
-- **解决**：确保使用最新稳定版本的 API Hub 动态库；检查代码中句柄是否正确释放（`try-with-resources`）；增加 JVM 堆内存。
+- **解决**：确保使用最新稳定版本的 API Hub 动态库；检查代码中句柄是否正确释放（`try-with-resources`）；增加 JVM 堆内存；使用 `getStatusNum()` / `getStatus()` 查看崩溃前的日志信息。
 
 ### Q5：v2.0 动态注销是否影响压测？
 - **解答**：`API_UnReg` 触发网络广播（约 3 秒），在此期间可能有轻微性能波动，属于正常现象。压测时应避免在压测过程中频繁注销 API。
+
+### Q6：如何确认压测环境已就绪？
+- **解答**：压测前可调用 `checkMainThread()` 确认框架主线程运行，调用 `checkApp("FuncService")` 确认目标服务在线，确保环境正常。
 
 ---
 
@@ -227,14 +253,16 @@ ApiHub.setOption("Wait_Connection_ReadyOk", "False");
 ```java
 actions.put("echo_large", () -> {
     try (DataHandle p = new DataHandle("echo_large")) {
-        p.writeString("x".repeat(1024)); // 1KB 字符串
+        p.writeStringNullTerminated("x".repeat(1024)); // 1KB 字符串
         try (DataHandle r = ApiHub.call("FuncService", p, TIMEOUT_MS)) {
-            r.readString();
+            r.readStringNullTerminated();
         }
     }
     return null;
 });
 ```
+
+> **跨语言字符串提醒**：使用 `writeStringNullTerminated` / `readStringNullTerminated` 确保与其他语言（C++/Python/Go/Pascal）兼容。
 
 ---
 
@@ -247,8 +275,9 @@ actions.put("echo_large", () -> {
 - 识别慢 API 并针对性优化（如缓存、异步处理）。  
 - 为集群扩容提供依据。  
 - **v2.0 新增**：验证动态配置（`API_SetOption`）对性能的影响，评估热卸载（`API_UnReg`）的场景适用性。
+- **v2.1 新增**：利用状态与检查 API 实现压测过程中的实时监控和问题定位，提升压测效率。
 
-现在就开始你的压测吧！如果遇到任何问题，请检查控制台输出日志——它是最好的"诊断工具"。
+现在就开始你的压测吧！如果遇到任何问题，请检查控制台输出或使用 `getStatus()` 拉取日志——它们是最好的"诊断工具"。
 
 ---
 
