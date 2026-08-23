@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <OutputType>WinExe</OutputType>
+        <TargetFramework>net8.0-windows</TargetFramework>
+        <UseWindowsForms>true</UseWindowsForms>
+        <Nullable>disable</Nullable>
+        <ApplicationIcon />
+        <RootNamespace>CrossNodeUI</RootNamespace>
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\ApiHubTool.Bindings\ApiHubTool.Bindings.vbproj" />
+    </ItemGroup>
+</Project>
