@@ -1,225 +1,225 @@
 ﻿/*
-* API_HubTool.cs - C# P/Invoke bindings for the API Hub dynamic library.
-*
-* This file provides managed wrappers for all functions exported by the API Hub
-* library. All exported functions are prefixed with "API_", matching the C and
-* Pascal bindings.
-*
-* The library file is loaded automatically by a custom DllImport resolver that
-* chooses the correct filename based on the current platform:
-*   - Windows 32-bit: z_api_hub32.dll
-*   - Windows 64-bit: z_api_hub64.dll
-*   - Linux:          libz_api_hub.so
-*   - macOS:          libz_api_hub.dylib
-*
-* ============================================================================
-* STRING ENCODING – UTF-8 IS MANDATORY
-* ============================================================================
-* All string parameters (including API names, descriptions, and network addresses)
-* MUST be encoded in **UTF-8** and MUST be null-terminated (i.e., end with a
-* byte of value 0).
-*
-* - UTF-8 is a multi-byte encoding where ASCII characters (0x00–0x7F) occupy
-*   one byte, and all other Unicode characters are encoded in 2–4 bytes.
-*   The null terminator is the only zero byte in a well-formed UTF-8 string.
-* - The library internally decodes UTF-8 input into Unicode, and encodes
-*   outgoing strings to UTF-8.
-* - This encoding is **platform-independent** and works identically on
-*   Windows, Linux, macOS, and BSD.
-*
-* *Important*: Do **not** use the system ANSI codepage (e.g., CP_ACP on
-* Windows). All strings are explicitly marshaled as UTF-8.
-*
-* ============================================================================
-* QUICK START – TYPICAL USAGE PATTERN
-* ============================================================================
-*
-* 1. Create an application handle (AppHnd):
-*    AppHnd app = API.API_Create_APPHnd("MyApp", "Example application");
-*
-* 2. Register your own API callbacks:
-*    API.API_Reg_Call(app, "echo", "Echo input", IntPtr.Zero, MyEchoCallback);
-*
-* 3. Prepare the network (server and/or client):
-*    API.API_Reset_Prepare();
-*    API.API_Prepare_Service("0.0.0.0", "127.0.0.1:9898");   // TCP service
-*    API.API_Prepare_Client("127.0.0.1:9898", app);           // connect to it
-*    if (API.API_Prepare_Done() == 1) { ... }                 // start framework
-*
-* 4. Make a remote call:
-*    DataHnd data = API.API_Create_DataHnd("echo");
-*    API.WriteString(data, "Hello, world!");
-*    DataHnd result = API.API_Call("TargetApp", data, 5000);
-*    API.API_Free_DataHnd(data);   // free input handle
-*    // process result ...
-*    API.API_Free_DataHnd(result);
-*
-* 5. (Optional) Dynamically unregister an API:
-*    if (API.API_UnReg(app, "echo") == 1)
-*        Console.WriteLine("API 'echo' unregistered, broadcast in progress.");
-*
-* 6. (Optional) Adjust runtime options, e.g., authentication password:
-*    API.API_SetOption("password", "my_secret_token");
-*    API.API_SetOption("Wait_Connection_ReadyOk", "False");   // don't wait for clients
-*
-* 7. Shutdown and clean up:
-*    API.API_Exit_MainThread();   // stop main loop
-*    API.API_Free_APPHnd(app);    // free app handle
-*    API.API_shutdown();          // shutdown framework
-*
-* ============================================================================
-* IMPORTANT NOTES & BEST PRACTICES (READ BEFORE USING)
-* ============================================================================
-*
-* 1. **THREAD SAFETY**:
-*    All exported functions are **fully thread-safe**. They can be called
-*    concurrently from any thread without external synchronization.
-*
-*    However, for a given DataHnd, write operations (API_WriteBuffer,
-*    API_SetPos, API_SetSize) should be serialised across threads because they
-*    modify the internal buffer state. Read‑only operations (API_GetBuffer,
-*    API_GetPos, API_GetSize) are safe even while another thread is writing,
-*    as long as the handle is not being freed.
-*
-*    Different DataHnd instances are independent and can be used concurrently
-*    without any restrictions.
-*
-* 2. **CALLBACK EXECUTION CONTEXT** (⚠️ CRITICAL):
-*    Your callbacks (APICallDelegate, APINotifyDelegate) are **executed in
-*    background threads** from the library's internal thread pool.
-*
-*    This means:
-*      * **DO NOT** perform long‑blocking operations inside callbacks.
-*      * **DO NOT** call API_Call() or API_Notify() from within a callback –
-*        this may cause deadlocks because the callback thread may hold internal
-*        locks. If you need to make a remote call, offload the request to a
-*        separate worker thread and return quickly.
-*      * **DO NOT** access UI components or thread‑local storage without
-*        proper synchronization (e.g., using Control.Invoke or a thread‑safe
-*        queue).
-*      * Offload heavy processing to a separate thread or queue to keep
-*        callbacks responsive.
-*
-*    The library guarantees that callbacks are thread‑safe and reentrant,
-*    but it is your responsibility to ensure that any shared data accessed
-*    from callbacks is properly synchronized.
-*
-* 3. **EXECUTION ORDER**:
-*    The library does **not** guarantee the order of execution for concurrent
-*    API calls. Calls are independent and may be executed out‑of‑order because
-*    the underlying service mesh distributes requests across multiple
-*    application instances for load balancing. If you send calls '1', '2', '3'
-*    in that order, the remote side may process them in any order (e.g., '2',
-*    '1', '3'). Only the per‑call request‑response semantics are reliable –
-*    each call is atomic and returns a correct result, but the global ordering
-*    is not preserved.
-*
-* 4. **DATA HANDLE LIFETIME**:
-*    Every DataHnd created with API_Create_DataHnd() MUST be freed with
-*    API_Free_DataHnd() when no longer needed. The library does NOT auto‑free
-*    them, even after remote calls (it clones the input internally).
-*
-* 5. **RESULT HANDLES**:
-*    API_Call() always returns a valid DataHnd (never a null handle). If the
-*    call times out or fails, the handle size will be 0. You must still free
-*    it with API_Free_DataHnd().
-*
-* 6. **CALLBACK DELEGATES MUST BE KEPT ALIVE** (⚠️ CRITICAL):
-*    When registering callbacks, the delegate object is converted to a function
-*    pointer and passed to the native library. You must keep the delegate
-*    alive (e.g., store it in a static variable or a class field) to prevent
-*    it from being garbage collected. This wrapper does NOT automatically
-*    cache the delegate; you are responsible for its lifetime.
-*
-* 7. **TIMEOUTS**:
-*    API_Call() timeout is in milliseconds. 0 means infinite wait (use with
-*    caution). On timeout, the returned handle size is 0.
-*
-* 8. **APPLICATION NAMES**:
-*    App names are case‑sensitive and should be unique across the network.
-*
-* 9. **DYNAMIC UNREGISTRATION (API_UnReg)**:
-*    - Immediately removes the API from the local registry.
-*    - Triggers an asynchronous network broadcast to all connected peers.
-*    - Remote peers stop seeing this API within approximately 3 seconds
-*      (depending on network latency and the C4 update interval).
-*    - During this short window, remote calls may still be attempted; they will
-*      fail gracefully (the remote side receives a "not found" error).
-*
-* 10. **RUNTIME OPTIONS (API_SetOption)**:
-*     Supports keys (case‑insensitive, aliases accepted):
-*       - "password" / "passwd" : Sets C4 P2PVM authentication token.
-*         Must match on both service and client sides.
-*       - "Quiet" : Enable/disable quiet mode (True/False).
-*       - "External_Conf_Auto_Save" / "Conf_Auto_Save" : Auto‑save .ini on exit.
-*       - "Wait_Connection_ReadyOk" / "Wait_API_Prepare_Done" / ... :
-*         Controls whether API_Prepare_Done blocks until all clients are connected.
-*         When False, clients auto‑connect later (useful for deployment).
-*       - "Wait_Connection_Timeout" / "Wait_TimeOut" : Max wait (ms) when the above is True.
-*       - "ShowThreadID" / "ShowThread" / "Show_Thread" : Show thread IDs in logs.
-*       - "ConsoleOutput" / "Console_Output" : Enable/disable console logging.
-*       - "IPC_Serv_ThreadCount" / "IPC_ThreadCount" / ... : Number of IPC service threads.
-*       - "IPC_Serv_MaxQueueLength" / "IPC_MaxQueueLength" / ... : Max IPC queue length.
-*       - "IPC_Serv_MaxMsgSize" / "IPC_MaxMsgSize" / ... : Max IPC message size (bytes).
-*
-* ============================================================================
-* ADDITIONAL EXAMPLES
-* ============================================================================
-*
-* Below is a complete local call example (no network required):
-*
-*     using API_HubTool.Bindings;
-*     using static API_HubTool.Bindings.API;
-*
-*     private static void AddCallback(IntPtr trigger, IntPtr input, IntPtr output)
-*     {
-*         DataHnd hInput = new DataHnd { Handle = input };
-*         DataHnd hOutput = new DataHnd { Handle = output };
-*         byte[] buf = ReadAllBytes(hInput);
-*         if (buf.Length >= 8)
-*         {
-*             int a = BitConverter.ToInt32(buf, 0);
-*             int b = BitConverter.ToInt32(buf, 4);
-*             int sum = a + b;
-*             API_WriteBuffer(hOutput, BitConverter.GetBytes(sum), 4);
-*         }
-*     }
-*
-*     // In Main:
-*     AppHnd app = API_Create_APPHnd("LocalDemo", "Local only");
-*     // The delegate must be kept alive manually (e.g., using GCHandle.Alloc).
-*     APICallDelegate del = AddCallback;
-*     GCHandle.Alloc(del);   // prevent collection
-*     API_Reg_Call(app, "add", "Addition", IntPtr.Zero, del);
-*
-*     DataHnd data = API_Create_DataHnd("add");
-*     byte[] payload = new byte[8];
-*     BitConverter.GetBytes(10).CopyTo(payload, 0);
-*     BitConverter.GetBytes(20).CopyTo(payload, 4);
-*     API_WriteBuffer(data, payload, 8);
-*
-*     DataHnd result = API_Local_APP_Call(app, data);
-*     API_Free_DataHnd(data);
-*     if (result.IsValid && API_GetSize(result) >= 4)
-*     {
-*         int sum = BitConverter.ToInt32(ReadAllBytes(result), 0);
-*         Console.WriteLine($"10 + 20 = {sum}");
-*         API_Free_DataHnd(result);
-*     }
-*
-*     // Unregister the 'add' API before shutdown (optional)
-*     if (API_UnReg(app, "add") == 1)
-*         Console.WriteLine("'add' unregistered.");
-*
-*     // Set a runtime option (e.g., enable quiet mode)
-*     API_SetOption("Quiet", "True");
-*
-*     API_Free_APPHnd(app);
-*     API_shutdown();
-*
-* For more examples, see the companion demo projects (HelloWorld, Service,
-* Client1, etc.).
-*/
+ * API_HubTool.cs - C# P/Invoke bindings for the API Hub dynamic library.
+ *
+ * This file provides managed wrappers for all functions exported by the API Hub
+ * library. All exported functions are prefixed with "API_", matching the C and
+ * Pascal bindings.
+ *
+ * The library file is loaded automatically by a custom DllImport resolver that
+ * chooses the correct filename based on the current platform:
+ *   - Windows 32-bit: z_api_hub32.dll
+ *   - Windows 64-bit: z_api_hub64.dll
+ *   - Linux:          libz_api_hub.so
+ *   - macOS:          libz_api_hub.dylib
+ *
+ * ============================================================================
+ * STRING ENCODING – UTF-8 IS MANDATORY
+ * ============================================================================
+ * All string parameters (including API names, descriptions, and network addresses)
+ * MUST be encoded in **UTF-8** and MUST be null-terminated (i.e., end with a
+ * byte of value 0).
+ *
+ * - UTF-8 is a multi-byte encoding where ASCII characters (0x00–0x7F) occupy
+ *   one byte, and all other Unicode characters are encoded in 2–4 bytes.
+ *   The null terminator is the only zero byte in a well-formed UTF-8 string.
+ * - The library internally decodes UTF-8 input into Unicode, and encodes
+ *   outgoing strings to UTF-8.
+ * - This encoding is **platform-independent** and works identically on
+ *   Windows, Linux, macOS, and BSD.
+ *
+ * *Important*: Do **not** use the system ANSI codepage (e.g., CP_ACP on
+ * Windows). All strings are explicitly marshaled as UTF-8.
+ *
+ * ============================================================================
+ * QUICK START – TYPICAL USAGE PATTERN
+ * ============================================================================
+ *
+ * 1. Create an application handle (AppHnd):
+ *    AppHnd app = API.API_Create_APPHnd("MyApp", "Example application");
+ *
+ * 2. Register your own API callbacks:
+ *    API.API_Reg_Call(app, "echo", "Echo input", IntPtr.Zero, MyEchoCallback);
+ *
+ * 3. Prepare the network (server and/or client):
+ *    API.API_Reset_Prepare();
+ *    API.API_Prepare_Service("0.0.0.0", "127.0.0.1:9898");   // TCP service
+ *    API.API_Prepare_Client("127.0.0.1:9898", app);           // connect to it
+ *    if (API.API_Prepare_Done() == 1) { ... }                 // start framework
+ *
+ * 4. Make a remote call:
+ *    DataHnd data = API.API_Create_DataHnd("echo");
+ *    API.WriteString(data, "Hello, world!");
+ *    DataHnd result = API.API_Call("TargetApp", data, 5000);
+ *    API.API_Free_DataHnd(data);   // free input handle
+ *    // process result ...
+ *    API.API_Free_DataHnd(result);
+ *
+ * 5. (Optional) Dynamically unregister an API:
+ *    if (API.API_UnReg(app, "echo") == 1)
+ *        Console.WriteLine("API 'echo' unregistered, broadcast in progress.");
+ *
+ * 6. (Optional) Adjust runtime options, e.g., authentication password:
+ *    API.API_SetOption("password", "my_secret_token");
+ *    API.API_SetOption("Wait_Connection_ReadyOk", "False");   // don't wait for clients
+ *
+ * 7. Shutdown and clean up:
+ *    API.API_Exit_MainThread();   // stop main loop
+ *    API.API_Free_APPHnd(app);    // free app handle
+ *    API.API_shutdown();          // shutdown framework
+ *
+ * ============================================================================
+ * IMPORTANT NOTES & BEST PRACTICES (READ BEFORE USING)
+ * ============================================================================
+ *
+ * 1. **THREAD SAFETY**:
+ *    All exported functions are **fully thread-safe**. They can be called
+ *    concurrently from any thread without external synchronization.
+ *
+ *    However, for a given DataHnd, write operations (API_WriteBuffer,
+ *    API_SetPos, API_SetSize) should be serialised across threads because they
+ *    modify the internal buffer state. Read‑only operations (API_GetBuffer,
+ *    API_GetPos, API_GetSize) are safe even while another thread is writing,
+ *    as long as the handle is not being freed.
+ *
+ *    Different DataHnd instances are independent and can be used concurrently
+ *    without any restrictions.
+ *
+ * 2. **CALLBACK EXECUTION CONTEXT** (⚠️ CRITICAL):
+ *    Your callbacks (APICallDelegate, APINotifyDelegate) are **executed in
+ *    background threads** from the library's internal thread pool.
+ *
+ *    This means:
+ *      * **DO NOT** perform long‑blocking operations inside callbacks.
+ *      * **DO NOT** call API_Call() or API_Notify() from within a callback –
+ *        this may cause deadlocks because the callback thread may hold internal
+ *        locks. If you need to make a remote call, offload the request to a
+ *        separate worker thread and return quickly.
+ *      * **DO NOT** access UI components or thread‑local storage without
+ *        proper synchronization (e.g., using Control.Invoke or a thread‑safe
+ *        queue).
+ *      * Offload heavy processing to a separate thread or queue to keep
+ *        callbacks responsive.
+ *
+ *    The library guarantees that callbacks are thread‑safe and reentrant,
+ *    but it is your responsibility to ensure that any shared data accessed
+ *    from callbacks is properly synchronized.
+ *
+ * 3. **EXECUTION ORDER**:
+ *    The library does **not** guarantee the order of execution for concurrent
+ *    API calls. Calls are independent and may be executed out‑of‑order because
+ *    the underlying service mesh distributes requests across multiple
+ *    application instances for load balancing. If you send calls '1', '2', '3'
+ *    in that order, the remote side may process them in any order (e.g., '2',
+ *    '1', '3'). Only the per‑call request‑response semantics are reliable –
+ *    each call is atomic and returns a correct result, but the global ordering
+ *    is not preserved.
+ *
+ * 4. **DATA HANDLE LIFETIME**:
+ *    Every DataHnd created with API_Create_DataHnd() MUST be freed with
+ *    API_Free_DataHnd() when no longer needed. The library does NOT auto‑free
+ *    them, even after remote calls (it clones the input internally).
+ *
+ * 5. **RESULT HANDLES**:
+ *    API_Call() always returns a valid DataHnd (never a null handle). If the
+ *    call times out or fails, the handle size will be 0. You must still free
+ *    it with API_Free_DataHnd().
+ *
+ * 6. **CALLBACK DELEGATES MUST BE KEPT ALIVE** (⚠️ CRITICAL):
+ *    When registering callbacks, the delegate object is converted to a function
+ *    pointer and passed to the native library. You must keep the delegate
+ *    alive (e.g., store it in a static variable or a class field) to prevent
+ *    it from being garbage collected. This wrapper does NOT automatically
+ *    cache the delegate; you are responsible for its lifetime.
+ *
+ * 7. **TIMEOUTS**:
+ *    API_Call() timeout is in milliseconds. 0 means infinite wait (use with
+ *    caution). On timeout, the returned handle size is 0.
+ *
+ * 8. **APPLICATION NAMES**:
+ *    App names are case‑sensitive and should be unique across the network.
+ *
+ * 9. **DYNAMIC UNREGISTRATION (API_UnReg)**:
+ *    - Immediately removes the API from the local registry.
+ *    - Triggers an asynchronous network broadcast to all connected peers.
+ *    - Remote peers stop seeing this API within approximately 3 seconds
+ *      (depending on network latency and the C4 update interval).
+ *    - During this short window, remote calls may still be attempted; they will
+ *      fail gracefully (the remote side receives a "not found" error).
+ *
+ * 10. **RUNTIME OPTIONS (API_SetOption)**:
+ *     Supports keys (case‑insensitive, aliases accepted):
+ *       - "password" / "passwd" : Sets C4 P2PVM authentication token.
+ *         Must match on both service and client sides.
+ *       - "Quiet" : Enable/disable quiet mode (True/False).
+ *       - "External_Conf_Auto_Save" / "Conf_Auto_Save" : Auto‑save .ini on exit.
+ *       - "Wait_Connection_ReadyOk" / "Wait_API_Prepare_Done" / ... :
+ *         Controls whether API_Prepare_Done blocks until all clients are connected.
+ *         When False, clients auto‑connect later (useful for deployment).
+ *       - "Wait_Connection_Timeout" / "Wait_TimeOut" : Max wait (ms) when the above is True.
+ *       - "ShowThreadID" / "ShowThread" / "Show_Thread" : Show thread IDs in logs.
+ *       - "ConsoleOutput" / "Console_Output" : Enable/disable console logging.
+ *       - "IPC_Serv_ThreadCount" / "IPC_ThreadCount" / ... : Number of IPC service threads.
+ *       - "IPC_Serv_MaxQueueLength" / "IPC_MaxQueueLength" / ... : Max IPC queue length.
+ *       - "IPC_Serv_MaxMsgSize" / "IPC_MaxMsgSize" / ... : Max IPC message size (bytes).
+ *
+ * ============================================================================
+ * ADDITIONAL EXAMPLES
+ * ============================================================================
+ *
+ * Below is a complete local call example (no network required):
+ *
+ *     using API_HubTool.Bindings;
+ *     using static API_HubTool.Bindings.API;
+ *
+ *     private static void AddCallback(IntPtr trigger, IntPtr input, IntPtr output)
+ *     {
+ *         DataHnd hInput = new DataHnd { Handle = input };
+ *         DataHnd hOutput = new DataHnd { Handle = output };
+ *         byte[] buf = ReadAllBytes(hInput);
+ *         if (buf.Length >= 8)
+ *         {
+ *             int a = BitConverter.ToInt32(buf, 0);
+ *             int b = BitConverter.ToInt32(buf, 4);
+ *             int sum = a + b;
+ *             API_WriteBuffer(hOutput, BitConverter.GetBytes(sum), 4);
+ *         }
+ *     }
+ *
+ *     // In Main:
+ *     AppHnd app = API_Create_APPHnd("LocalDemo", "Local only");
+ *     // The delegate must be kept alive manually (e.g., using GCHandle.Alloc).
+ *     APICallDelegate del = AddCallback;
+ *     GCHandle.Alloc(del);   // prevent collection
+ *     API_Reg_Call(app, "add", "Addition", IntPtr.Zero, del);
+ *
+ *     DataHnd data = API_Create_DataHnd("add");
+ *     byte[] payload = new byte[8];
+ *     BitConverter.GetBytes(10).CopyTo(payload, 0);
+ *     BitConverter.GetBytes(20).CopyTo(payload, 4);
+ *     API_WriteBuffer(data, payload, 8);
+ *
+ *     DataHnd result = API_Local_APP_Call(app, data);
+ *     API_Free_DataHnd(data);
+ *     if (result.IsValid && API_GetSize(result) >= 4)
+ *     {
+ *         int sum = BitConverter.ToInt32(ReadAllBytes(result), 0);
+ *         Console.WriteLine($"10 + 20 = {sum}");
+ *         API_Free_DataHnd(result);
+ *     }
+ *
+ *     // Unregister the 'add' API before shutdown (optional)
+ *     if (API_UnReg(app, "add") == 1)
+ *         Console.WriteLine("'add' unregistered.");
+ *
+ *     // Set a runtime option (e.g., enable quiet mode)
+ *     API_SetOption("Quiet", "True");
+ *
+ *     API_Free_APPHnd(app);
+ *     API_shutdown();
+ *
+ * For more examples, see the companion demo projects (HelloWorld, Service,
+ * Client1, etc.).
+ */
 
 using System;
 using System.Runtime.InteropServices;
@@ -714,8 +714,6 @@ namespace API_HubTool.Bindings
             long nullPos = startPos;
             while (nullPos < size)
             {
-                // Marshal.ReadByte accepts an IntPtr and an int offset.
-                // Since nullPos is long, we need to cast to int (safe as buffer size < 2GB in practice).
                 if (Marshal.ReadByte(buffer, (int)nullPos) == 0)
                     break;
                 nullPos++;
@@ -872,6 +870,23 @@ namespace API_HubTool.Bindings
         [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "API_shutdown")]
         private static extern void Native_shutdown();
 
+        // ---------- Newly added missing exports ----------
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "API_Check_MainThread")]
+        private static extern int Native_Check_MainThread();
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "API_Check_App")]
+        private static extern int Native_Check_App(IntPtr appName);
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "API_Get_Status_Num")]
+        private static extern int Native_Get_Status_Num();
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "API_Get_Status")]
+        private static extern IntPtr Native_Get_Status();
+
+        [DllImport(DllName, CallingConvention = CallingConvention.Cdecl, EntryPoint = "API_Post_Status")]
+        private static extern void Native_Post_Status(IntPtr status);
+
         /// <exception cref="ArgumentNullException">Thrown when either parameter is null.</exception>
         public static int API_Prepare_Service(string listeningAddr, string physicsAddr)
         {
@@ -933,6 +948,63 @@ namespace API_HubTool.Bindings
         }
 
         public static void API_shutdown() => Native_shutdown();
+
+        // ---------- New public API for status and checks ----------
+
+        /// <summary>
+        /// Checks whether the simulated main thread (the C4 event loop) is currently running.
+        /// </summary>
+        /// <returns>1 if running, 0 if stopped or not yet started.</returns>
+        public static int API_Check_MainThread() => Native_Check_MainThread();
+
+        /// <summary>
+        /// Checks whether an application with the given name is available on the network.
+        /// This query is based on a local cache and may be slightly stale.
+        /// </summary>
+        /// <param name="appName">Application name (UTF‑8, case‑sensitive).</param>
+        /// <returns>1 if at least one instance exists, 0 otherwise.</returns>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="appName"/> is null.</exception>
+        public static int API_Check_App(string appName)
+        {
+            if (appName == null)
+                throw new ArgumentNullException(nameof(appName));
+            IntPtr pName = UTF8Marshal.AllocUTF8(appName);
+            try { return Native_Check_App(pName); }
+            finally { UTF8Marshal.FreeUTF8(pName); }
+        }
+
+        /// <summary>
+        /// Returns the number of pending log messages in the internal status queue.
+        /// </summary>
+        public static int API_Get_Status_Num() => Native_Get_Status_Num();
+
+        /// <summary>
+        /// Retrieves the next log message from the status queue (FIFO order).
+        /// The message is UTF‑8 encoded and null‑terminated. The returned string is
+        /// a copy of the internal buffer, so it remains valid after subsequent calls.
+        /// </summary>
+        /// <returns>The next status message, or an empty string if the queue is empty.</returns>
+        public static string API_Get_Status()
+        {
+            IntPtr ptr = Native_Get_Status();
+            if (ptr == IntPtr.Zero)
+                return string.Empty;
+            return UTF8Marshal.PtrToStringUTF8(ptr) ?? string.Empty;
+        }
+
+        /// <summary>
+        /// Injects a custom log message into the internal status queue.
+        /// </summary>
+        /// <param name="status">The message to add (UTF‑8).</param>
+        /// <exception cref="ArgumentNullException">Thrown when <paramref name="status"/> is null.</exception>
+        public static void API_Post_Status(string status)
+        {
+            if (status == null)
+                throw new ArgumentNullException(nameof(status));
+            IntPtr pStatus = UTF8Marshal.AllocUTF8(status);
+            try { Native_Post_Status(pStatus); }
+            finally { UTF8Marshal.FreeUTF8(pStatus); }
+        }
 
         #endregion
 
