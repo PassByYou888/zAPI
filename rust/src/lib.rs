@@ -1,87 +1,75 @@
 //! API Hub Rust Bindings – Dynamic Loading Edition
 //!
-//! This crate provides a safe Rust interface to the API Hub C library
-//! (`z_api_hub64.dll` on Windows, `libz_api_hub.so` on Linux/BSD,
-//! `libz_api_hub.dylib` on macOS). The library is loaded at runtime
-//! and all functions are accessed through raw pointers stored in a static
-//! `Api` struct. RAII wrappers (`DataHandle`, `AppHandle`) are provided
-//! for automatic resource management.
+//! 本库提供了对 API Hub C 动态库的安全 Rust 接口。动态库在运行时加载，
+//! 所有函数通过静态 `Api` 结构体中的原始指针访问。
+//! RAII 包装器（`DataHandle`、`AppHandle`）提供自动资源管理。
 //!
-//! # Ownership Model (CRITICAL)
+//! # 所有权模型（关键）
 //!
-//! `DataHandle` distinguishes between **owned** and **borrowed** handles.
-//! - **Owned** (`new` or `from_owned_raw`): the handle is freed on `Drop`.
-//!   Used for handles created by the user or returned from `call`/`local_call`.
-//! - **Borrowed** (`from_raw`): the handle is NOT freed on `Drop`.
-//!   Used exclusively inside callbacks for the `input` and `output` parameters
-//!   which are owned by the C library.
+//! `DataHandle` 区分**拥有**和**借用**两种句柄。
+//! - **拥有**（`new` 或 `from_owned_raw`）：在 `Drop` 时释放句柄。
+//!   用于用户创建或从 `call`/`local_call` 返回的句柄。
+//! - **借用**（`from_raw`）：在 `Drop` 时**不释放**句柄。
+//!   仅用于回调中的 `input` 和 `output` 参数，这些由 C 库拥有。
 //!
-//! **Important**: Borrowed handles can still be written to (e.g., `output` in callbacks).
-//! The developer must ensure that writes are only performed on handles that permit it
-//! (e.g., `output` for results, not `input` which is read‑only).
+//! **重要**：借用的句柄仍然可以写入（例如回调中的 `output`）。
+//! 开发者必须确保仅在允许写入的句柄上执行写入（如 `output` 用于结果，
+//! 而 `input` 是只读的）。
 //!
-//! # Thread Safety (based on the C ABI specification)
+//! # 线程安全（基于 C ABI 规范）
 //!
-//! **All functions are fully thread‑safe** and can be called concurrently
-//! from any number of threads. This matches the behaviour of the underlying
-//! C library. For a given `DataHandle`, write operations (`write`, `set_pos`,
-//! `set_size`) should be serialised across threads, but read operations are
-//! safe concurrently.
+//! **所有函数均为完全线程安全**，可从任意数量的线程并发调用。
+//! 这符合底层 C 库的行为。对于同一个 `DataHandle`，写操作（`write`、
+//! `set_pos`、`set_size`）应跨线程串行化，但读操作可以安全并发。
 //!
-//! # Callback Restrictions (CRITICAL)
+//! # 回调约束（关键）
 //!
-//! Callbacks registered with [`reg_call`] and [`reg_notify`] are executed
-//! in background threads from the library's internal thread pool.
+//! 通过 [`reg_call`] 和 [`reg_notify`] 注册的回调在库内部线程池的
+//! 后台线程中执行。
 //!
-//! - **DO NOT** call [`call`] or [`notify`] from inside a callback – this
-//!   may cause deadlocks because the callback may hold internal locks.
-//! - **DO NOT** perform long‑blocking operations (e.g., `sleep`, heavy loops,
-//!   waiting on events) inside callbacks.
-//! - **DO NOT** access UI components or thread‑local storage without proper
-//!   synchronisation (e.g., using channels or message queues).
-//! - Offload heavy work to a separate thread or queue and return quickly.
+//! - **禁止**在回调内部调用 [`call`] 或 [`notify`] —— 这可能造成死锁，
+//!   因为回调可能持有内部锁。
+//! - **禁止**在回调内部执行长时间阻塞操作（如 `sleep`、重循环、等待事件）。
+//! - **禁止**在回调中直接访问 UI 组件或线程局部存储，应通过通道或消息队列
+//!   进行同步。
+//! - 耗时任务应分流到独立线程或队列，回调需快速返回。
 //!
-//! # Performance
+//! # 性能
 //!
-//! For lightweight calls (no heavy payloads), the library can sustain
-//! approximately 3000 requests per second in typical configurations.
-//! Use IPC (`ipc:...`) for same‑machine communication to achieve
-//! sub‑millisecond latencies. Reuse `DataHandle` objects where possible
-//! to reduce allocation overhead.
+//! 对于轻量级调用（无大载荷），在典型配置下库可维持约 3000 请求/秒。
+//! 同机通信使用 IPC（`ipc:...`）可实现亚毫秒级延迟。
+//! 尽可能重用 `DataHandle` 以减少分配开销。
 //!
-//! # Execution Order
+//! # 执行顺序
 //!
-//! The library **does not guarantee** the order of execution for concurrent
-//! calls. Requests may be processed out‑of‑order due to load balancing and
-//! threading. If your application depends on a specific order, you must
-//! implement your own sequencing (e.g., sequence numbers or serialisation).
+//! 库**不保证**并发调用的执行顺序。由于负载均衡和多线程，请求可能乱序处理。
+//! 若应用依赖特定顺序，需自行实现排序机制（如序列号或串行化）。
 //!
-//! # Error Diagnosis
+//! # 错误诊断
 //!
-//! The library prints detailed diagnostic messages to the console (stdout/stderr)
-//! by default. You can control logging behaviour via the
-//! `<executable>.api-tool.ini` configuration file, which is auto‑generated
-//! on first run, or by using [`set_option`] to adjust settings at runtime.
+//! 库默认将详细诊断信息打印到控制台（stdout/stderr）。
+//! 可通过 `<可执行文件名>.api-tool.ini` 配置文件控制日志行为，
+//! 该文件在首次运行时自动生成，也可通过 [`set_option`] 在运行时调整。
 //!
-//! # Runtime Options (via [`set_option`])
+//! # 运行时选项（通过 [`set_option`]）
 //!
-//! Supported keys (case‑insensitive, aliases accepted):
-//! - `"password" / "passwd"` : Sets the C4 P2PVM authentication token.
-//!   Must match on both service and client sides. Affects new connections only.
-//! - `"Quiet"` : Enable/disable quiet mode (True/False). Suppresses debug logs.
-//! - `"External_Conf_Auto_Save" / "Conf_Auto_Save"` : Auto‑save .ini on exit (True/False).
-//! - `"Wait_Connection_ReadyOk" / "Wait_API_Prepare_Done" / ...` :
-//!   Controls whether [`prepare_done`] blocks until all clients are connected.
-//!   When False, clients auto‑connect later (important for deployment).
-//! - `"Wait_Connection_Timeout" / "Wait_TimeOut"` : Max wait (ms) when the above is True.
-//! - `"ShowThreadID" / "ShowThread" / "Show_Thread"` : Show thread IDs in logs.
-//! - `"ConsoleOutput" / "Console_Output"` : Enable/disable console logging.
-//! - `"IPC_Serv_ThreadCount" / "IPC_ThreadCount" / "IPC_Server_ThreadCount"` :
-//!   Number of threads in the IPC service thread pool.
-//! - `"IPC_Serv_MaxQueueLength" / "IPC_MaxQueueLength" / "IPC_Server_MaxQueueLength"` :
-//!   Max IPC queue length.
-//! - `"IPC_Serv_MaxMsgSize" / "IPC_MaxMsgSize" / "IPC_Server_MaxMsgSize"` :
-//!   Max IPC message size (bytes).
+//! 支持的键（不区分大小写，支持别名）：
+//! - `"password" / "passwd"`：设置 C4 P2PVM 认证令牌。
+//!   服务端和客户端必须匹配。仅影响新建连接。
+//! - `"Quiet"`：启用/禁用静默模式（True/False）。抑制调试日志。
+//! - `"External_Conf_Auto_Save" / "Conf_Auto_Save"`：退出时自动保存 .ini（True/False）。
+//! - `"Wait_Connection_ReadyOk" / "Wait_API_Prepare_Done" / ...`：
+//!   控制 [`prepare_done`] 是否阻塞等待所有客户端连接就绪。
+//!   设为 False 时客户端稍后自动连接（适用于部署）。
+//! - `"Wait_Connection_Timeout" / "Wait_TimeOut"`：最大等待时间（毫秒）。
+//! - `"ShowThreadID" / "ShowThread" / "Show_Thread"`：在日志中显示线程 ID。
+//! - `"ConsoleOutput" / "Console_Output"`：启用/禁用控制台日志。
+//! - `"IPC_Serv_ThreadCount" / "IPC_ThreadCount" / "IPC_Server_ThreadCount"`：
+//!   IPC 服务线程池大小。
+//! - `"IPC_Serv_MaxQueueLength" / "IPC_MaxQueueLength" / "IPC_Server_MaxQueueLength"`：
+//!   IPC 消息队列最大长度。
+//! - `"IPC_Serv_MaxMsgSize" / "IPC_MaxMsgSize" / "IPC_Server_MaxMsgSize"`：
+//!   IPC 单条消息最大字节数。
 
 #![allow(static_mut_refs)]
 #![allow(unused_unsafe)]
@@ -91,10 +79,10 @@ use std::ffi::{CString, c_char, c_int, c_void, c_ulonglong};
 use std::sync::Once;
 
 // ============================================================================
-// Conditional debug logging macro (exported for external use)
+// 条件调试日志宏（供外部使用）
 // ============================================================================
 
-/// Debug log: prints to stderr when `debug-log` feature is enabled.
+/// 调试日志：当启用 `debug-log` feature 时打印到 stderr。
 #[macro_export]
 macro_rules! debug_log {
     ($($arg:tt)*) => {
@@ -105,39 +93,38 @@ macro_rules! debug_log {
 }
 
 // ============================================================================
-// Type Definitions
+// 类型定义
 // ============================================================================
 
-/// Opaque handle to a data buffer that holds an API name and its binary payload.
-/// Created with `create_data_hnd`, freed with `free_data_hnd` (or via `DataHandle` RAII).
+/// 不透明数据句柄，持有 API 名称和二进制载荷。
+/// 通过 `create_data_hnd` 创建，通过 `free_data_hnd` 释放（或通过 `DataHandle` RAII）。
 pub type DataHnd = *mut c_void;
 
-/// Opaque handle to an application context that groups a set of APIs.
-/// Created with `create_app_hnd`, freed with `free_app_hnd` (or via `AppHandle` RAII).
+/// 不透明应用句柄，分组一组 API。
+/// 通过 `create_app_hnd` 创建，通过 `free_app_hnd` 释放（或通过 `AppHandle` RAII）。
 pub type AppHnd = *mut c_void;
 
-/// Callback signature for request‑response (call) APIs.
+/// 请求-响应（Call）API 的回调签名。
 ///
-/// # Safety
+/// # 安全性
 ///
-/// The callback must be `extern "C"` and must **not** call [`call`] or [`notify`]
-/// recursively (deadlock risk). It should return quickly; heavy processing
-/// should be delegated to another thread.
+/// 回调必须是 `extern "C"`，且**禁止**递归调用 [`call`] 或 [`notify`]
+/// （死锁风险）。应快速返回；重处理应委托给其他线程。
 ///
-/// # Parameters
+/// # 参数
 ///
-/// - `trigger`: user‑supplied pointer (as given to [`reg_call`]).
-/// - `input`:   read‑only data handle containing the request payload.
-/// - `output`:  write‑only data handle where the response must be written.
+/// - `trigger`：用户提供的指针（注册时传入 [`reg_call`]）。
+/// - `input`：  只读数据句柄，包含请求载荷。
+/// - `output`： 只写数据句柄，必须写入响应。
 pub type APICall = extern "C" fn(*mut c_void, DataHnd, DataHnd);
 
-/// Callback signature for one‑way notification (notify) APIs.
+/// 单向通知（Notify）API 的回调签名。
 ///
-/// Same safety restrictions as [`APICall`] – no recursive calls, no blocking.
+/// 与 [`APICall`] 相同的安全限制——无递归调用，无阻塞。
 pub type APINotify = extern "C" fn(*mut c_void, DataHnd);
 
 // ============================================================================
-// Error Types
+// 错误类型
 // ============================================================================
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -168,7 +155,7 @@ impl std::error::Error for ApiError {}
 pub type Result<T> = std::result::Result<T, ApiError>;
 
 // ============================================================================
-// Global API Function Pointers
+// 全局 API 函数指针
 // ============================================================================
 
 struct Api {
@@ -199,13 +186,22 @@ struct Api {
     notify: fn(*const c_char, DataHnd),
     set_option: fn(*const c_char, *const c_char),
     shutdown: fn(),
+
+    // ====================================================================
+    // 新增导出函数（补齐 Pascal 全部接口） – 2026-08-24
+    // ====================================================================
+    get_status_num: fn() -> c_int,
+    get_status: fn() -> *const c_char,
+    post_status: fn(*const c_char),
+    check_main_thread: fn() -> c_int,
+    check_app: fn(*const c_char) -> c_int,
 }
 
 static mut API: Option<Api> = None;
 static INIT: Once = Once::new();
 
 // ============================================================================
-// Library Loading
+// 库加载
 // ============================================================================
 
 #[cfg(target_os = "windows")]
@@ -308,6 +304,13 @@ fn load_api() -> Result<()> {
         let set_option = get_fn!(lib, "API_SetOption", fn(*const c_char, *const c_char));
         let shutdown = get_fn!(lib, "API_shutdown", fn());
 
+        // 新增符号加载
+        let get_status_num = get_fn!(lib, "API_Get_Status_Num", fn() -> c_int);
+        let get_status = get_fn!(lib, "API_Get_Status", fn() -> *const c_char);
+        let post_status = get_fn!(lib, "API_Post_Status", fn(*const c_char));
+        let check_main_thread = get_fn!(lib, "API_Check_MainThread", fn() -> c_int);
+        let check_app = get_fn!(lib, "API_Check_App", fn(*const c_char) -> c_int);
+
         unsafe {
             API = Some(Api {
                 create_data_hnd,
@@ -335,6 +338,11 @@ fn load_api() -> Result<()> {
                 notify,
                 set_option,
                 shutdown,
+                get_status_num,
+                get_status,
+                post_status,
+                check_main_thread,
+                check_app,
             });
             debug_log!("All API symbols resolved successfully");
         }
@@ -357,7 +365,7 @@ fn api() -> &'static Api {
 }
 
 // ============================================================================
-// Public API Functions (with logging)
+// 公有 API 函数（带日志）
 // ============================================================================
 
 pub fn create_data_hnd(api_name: &str) -> Result<DataHnd> {
@@ -570,54 +578,190 @@ pub fn shutdown() {
 }
 
 // ============================================================================
-// RAII Wrappers
+// 新增诊断与状态函数（补齐 Pascal 全部接口）
+// 以下函数均提供中文注释
 // ============================================================================
 
-/// RAII wrapper for a data handle.
+/// 返回内部状态队列中待读取的日志消息数量。
 ///
-/// # Ownership
-/// - `owned = true`: drops the handle on `Drop`.
-/// - `owned = false`: does NOT drop the handle on `Drop` (borrowed).
+/// 此函数**线程安全**，可与 [`get_status`] 和 [`post_status`] 并发调用。
 ///
-/// See the module-level documentation for detailed ownership semantics.
+/// # 示例
+/// ```
+/// use api_hub_rust::{get_status_num, get_status};
+/// let count = get_status_num().unwrap();
+/// for _ in 0..count {
+///     if let Ok(msg) = get_status() {
+///         println!("日志: {}", msg);
+///     }
+/// }
+/// ```
+pub fn get_status_num() -> Result<i32> {
+    debug_log!("get_status_num");
+    Ok((api().get_status_num)())
+}
+
+/// 从状态队列中取出一条日志消息（FIFO 顺序）。
+///
+/// 返回的字符串是内部缓冲区的副本，后续调用不会影响其有效性。
+/// 若队列为空，返回空字符串。
+///
+/// 此函数**线程安全**。
+///
+/// # 重要
+/// - 消息长度超过 64 KB 会被截断。
+/// - 内部队列最多容纳 1000 条消息，超出时丢弃旧消息。
+///
+/// # 示例
+/// ```
+/// use api_hub_rust::get_status;
+/// if let Ok(msg) = get_status() {
+///     println!("日志消息: {}", msg);
+/// }
+/// ```
+pub fn get_status() -> Result<String> {
+    debug_log!("get_status");
+    let ptr = (api().get_status)();
+    if ptr.is_null() {
+        return Ok(String::new());
+    }
+    // 将 *const c_char 转换为 *const u8，以正确构造 &[u8]
+    let ptr_u8 = ptr as *const u8;
+    let mut len = 0;
+    while unsafe { *ptr_u8.add(len) } != 0 {
+        len += 1;
+    }
+    let slice = unsafe { std::slice::from_raw_parts(ptr_u8, len) };
+    match std::str::from_utf8(slice) {
+        Ok(s) => Ok(s.to_string()),
+        Err(_) => {
+            debug_log!("get_status: 无效 UTF‑8，以损失性方式返回原始字节");
+            Ok(String::from_utf8_lossy(slice).into_owned())
+        }
+    }
+}
+
+/// 向内部状态队列中注入一条自定义日志消息。
+///
+/// 消息将追加到队列尾部，可通过 [`get_status`] 以 FIFO 顺序读取。
+/// 适用于将外部日志与库自身的诊断信息合并。
+///
+/// 此函数**线程安全**。
+///
+/// # 示例
+/// ```
+/// use api_hub_rust::post_status;
+/// post_status("来自 Rust 客户端的自定义消息").unwrap();
+/// ```
+pub fn post_status(status: &str) -> Result<()> {
+    debug_log!("post_status: {}", status);
+    let cstr = CString::new(status).map_err(|_| ApiError::InvalidApiName)?;
+    (api().post_status)(cstr.as_ptr());
+    Ok(())
+}
+
+/// 检查模拟主线程（C4 事件循环）是否正在运行。
+///
+/// 主线程在 [`prepare_done`] 成功后启动，在 [`exit_main_thread`] 或 [`shutdown`]
+/// 调用后停止。
+///
+/// 此函数**线程安全**。
+///
+/// # 返回值
+/// - `true` 表示主线程正在运行。
+/// - `false` 表示已停止或尚未启动。
+///
+/// # 示例
+/// ```
+/// use api_hub_rust::check_main_thread;
+/// if check_main_thread() {
+///     println!("网络层已激活。");
+/// } else {
+///     println!("网络层未运行。");
+/// }
+/// ```
+pub fn check_main_thread() -> bool {
+    debug_log!("check_main_thread");
+    (api().check_main_thread)() != 0
+}
+
+/// 检查网络中是否存在指定名称的应用。
+///
+/// 该查询基于本地缓存，可能略有过时（通常不超过 3 秒）。
+/// 适用于快速探测目标是否在线，但不应用作严格的先决条件。
+///
+/// 应用名称**区分大小写**。
+///
+/// 此函数**线程安全**。
+///
+/// # 返回值
+/// - `true` 表示存在至少一个实例。
+/// - `false` 表示本地未知（可能离线或尚未发现）。
+///
+/// # 示例
+/// ```
+/// use api_hub_rust::check_app;
+/// if check_app("CalcService") {
+///     println!("CalcService 可用。");
+/// } else {
+///     println!("未找到 CalcService（或尚未发现）。");
+/// }
+/// ```
+pub fn check_app(app_name: &str) -> bool {
+    debug_log!("check_app: {}", app_name);
+    let cstr = CString::new(app_name).unwrap_or_default();
+    (api().check_app)(cstr.as_ptr()) != 0
+}
+
+// ============================================================================
+// RAII 包装器
+// ============================================================================
+
+/// 数据句柄的 RAII 包装器。
+///
+/// # 所有权
+/// - `owned = true`：在 `Drop` 时释放句柄。
+/// - `owned = false`：在 `Drop` 时**不释放**句柄（借用）。
+///
+/// 详见模块级文档的所有权说明。
 pub struct DataHandle {
     ptr: DataHnd,
     owned: bool,
 }
 
 impl DataHandle {
-    /// Creates a new owned data handle with the given API name.
+    /// 使用给定的 API 名称创建新的拥有型数据句柄。
     pub fn new(api_name: &str) -> Result<Self> {
         let ptr = create_data_hnd(api_name)?;
         Ok(DataHandle { ptr, owned: true })
     }
 
-    /// Wraps an existing raw handle **without taking ownership** (borrowed).
-    /// The caller must ensure the handle remains valid for the lifetime of this wrapper.
-    /// This is the correct constructor for `input` and `output` parameters inside callbacks.
+    /// 包装一个已有的原始句柄，**不获取所有权**（借用）。
+    /// 调用者必须确保句柄在包装器生命周期内有效。
+    /// 这是回调中 `input` 和 `output` 参数的正确构造方式。
     pub unsafe fn from_raw(ptr: DataHnd) -> Self {
         DataHandle { ptr, owned: false }
     }
 
-    /// Wraps an existing raw handle **with ownership**.
-    /// The wrapper will free the handle on drop. This is the correct constructor
-    /// for handles returned by `call` or `local_app_call`.
+    /// 包装一个已有的原始句柄，**获取所有权**。
+    /// 包装器在析构时会释放句柄。这是 `call` 或 `local_app_call`
+    /// 返回句柄的正确构造方式。
     pub unsafe fn from_owned_raw(ptr: DataHnd) -> Self {
         DataHandle { ptr, owned: true }
     }
 
-    /// Returns the raw handle (borrowed).
+    /// 返回原始句柄（借用）。
     pub fn as_raw(&self) -> DataHnd {
         self.ptr
     }
 
-    /// Writes raw bytes to the handle's buffer at the current position.
-    /// This is allowed on both owned and borrowed handles.
+    /// 向句柄缓冲区写入原始字节（当前位置）。
+    /// 允许在拥有型和借用型句柄上使用。
     pub fn write(&mut self, data: &[u8]) -> Result<usize> {
         write_buffer(self.ptr, data)
     }
 
-    /// Reads raw bytes from the handle's buffer into the provided slice.
+    /// 从句柄缓冲区读取原始字节到提供的切片中。
     pub fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
         read_buffer(self.ptr, buf)
     }
@@ -626,7 +770,7 @@ impl DataHandle {
         get_pos(self.ptr)
     }
 
-    /// Sets the read/write position. This is allowed on both owned and borrowed handles.
+    /// 设置读写位置。允许在拥有型和借用型句柄上使用。
     pub fn set_pos(&self, pos: i64) {
         set_pos(self.ptr, pos)
     }
@@ -635,7 +779,7 @@ impl DataHandle {
         get_size(self.ptr)
     }
 
-    /// Sets the buffer size. This is allowed on both owned and borrowed handles.
+    /// 设置缓冲区大小。允许在拥有型和借用型句柄上使用。
     pub fn set_size(&self, size: i64) {
         set_size(self.ptr, size)
     }
@@ -644,7 +788,7 @@ impl DataHandle {
         (api().get_buffer)(self.ptr)
     }
 
-    // ----- Convenience typed helpers (existing) -----
+    // ----- 便捷类型辅助（已有）-----
     pub fn write_i32(&mut self, v: i32) -> Result<()> {
         self.write(&v.to_le_bytes())?;
         Ok(())
@@ -696,8 +840,8 @@ impl DataHandle {
     }
 
     // ========================================================================
-    // Atomic type helpers (Pascal‑compatible, little‑endian)
-    // All write methods are allowed on both owned and borrowed handles.
+    // 原子类型辅助（兼容 Pascal，小端序）
+    // 所有写方法均允许在拥有型和借用型句柄上使用。
     // ========================================================================
 
     pub fn write_int8(&mut self, v: i8) -> Result<()> {
@@ -761,7 +905,7 @@ impl DataHandle {
         }
     }
 
-    // ----- Atomic reads -----
+    // ----- 原子读取 -----
 
     pub fn read_int8(&mut self) -> Result<i8> {
         let mut b = [0u8; 1];
@@ -854,7 +998,7 @@ impl Drop for DataHandle {
 unsafe impl Send for DataHandle {}
 unsafe impl Sync for DataHandle {}
 
-/// RAII wrapper for an application handle. Automatically frees the handle on drop.
+/// 应用句柄的 RAII 包装器。析构时自动释放句柄。
 pub struct AppHandle(AppHnd);
 
 impl AppHandle {
@@ -893,7 +1037,6 @@ impl AppHandle {
 
     pub fn local_call(&self, param: &DataHandle) -> Result<DataHandle> {
         let ptr = local_app_call(self.0, param.as_raw())?;
-        // The returned handle is owned by the caller.
         Ok(unsafe { DataHandle::from_owned_raw(ptr) })
     }
 
@@ -914,7 +1057,7 @@ unsafe impl Send for AppHandle {}
 unsafe impl Sync for AppHandle {}
 
 // ============================================================================
-// Test Runner Module (exported)
+// 测试运行器模块（导出）
 // ============================================================================
 
 pub mod test_runner;
