@@ -169,7 +169,7 @@ API_Create_APPHnd = _set_func("API_Create_APPHnd", [ctypes.c_char_p, ctypes.c_ch
 API_Free_APPHnd = _set_func("API_Free_APPHnd", [AppHnd], None)
 API_Reg_Call = _set_func("API_Reg_Call", [AppHnd, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_void_p, APICallFunc], ctypes.c_int)
 API_Reg_Notify = _set_func("API_Reg_Notify", [AppHnd, ctypes.c_char_p, ctypes.c_char_p, ctypes.c_void_p, APINotifyFunc], ctypes.c_int)
-API_UnReg = _set_func("API_UnReg", [AppHnd, ctypes.c_char_p], ctypes.c_int)     # NEW: dynamic unregistration
+API_UnReg = _set_func("API_UnReg", [AppHnd, ctypes.c_char_p], ctypes.c_int)     # dynamic unregistration
 API_Local_APP_Call = _set_func("API_Local_APP_Call", [AppHnd, DataHnd], DataHnd)
 API_Local_APP_Notify = _set_func("API_Local_APP_Notify", [AppHnd, DataHnd], None)
 
@@ -181,10 +181,75 @@ API_Prepare_Client = _set_func("API_Prepare_Client", [ctypes.c_char_p, AppHnd], 
 API_Reset_Prepare = _set_func("API_Reset_Prepare", [], None)
 API_Prepare_Done = _set_func("API_Prepare_Done", [], ctypes.c_int)
 API_Exit_MainThread = _set_func("API_Exit_MainThread", [], None)
-# Note: API_Get_Status has been removed from the C library – do not use.
 API_Call = _set_func("API_Call", [ctypes.c_char_p, DataHnd, ctypes.c_uint64], DataHnd)
 API_Notify = _set_func("API_Notify", [ctypes.c_char_p, DataHnd], None)
-API_SetOption = _set_func("API_SetOption", [ctypes.c_char_p, ctypes.c_char_p], None)   # NEW: runtime options
+API_SetOption = _set_func("API_SetOption", [ctypes.c_char_p, ctypes.c_char_p], None)
 API_shutdown = _set_func("API_shutdown", [], None)
 
-# No get_status() function – status messages are printed to console by the library.
+# ======================================================================
+# 新增导出函数（补齐 Pascal 全部接口）
+# ======================================================================
+
+# ---- 状态与诊断 ----
+API_Get_Status_Num = _set_func(
+    "API_Get_Status_Num",
+    [],
+    ctypes.c_int
+)
+"""
+int API_Get_Status_Num()
+返回待读取的日志消息数量（FIFO 队列）。
+线程安全：是。
+"""
+
+API_Get_Status = _set_func(
+    "API_Get_Status",
+    [],
+    ctypes.c_char_p
+)
+"""
+const char* API_Get_Status()
+从队列中取出一条日志消息（UTF‑8 编码，以 NUL 结尾）。
+返回的指针指向内部静态缓冲区，数据在下次调用前有效。
+若队列为空，返回空字符串（仅 NUL）。
+调用者不得释放返回的指针，应尽快复制内容。
+线程安全：是。
+"""
+
+API_Post_Status = _set_func(
+    "API_Post_Status",
+    [ctypes.c_char_p],
+    None
+)
+"""
+void API_Post_Status(const char* status)
+向状态队列中写入一条自定义日志消息。
+@param status: UTF‑8 编码、NUL 结尾的字符串。
+线程安全：是。
+"""
+
+API_Check_MainThread = _set_func(
+    "API_Check_MainThread",
+    [],
+    ctypes.c_int
+)
+"""
+int API_Check_MainThread()
+检查模拟主线程（C4 事件循环）是否正在运行。
+返回 1 表示运行中，0 表示已停止或未启动。
+线程安全：是。
+"""
+
+API_Check_App = _set_func(
+    "API_Check_App",
+    [ctypes.c_char_p],
+    ctypes.c_int
+)
+"""
+int API_Check_App(const char* appName)
+检查网络中是否存在名为 appName 的应用（区分大小写）。
+基于本地缓存查询，不保证实时性。
+返回 1 存在，0 不存在。
+@param appName: UTF‑8 编码、NUL 结尾的应用名。
+线程安全：是。
+"""
