@@ -6,10 +6,10 @@
 > - 编写第一个跨语言服务端和客户端；
 > - 理解核心概念（句柄、回调、网络准备）；
 > - 学会调试和解决常见问题；
-> - 掌握 v2.0 新特性（动态注销和运行时配置）；
+> - 掌握 v2.1 新特性（动态注销、运行时配置、状态与检查 API）；
 > - 迈出迈向多语言生态的第一步。
 >
-> **版本：** 2.0（与 ZAPI 核心 v2.0 同步）
+> **版本：** 2.1（与 ZAPI 核心 v2.1 同步）
 
 ---
 
@@ -23,11 +23,12 @@
 - [6. 深入理解：每一步做了什么？](#6-深入理解每一步做了什么)
 - [7. 扩展：注册多个 API](#7-扩展注册多个-api)
 - [8. 扩展：发送通知（Notify）](#8-扩展发送通知notify)
-- [9. v2.0 新特性：动态注销 API](#9-v20-新特性动态注销-api)
-- [10. v2.0 新特性：运行时配置](#10-v20-新特性运行时配置)
-- [11. 跨语言调用初体验](#11-跨语言调用初体验)
-- [12. 常见错误与解决方法](#12-常见错误与解决方法)
-- [13. 下一步学什么](#13-下一步学什么)
+- [9. v2.1 新特性：动态注销 API](#9-v21-新特性动态注销-api)
+- [10. v2.1 新特性：运行时配置](#10-v21-新特性运行时配置)
+- [11. v2.1 新特性：状态与检查 API](#11-v21-新特性状态与检查-api)
+- [12. 跨语言调用初体验](#12-跨语言调用初体验)
+- [13. 常见错误与解决方法](#13-常见错误与解决方法)
+- [14. 下一步学什么](#14-下一步学什么)
 
 ---
 
@@ -57,7 +58,7 @@ java/
 │       ├── AppHandle.java      # 应用句柄封装
 │       ├── CallCallback.java   # 请求-响应回调接口
 │       ├── NotifyCallback.java # 通知回调接口
-│       └── ApiHub.java         # 静态工具类（含 v2.0 新方法）
+│       └── ApiHub.java         # 静态工具类（含 v2.1 新方法）
 ├── demo/
 │   ├── DemoServer.java         # 最简单的服务端（加法）
 │   ├── DemoClient.java         # 最简单的客户端（调用加法）
@@ -146,7 +147,7 @@ public class DemoServer {
             // 3. 网络准备
             ApiHub.resetPrepare();                      // 清空之前的状态
             
-            // v2.0 新增：运行时配置（可选）
+            // v2.1 新增：运行时配置（可选）
             ApiHub.setOption("Wait_Connection_ReadyOk", "False");
             
             ApiHub.prepareService("ipc:calc_service", "ipc:calc_service"); // 启动 IPC 服务
@@ -191,7 +192,7 @@ public class DemoServer {
   - `prepareService("ipc:calc_service", "ipc:calc_service")`：启动一个 IPC 服务，地址为 `ipc:calc_service`。IPC 是本机进程间通信，速度极快。
   - `prepareClient("ipc:calc_service", app)`：作为客户端连接到同一个服务，并将 `app` 暴露出去，这样外部就能调用 `CalcService` 的 API。
   - `prepareDone()`：启动框架，阻塞直到网络就绪。返回 `true` 表示成功。
-- **v2.0 新特性**：`ApiHub.setOption()` 可在启动前动态调整配置。
+- **v2.1 新特性**：`ApiHub.setOption()` 可在启动前动态调整配置。
 - **主循环**：使用可中断循环保持程序运行，直到收到 Ctrl+C。`Thread.sleep(1000)` 让出 CPU。
 - **ShutdownHook**：当程序被中断时，调用 `ApiHub.exitMainThread()` 和 `shutdown()` 释放资源。
 
@@ -350,8 +351,9 @@ try (DataHandle p = new DataHandle("subtract")) {
 ```java
 app.registerNotify("log", "Logging", (trigger, input) -> {
     DataHandle in = DataHandle.wrapInput(input);
-    String level = in.readString();
-    String msg = in.readString();
+    // 推荐使用空终止字符串，确保跨语言兼容
+    String level = in.readStringNullTerminated();
+    String msg = in.readStringNullTerminated();
     System.out.println("[" + level + "] " + msg);
 });
 ```
@@ -359,17 +361,17 @@ app.registerNotify("log", "Logging", (trigger, input) -> {
 **客户端发送 Notify**：
 ```java
 try (DataHandle p = new DataHandle("log")) {
-    p.writeString("INFO");
-    p.writeString("User logged in");
+    p.writeStringNullTerminated("INFO");
+    p.writeStringNullTerminated("User logged in");
     ApiHub.notify("LogService", p);
 }
 ```
 
-注意：通知没有返回结果，`ApiHub.notify` 立即返回。
+> **跨语言字符串协议提醒**：为确保与其他语言（C++、Python、Go、Pascal 等）兼容，请使用 `writeStringNullTerminated` / `readStringNullTerminated`，它们写入 UTF-8 字节后追加一个 `\0`，与 Pascal 的 `API_WriteString` 行为一致。旧版 `writeString` / `readString`（长度前缀）仅限 Java 内部使用，不跨语言。
 
 ---
 
-## 9. v2.0 新特性：动态注销 API
+## 9. v2.1 新特性：动态注销 API
 
 `AppHandle.unregister()` 方法允许您在运行时移除已注册的 API。
 
@@ -408,7 +410,7 @@ try (AppHandle app = new AppHandle("MyService", "")) {
 
 ---
 
-## 10. v2.0 新特性：运行时配置
+## 10. v2.1 新特性：运行时配置
 
 `ApiHub.setOption()` 方法允许您在运行时动态调整 API Hub 框架的全局配置选项。
 
@@ -447,7 +449,61 @@ ApiHub.setOption("IPC_Serv_ThreadCount", "8");
 
 ---
 
-## 11. 跨语言调用初体验
+## 11. v2.1 新特性：状态与检查 API
+
+v2.1 新增了五个 API，让你能监控框架运行状态、探测服务可用性、程序化拉取日志。它们全部线程安全，非常适合生产环境的监控和故障排查。
+
+### 11.1 API 概览
+
+| 方法 | 说明 |
+|------|------|
+| `ApiHub.checkMainThread()` | 返回 `1` 如果模拟主线程（C4 事件循环）正在运行，`0` 否则。 |
+| `ApiHub.checkApp(appName)` | 返回 `1` 如果指定应用在线（基于本地缓存，可能短暂滞后），`0` 否则。 |
+| `ApiHub.getStatusNum()` | 返回内部日志队列中待读取的消息数量。 |
+| `ApiHub.getStatus()` | 从队列中取出一条日志消息（UTF‑8），队列为空返回空字符串。 |
+| `ApiHub.postStatus(status)` | 向队列中注入一条自定义日志消息。 |
+
+### 11.2 使用示例
+
+**检查主线程是否运行**（确保框架已就绪）：
+```java
+if (ApiHub.checkMainThread() == 1) {
+    System.out.println("主线程运行正常，可以发起调用");
+} else {
+    System.err.println("框架未启动，请先调用 prepareDone()");
+}
+```
+
+**调用前探测目标服务**：
+```java
+if (ApiHub.checkApp("PaymentService") == 1) {
+    try (DataHandle res = ApiHub.call("PaymentService", param, 3000)) {
+        // 处理结果
+    }
+} else {
+    // 降级策略：返回缓存或错误码
+    System.err.println("PaymentService 不可用，使用降级方案");
+}
+```
+
+**拉取库日志到你的日志系统**（例如 SLF4J 或 Log4j）：
+```java
+while (ApiHub.getStatusNum() > 0) {
+    String msg = ApiHub.getStatus();
+    logger.info("[zAPI] {}", msg);  // 写入统一日志
+}
+```
+
+**注入自定义日志**：
+```java
+ApiHub.postStatus("用户会话过期，重定向中...");
+```
+
+这些 API 让 Java 开发者不再依赖控制台输出，可以像处理普通日志一样处理库内部消息，极大提升运维效率。
+
+---
+
+## 12. 跨语言调用初体验
 
 现在，你可以尝试用其他语言编写的客户端调用你的 Java 服务。例如，启动 Java 服务端后：
 
@@ -480,46 +536,49 @@ sum, _ := client.ReadInt32(res)
 fmt.Printf("100 + 200 = %d\n", sum)  // 输出 300
 ```
 
-这种无缝互操作正是 API Hub 的魅力所在。
+这种无缝互操作正是 API Hub 的魅力所在。所有语言使用相同的二进制协议和地址格式，因此无论服务端用什么语言实现，客户端都不需要调整代码。
 
 ---
 
-## 12. 常见错误与解决方法
+## 13. 常见错误与解决方法
 
-### 12.1 `UnsatisfiedLinkError: Unable to load library 'z_api_hub64'`
+### 13.1 `UnsatisfiedLinkError: Unable to load library 'z_api_hub64'`
 - **原因**：动态库找不到。  
 - **解决**：将 `Binary/` 目录加入系统 `PATH`，或复制 `z_api_hub64.dll` 到 `java/` 目录。
 
-### 12.2 `ClassNotFoundException: demo.DemoServer`
+### 13.2 `ClassNotFoundException: demo.DemoServer`
 - **原因**：未编译或类路径不对。  
 - **解决**：执行 `.\build.ps1`，确保 `out` 目录存在 `.class` 文件。
 
-### 12.3 客户端调用超时（返回句柄大小为 0）
+### 13.3 客户端调用超时（返回句柄大小为 0）
 - **原因**：服务端未启动，或地址不一致。  
 - **解决**：检查服务端是否运行；客户端 `prepareClient` 地址必须与服务端 `prepareService` 公布的地址一致；检查应用名称大小写是否匹配（`CalcService` vs `calcservice`）。
 
-### 12.4 回调未触发
+### 13.4 回调未触发
 - **原因**：注册时 API 名称拼写错误，或客户端未正确连接。  
-- **解决**：检查 `registerCall` 和 `new DataHandle` 中的名称是否完全一致（包括大小写）；查看控制台输出。
+- **解决**：检查 `registerCall` 和 `new DataHandle` 中的名称是否完全一致（包括大小写）；查看控制台输出，或使用 `checkApp` 探测目标服务是否在线。
 
-### 12.5 编译时出现 `编码 GBK 的不可映射字符`
+### 13.5 编译时出现 `编码 GBK 的不可映射字符`
 - **原因**：源文件是 UTF-8，而 `javac` 默认使用系统编码（如 GBK）。  
 - **解决**：编译时添加 `-encoding UTF-8` 参数（我们的 `build.ps1` 已包含）。
 
-### 12.6 v2.0 动态注销后仍有请求到达
+### 13.6 v2.1 动态注销后仍有请求到达
 - **原因**：广播传播需要时间（约 3 秒），这是分布式系统的正常行为。
 - **解决**：等待广播完成，或在客户端实现重试逻辑。
 
+### 13.7 如何获取库内部的详细日志？
+- 使用 `getStatusNum()` / `getStatus()` 拉取日志，或直接查看控制台输出。也可使用 `postStatus()` 注入自定义日志便于关联分析。
+
 ---
 
-## 13. 下一步学什么
+## 14. 下一步学什么
 
 - **阅读《Java 使用指南》**：深入了解所有 API 和高级用法。  
 - **尝试 `FuncServer` 和 `FuncClient`**：体验 13 个 API 和并发压测，理解性能特性。  
 - **探索其他语言绑定**：查看 `C++/`、`C#/`、`Py/` 等目录，编写多语言协作的示例。  
 - **将你的业务逻辑封装为 API**：比如加密、图像处理、数据库操作，让其他语言调用。  
 - **学习分布式概念**：服务发现、负载均衡、自动重连等，API Hub 已为你实现。
-- **掌握 v2.0 新特性**：尝试使用 `API_UnReg` 热卸载和 `API_SetOption` 运行时调优。
+- **掌握 v2.1 新特性**：尝试使用状态与检查 API，将库日志集成到你的监控系统，实现生产级可观测性。
 
 ---
 
@@ -530,13 +589,18 @@ fmt.Printf("100 + 200 = %d\n", sum)  // 输出 300
 | 创建应用 | `new AppHandle("MyApp", "desc")` |
 | 注册 Call | `app.registerCall("api", "desc", callback)` |
 | 注册 Notify | `app.registerNotify("api", "desc", callback)` |
-| **动态注销（v2.0）** | `app.unregister("api")` |
-| **运行时配置（v2.0）** | `ApiHub.setOption("key", "value")` |
+| **动态注销（v2.1）** | `app.unregister("api")` |
+| **运行时配置（v2.1）** | `ApiHub.setOption("key", "value")` |
+| **检查主线程（v2.1）** | `ApiHub.checkMainThread()` |
+| **检查应用在线（v2.1）** | `ApiHub.checkApp("appName")` |
+| **获取日志数量（v2.1）** | `ApiHub.getStatusNum()` |
+| **获取日志消息（v2.1）** | `ApiHub.getStatus()` |
+| **注入自定义日志（v2.1）** | `ApiHub.postStatus("message")` |
 | 创建数据句柄 | `new DataHandle("apiName")` |
 | 写入整数 | `data.writeInt(int)` |
 | 读取整数 | `int v = data.readInt()` |
-| 写入字符串 | `data.writeString(String)` |
-| 读取字符串 | `String s = data.readString()` |
+| 写入字符串（跨语言） | `data.writeStringNullTerminated(String)` |
+| 读取字符串（跨语言） | `String s = data.readStringNullTerminated()` |
 | 写入字节 | `data.write(byte[])` |
 | 读取字节 | `byte[] b = data.read(len)` |
 | 获取大小 | `data.getSize()` |
@@ -548,7 +612,7 @@ fmt.Printf("100 + 200 = %d\n", sum)  // 输出 300
 
 ---
 
-**你已经完成了入门学习！** 现在，尝试修改代码，添加自己的 API，或与同事用不同语言编写服务，感受跨语言协作的便捷。如果遇到困难，记得检查控制台输出——它几乎能告诉你所有底层信息。
+**你已经完成了入门学习！** 现在，尝试修改代码，添加自己的 API，或与同事用不同语言编写服务，感受跨语言协作的便捷。如果遇到困难，记得检查控制台输出或使用 `getStatus()` ——它几乎能告诉你所有底层信息。
 
 祝你编码愉快，开启分布式之旅！🚀
 
