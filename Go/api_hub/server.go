@@ -20,14 +20,15 @@ import (
 	"unsafe"
 )
 
-// Server represents an application that exposes APIs.
+// Server 表示一个暴露 API 的应用。
+// 它封装了 TAppHnd，并管理注册的回调。
 type Server struct {
 	app       uintptr
 	name      string
 	callIDs   []uintptr
 	notifyIDs []uintptr
 	loaded    bool
-	mu        sync.Mutex // protects callIDs, notifyIDs
+	mu        sync.Mutex // 保护 callIDs, notifyIDs
 }
 
 var (
@@ -39,6 +40,8 @@ var (
 	nextID    uintptr = 1
 )
 
+// NewServer 创建一个新的应用实例。
+// name 是应用名（全网唯一，区分大小写），desc 是描述信息。
 func NewServer(name, desc string) (*Server, error) {
 	if err := loadLibrary(); err != nil {
 		return nil, fmt.Errorf("Init failed: %w", err)
@@ -54,6 +57,9 @@ func NewServer(name, desc string) (*Server, error) {
 	return &Server{app: ret, name: name, loaded: true}, nil
 }
 
+// RegisterCall 注册一个请求‑响应 Call API。
+// apiName 是 API 名（应用内唯一），fn 是处理函数。
+// 注意：fn 将在后台线程池中执行，不可阻塞，不可调用 API_Call。
 func (s *Server) RegisterCall(apiName, desc string, fn func(DataHnd, DataHnd)) error {
 	if !s.loaded {
 		return errors.New("server closed")
@@ -89,7 +95,7 @@ func (s *Server) RegisterCall(apiName, desc string, fn func(DataHnd, DataHnd)) e
 		delete(callMap, id)
 		callMu.Unlock()
 		s.mu.Lock()
-		// remove id from slice (simple but O(n) – okay for small sets)
+		// 从 slice 中移除（简单 O(n) 实现，适用于少量 API）
 		for i, v := range s.callIDs {
 			if v == id {
 				s.callIDs = append(s.callIDs[:i], s.callIDs[i+1:]...)
@@ -102,6 +108,9 @@ func (s *Server) RegisterCall(apiName, desc string, fn func(DataHnd, DataHnd)) e
 	return nil
 }
 
+// RegisterNotify 注册一个单向通知 Notify API。
+// apiName 是 API 名，fn 是处理函数。
+// 回调同样在后台线程池执行，不可阻塞。
 func (s *Server) RegisterNotify(apiName, desc string, fn func(DataHnd)) error {
 	if !s.loaded {
 		return errors.New("server closed")
@@ -149,6 +158,8 @@ func (s *Server) RegisterNotify(apiName, desc string, fn func(DataHnd)) error {
 	return nil
 }
 
+// Unregister 动态注销一个已注册的 API。
+// 本地立即生效，网络广播约 3 秒传播。
 func (s *Server) Unregister(apiName string) error {
 	if !s.loaded {
 		return errors.New("server closed")
@@ -162,6 +173,9 @@ func (s *Server) Unregister(apiName string) error {
 	return nil
 }
 
+// Start 启动服务，监听指定地址（同时作为监听和公布地址）。
+// 内部会调用 ResetPrepare, PrepareService, PrepareClient, PrepareDone。
+// 若需单独指定公布地址，可手动调用 PrepareService 两次。
 func (s *Server) Start(addr string) error {
 	if !s.loaded {
 		return errors.New("server closed")
@@ -181,6 +195,7 @@ func (s *Server) Start(addr string) error {
 	return nil
 }
 
+// Stop 停止服务，释放资源。调用后会关闭所有网络连接。
 func (s *Server) Stop() {
 	if !s.loaded {
 		return
@@ -206,6 +221,9 @@ func (s *Server) Stop() {
 	s.mu.Unlock()
 }
 
+// LocalCall 在本地同步执行一个 Call API，不经过网络。
+// 输入参数 param 不会被释放，调用者仍需负责释放。
+// 返回的结果句柄由调用者释放。
 func (s *Server) LocalCall(param DataHnd) DataHnd {
 	if !s.loaded || s.app == 0 {
 		return 0
@@ -217,6 +235,7 @@ func (s *Server) LocalCall(param DataHnd) DataHnd {
 	return DataHnd(ret)
 }
 
+// LocalNotify 在本地发送一个通知，不经过网络。
 func (s *Server) LocalNotify(param DataHnd) {
 	if !s.loaded || s.app == 0 || param == 0 {
 		return
@@ -224,8 +243,8 @@ func (s *Server) LocalNotify(param DataHnd) {
 	callFunc(funcs.LocalAppNotify, s.app, uintptr(param))
 }
 
-// ---------- CGO Trampolines (void return) ----------
-//
+// ---------- CGO 桥接函数 ----------
+
 //export goCallCallback
 func goCallCallback(trigger unsafe.Pointer, input unsafe.Pointer, output unsafe.Pointer) {
 	id := uintptr(trigger)

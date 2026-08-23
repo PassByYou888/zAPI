@@ -5,8 +5,8 @@ package api_hub
 
 import "syscall"
 
-// callFunc calls a function pointer with the given arguments.
-// It uses syscall.SyscallN, which works on all platforms (Go 1.17+).
+// callFunc 调用一个函数指针，传入参数，返回结果。
+// 它使用 syscall.SyscallN（Go 1.17+ 支持所有平台）。
 func callFunc(addr uintptr, args ...uintptr) uintptr {
 	if addr == 0 {
 		return 0
