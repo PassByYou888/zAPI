@@ -21,6 +21,8 @@ Project("{F184B08F-C81C-45F6-A57F-5ABD9991F28F}") = "CrossNode", "CrossNode\Cros
 EndProject
 Project("{F184B08F-C81C-45F6-A57F-5ABD9991F28F}") = "CrossCall", "CrossCall\CrossCall.vbproj", "{02E5E776-2DC4-4E17-9213-2795BC2991DB}"
 EndProject
+Project("{F184B08F-C81C-45F6-A57F-5ABD9991F28F}") = "CrossNodeUI", "CrossNodeUI\CrossNodeUI.vbproj", "{D0F748CD-78B4-0C60-F58F-1E1700FB92DC}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -63,6 +65,10 @@ Global
 		{02E5E776-2DC4-4E17-9213-2795BC2991DB}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{02E5E776-2DC4-4E17-9213-2795BC2991DB}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{02E5E776-2DC4-4E17-9213-2795BC2991DB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D0F748CD-78B4-0C60-F58F-1E1700FB92DC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D0F748CD-78B4-0C60-F58F-1E1700FB92DC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D0F748CD-78B4-0C60-F58F-1E1700FB92DC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D0F748CD-78B4-0C60-F58F-1E1700FB92DC}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
