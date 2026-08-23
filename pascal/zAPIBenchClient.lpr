@@ -131,16 +131,16 @@ end;
 -----------------------------------------------------------------------------}
 function DoRemoteCall(const AppName, APIName, RequestJSON: string; out ResponseJSON: string; out ErrorMsg: string): boolean;
 var
-  HndData, HndRes: TDataHandle;
+  HndData, HndRes: API.TDataHandle;
 begin
   Result := False;
   ResponseJSON := '';
   ErrorMsg := '';
 
-  HndData := TDataHandle.Create(APIName);
+  HndData := API.TDataHandle.Create(APIName);
   try
     HndData.WriteString(RequestJSON);
-    HndRes := CallApp(AppName, HndData, TIMEOUT_MS);
+    HndRes := API.CallApp(AppName, HndData, TIMEOUT_MS);
     try
       if HndRes = nil then
       begin
@@ -713,7 +713,7 @@ end;
 
 procedure TWorkerThread.Execute;
 var
-  i, idx: integer;
+  I, idx: integer;
   StartTime, EndTime: int64;
   Elapsed: int64;
   Success: boolean;
@@ -722,12 +722,12 @@ var
   tmpStr: string;
   tmpInt64: int64;
 begin
-  for i := 1 to FCallsPerThread do
+  for I := 1 to FCallsPerThread do
   begin
     if not Running then Break;
 
     // 轮询调用 20 个 API (0-19)
-    idx := (i - 1) mod 20;
+    idx := (I - 1) mod 20;
 
     StartTime := GetTickCount64 * 1000; // 微秒
 
@@ -785,7 +785,7 @@ begin
     end;
 
     Inc(FCompletedCalls);
-    if i mod 10 = 0 then Sleep(0);
+    if I mod 10 = 0 then Sleep(0);
   end;
 end;
 
@@ -793,7 +793,7 @@ end;
   主程序
 -----------------------------------------------------------------------------}
 var
-  i: integer;
+  I: integer;
   ThreadCount, CallsPerThread: integer;
   Threads: array of TWorkerThread;
   StartTime, EndTime: TDateTime;
@@ -828,7 +828,7 @@ begin
   ConsoleWriteLn('   2. 服务端控制台日志输出 (ConsoleWriteLn)');
   ConsoleWriteLn('   3. sleep API 的累积阻塞 (1-10ms/次)');
   ConsoleWriteLn('   4. C4 线程池调度和上下文切换开销');
-  ConsoleWriteLn('   5. TDataHandle 多次底层读写操作');
+  ConsoleWriteLn('   5. API.TDataHandle 多次底层读写操作');
   ConsoleWriteLn('');
   ConsoleWriteLn('优化建议:');
   ConsoleWriteLn('   - 生产环境关闭服务端 ConsoleWriteLn');
@@ -840,24 +840,24 @@ begin
   // 初始化统计锁
   StatsLock := TCriticalSection.Create;
   GlobalCallCounterLock := TCriticalSection.Create;
-  for i := 0 to 19 do
+  for I := 0 to 19 do
   begin
-    Stats[i].Name := apiNames[i];
-    Stats[i].TotalCalls := 0;
-    Stats[i].SuccessCalls := 0;
-    Stats[i].TotalTime := 0;
-    Stats[i].MinTime := 0;
-    Stats[i].MaxTime := 0;
+    Stats[I].Name := apiNames[I];
+    Stats[I].TotalCalls := 0;
+    Stats[I].SuccessCalls := 0;
+    Stats[I].TotalTime := 0;
+    Stats[I].MinTime := 0;
+    Stats[I].MaxTime := 0;
   end;
 
   // 连接服务器
-  ResetPrepare;
-  PrepareClient(SERVER_ENDPOINT, nil);
+  API.ResetPrepare;
+  API.PrepareClient(SERVER_ENDPOINT, nil);
 
-  if not PrepareDone then
+  if not API.PrepareDone then
   begin
     ConsoleWriteLn('连接服务器失败，请确保 BenchServer 已启动');
-    Shutdown;
+    API.Shutdown;
     Halt(1);
   end;
 
@@ -866,9 +866,9 @@ begin
 
   // 预热 (确保连接就绪)
   ConsoleWriteLn('预热中...');
-  CallAdd(i);
-  CallSub(i);
-  CallMul(i);
+  CallAdd(I);
+  CallSub(I);
+  CallMul(I);
 
   ConsoleWriteLn('开始压测...');
   ConsoleWriteLn('');
@@ -879,14 +879,14 @@ begin
 
   // 创建并启动工作线程
   SetLength(Threads, ThreadCount);
-  for i := 0 to ThreadCount - 1 do
-    Threads[i] := TWorkerThread.Create(i, CallsPerThread);
+  for I := 0 to ThreadCount - 1 do
+    Threads[I] := TWorkerThread.Create(I, CallsPerThread);
 
   // 等待所有线程完成
-  for i := 0 to ThreadCount - 1 do
+  for I := 0 to ThreadCount - 1 do
   begin
-    Threads[i].WaitFor;
-    Threads[i].Free;
+    Threads[I].WaitFor;
+    Threads[I].Free;
   end;
 
   EndTime := Now;
@@ -896,11 +896,11 @@ begin
   TotalCalls := 0;
   TotalSuccess := 0;
   TotalElapsed := 0;
-  for i := 0 to 19 do
+  for I := 0 to 19 do
   begin
-    TotalCalls := TotalCalls + Stats[i].TotalCalls;
-    TotalSuccess := TotalSuccess + Stats[i].SuccessCalls;
-    TotalElapsed := TotalElapsed + Stats[i].TotalTime;
+    TotalCalls := TotalCalls + Stats[I].TotalCalls;
+    TotalSuccess := TotalSuccess + Stats[I].SuccessCalls;
+    TotalElapsed := TotalElapsed + Stats[I].TotalTime;
   end;
 
   if TotalElapsed > 0 then
@@ -922,9 +922,9 @@ begin
   ConsoleWriteLn('各 API 详细统计:');
   ConsoleWriteLn('  API 名称           调用数   成功数  平均(μs)  最小(μs)  最大(μs)');
   ConsoleWriteLn('  --------------------------------------------------------------');
-  for i := 0 to 19 do
+  for I := 0 to 19 do
   begin
-    with Stats[i] do
+    with Stats[I] do
     begin
       if SuccessCalls > 0 then
         ConsoleWriteLn(Format('  %-18s %8d %8d %10d %10d %10d', [Name, TotalCalls, SuccessCalls, TotalTime div SuccessCalls, MinTime, MaxTime]))
@@ -936,8 +936,8 @@ begin
   ConsoleWriteLn('');
 
   ConsoleWriteLn('正在清理...');
-  ExitMainThread;
-  Shutdown;
+  API.ExitMainThread;
+  API.Shutdown;
   StatsLock.Free;
   GlobalCallCounterLock.Free;
   ConsoleWriteLn('压测完成！');

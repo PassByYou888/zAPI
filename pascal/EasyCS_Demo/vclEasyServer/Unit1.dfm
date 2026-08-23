@@ -10,10 +10,12 @@ object Form1: TForm1
   Font.Height = -12
   Font.Name = 'Segoe UI'
   Font.Style = []
+  OldCreateOrder = True
   OnDestroy = Button2Click
   DesignSize = (
     452
     191)
+  PixelsPerInch = 96
   TextHeight = 15
   object Button1: TButton
     Left = 8

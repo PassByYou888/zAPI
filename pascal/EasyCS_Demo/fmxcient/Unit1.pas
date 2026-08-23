@@ -48,10 +48,10 @@ procedure TForm1.Button1Click(Sender: TObject);
 begin
   // 1. 连接到服务（纯消费端，不暴露 API）
 
-  ResetPrepare;
-  PrepareClient('ipc:calc_service', nil); // App 如果为 nil，则充当纯消费者(不对外提供服务)。
+  API.ResetPrepare;
+  API.PrepareClient('ipc:calc_service', nil); // App 如果为 nil，则充当纯消费者(不对外提供服务)。
 
-  if PrepareDone then
+  if API.PrepareDone then
   begin
     Button1.Enabled := false;
     Button2.Enabled := true;
@@ -68,14 +68,14 @@ begin
   TThread.CreateAnonymousThread(
     procedure
     var
-      Data, Res: TDataHandle;
+      Data, Res: API.TDataHandle;
       Sum: integer;
     begin
       // 2. 构造请求（RAII 自动释放）
-      Data := TDataHandle.Create('add');
+      Data := API.TDataHandle.Create('add');
       Data.WriteInt32(10).WriteInt32(20); // 链式写入
       // 3. 远程调用（超时 3000ms）
-      Res := CallApp('CalcService', Data, 3000);
+      Res := API.CallApp('CalcService', Data, 3000);
       try
         if Res.GetSize = 0 then
           TThread.Synchronize(nil,
@@ -113,8 +113,8 @@ begin
   end;
 
   // 4. 清理
-  z_api_hubtool_helper.ExitMainThread;
-  z_api_hubtool_helper.Shutdown;
+  API.ExitMainThread;
+  API.Shutdown;
   Button1.Enabled := true;
   Button2.Enabled := false;
   Button3.Enabled := false;
@@ -151,7 +151,7 @@ begin
       procedure
       var
         n: Cardinal;
-        Data, Res: TDataHandle;
+        Data, Res: API.TDataHandle;
         Sum: integer;
       begin // 线程里的一些代码。
         while true do
@@ -160,10 +160,10 @@ begin
           n := TThread.GetTickCount;
           // Randomize; // 初始化内置的随机数生成器
           // 2. 构造请求（RAII 自动释放）
-          Data := TDataHandle.Create('add');
+          Data := API.TDataHandle.Create('add');
           Data.WriteInt32(10).WriteInt32(20); // 链式写入
           // 3. 远程调用（超时 3000ms）
-          Res := CallApp('CalcService', Data, 3000);
+          Res := API.CallApp('CalcService', Data, 3000);
           try
             if Res.GetSize = 0 then
               TInterlocked.increment(k2)
@@ -214,18 +214,18 @@ begin
   TThread.CreateAnonymousThread(
     procedure
     var
-      Data, Res: TDataHandle;
+      Data, Res: API.TDataHandle;
       astr: string;
       astringlist:Tstringlist;
     begin
       // 2. 构造请求（RAII 自动释放）
-      Data := TDataHandle.Create('jsonceshi');
+      Data := API.TDataHandle.Create('jsonceshi');
       astringlist:=Tstringlist.Create;
       astringlist.LoadFromFile('abigstring.txt',TEncoding.UTF8);////导入一个大的测试文件(我测试过100兆的文件)
       Data.WriteString(astringlist.Text);
       astringlist.Free;
       // 3. 远程调用（超时 3000ms）
-      Res := CallApp('CalcService', Data, 10000);
+      Res := API.CallApp('CalcService', Data, 10000);
       try
         if Res.GetSize = 0 then
           TThread.Synchronize(nil,

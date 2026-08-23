@@ -28,7 +28,6 @@
       <Unit>
         <Filename Value="zAPIBenchClient.lpr"/>
         <IsPartOfProject Value="True"/>
-        <UnitName Value="zAPIBenchClient_ThreadPerCall"/>
       </Unit>
     </Units>
   </ProjectOptions>
@@ -40,7 +39,7 @@
     </Target>
     <SearchPaths>
       <IncludeFiles Value="$(ProjOutDir)"/>
-      <OtherUnitFiles Value=".\zNetV2\source"/>
+      <OtherUnitFiles Value="zNetV2\source"/>
       <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
     <CodeGeneration>

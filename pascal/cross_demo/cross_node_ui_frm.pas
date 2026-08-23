@@ -165,7 +165,7 @@ begin
   c := a + b;
 
   // 此处安全地更新 UI（因为已同步到主线程）
-  Memo.Lines.Add(Format('收到计算请求 "a(%d)+b(%d)" = 计算结果 "%d"', [a, b, c]));
+  API_Post_Status2(Format('收到计算请求 "a(%d)+b(%d)" = 计算结果 "%d"', [a, b, c]));
 
   // 将结果写入输出句柄
   API__.API_WriteInt32(Output, c);
@@ -198,7 +198,7 @@ begin
   API__.API_WriteUInt8(Output, b);
 
   // 安全更新 UI（主线程）
-  Memo.Lines.Add(Format('接收数据序 [%d, %d, %d, %d, "%s", %.2f] = 发送数据序 [%.2f, "%s", %d, %d, %d, %d] ',
+  API_Post_Status2(Format('接收数据序 [%d, %d, %d, %d, "%s", %.2f] = 发送数据序 [%.2f, "%s", %d, %d, %d, %d] ',
     [b, w, c, u64, s, f, f, s, u64, c, w, b]));
 end;
 
@@ -209,6 +209,8 @@ begin
     作用：从软同步队列中取出所有等待的任务，并在主线程中执行它们。
     若不调用，则所有同步回调将永久阻塞（死等）。 }
   API.Sync;
+  while API_Get_Status_Num() > 0 do
+    Memo.Lines.Add(API_Get_Status2());
 end;
 
 { FormCreate – 窗体创建时启动后台初始化线程 }

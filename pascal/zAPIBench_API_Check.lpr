@@ -101,16 +101,16 @@ const
 -----------------------------------------------------------------------------}
 function DoRemoteCall(const APIName, RequestJSON: string; out ResponseJSON: string; out ErrorMsg: string): Boolean;
 var
-  HndData, HndRes: TDataHandle;
+  HndData, HndRes: API.TDataHandle;
 begin
   Result := False;
   ResponseJSON := '';
   ErrorMsg := '';
 
-  HndData := TDataHandle.Create(APIName);
+  HndData := API.TDataHandle.Create(APIName);
   try
     HndData.WriteString(RequestJSON);
-    HndRes := CallApp(SERVER_APP, HndData, TIMEOUT_MS);
+    HndRes := API.CallApp(SERVER_APP, HndData, TIMEOUT_MS);
     try
       if HndRes = nil then
       begin
@@ -853,13 +853,13 @@ begin
   ConsoleWriteLn('');
 
   // 连接服务器
-  ResetPrepare;
-  PrepareClient(SERVER_ENDPOINT, nil);
+  API.ResetPrepare;
+  API.PrepareClient(SERVER_ENDPOINT, nil);
 
-  if not PrepareDone then
+  if not API.PrepareDone then
   begin
     ConsoleWriteLn('连接服务器失败，请确保 BenchServer 已启动');
-    Shutdown;
+    API.Shutdown;
     Halt(1);
   end;
 
@@ -895,6 +895,6 @@ begin
     ReadLn(input_);
   until umlTrimSpace(input_).Same('exit');
 
-  ExitMainThread;
-  Shutdown;
+  API.ExitMainThread;
+  API.Shutdown;
 end.

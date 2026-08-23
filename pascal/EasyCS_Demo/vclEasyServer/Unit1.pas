@@ -27,7 +27,7 @@ procedure jsonceshiCallback(Trigger: Pointer; Input, Output: Pointer); cdecl;
 
 var
   Form1: TForm1;
-  App: TAppHandle = nil;
+  App: API.TAppHandle = nil;
 
 implementation
 
@@ -49,12 +49,12 @@ end;
 
 procedure jsonceshiCallback(Trigger: Pointer; Input, Output: Pointer); cdecl;
 var
-  InData, OutData: TDataHandle;
+  InData, OutData: API.TDataHandle;
   ainstr,aoutstr: string;
 begin
   try
-    InData := TDataHandle.Create(Input);
-    OutData := TDataHandle.Create(Output);
+    InData := API.TDataHandle.Create(Input);
+    OutData := API.TDataHandle.Create(Output);
     InData.ReadString(ainstr); //ainstr为收到的字符串
 
     //这里省略业务处理（将ainstr转换为json，然后处理完毕后，再组装一个json，再将它转换为字符串），假设最后处理完毕的字符串为aoutstr
@@ -70,7 +70,7 @@ end;
 procedure TForm1.Button1Click(Sender: TObject);
 begin
   // 1. 创建应用（RAII，自动释放）
-  App := TAppHandle.Create('CalcService', '这是一个ceshi用的Demo');
+  App := API.TAppHandle.Create('CalcService', '这是一个ceshi用的Demo');
 
   // 2. 注册 API:add
   if not App.RegisterCall('add', '计算a + b的和', nil, @AddCallback) then
@@ -84,12 +84,12 @@ begin
   end;
 
   // 3. 准备网络（IPC 模式）
-  ResetPrepare;
+  API.ResetPrepare;
 
   // 第3个参数如果为 nil，则充当纯消费者(不对外提供服务)。
-  PrepareService('ipc:calc_service', 'ipc:calc_service', App);
+  API.PrepareService('ipc:calc_service', 'ipc:calc_service', App);
 
-  if not PrepareDone then
+  if not API.PrepareDone then
   begin
     Memo1.Lines.Add('网络启动失败');
   end;
@@ -106,8 +106,8 @@ end;
 procedure TForm1.Button2Click(Sender: TObject);
 begin
   // 4. 清理（RAII 会自动释放 App，但我们手动调用网络停止）
-  ExitMainThread;
-  Shutdown;
+  API.ExitMainThread;
+  API.Shutdown;
   if App <> nil then
     Freeandnil(App); // 非必须，但显式释放更清晰
 

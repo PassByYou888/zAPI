@@ -4,7 +4,7 @@ program fpc_tester_for_zAPI;
  *  fpc_tester_for_zAPI – Comprehensive Test Suite for API Hub Pascal Wrapper
  *
  *  This program thoroughly tests the z_api_hubtool_helper unit, covering:
- *    - TDataHandle: all read/write methods (including chaining), position/size
+ *    - API.TDataHandle: all read/write methods (including chaining), position/size
  *    - TAppHandle: registration, local calls/notifications, network (IPC)
  *    - Concurrency, performance, resource leak, duplicate registration, UTF‑8
  *
@@ -165,15 +165,15 @@ var
 type
   TConcurrencyThread = class(TThread)
   private
-    FApp: TAppHandle;      // Reference to the application handle
+    FApp: API.TAppHandle;      // Reference to the application handle
     FThreadIndex: Integer; // Not used, but kept for potential diagnostics
   protected
     procedure Execute; override;
   public
-    constructor Create(App: TAppHandle; ThreadIndex: Integer);
+    constructor Create(App: API.TAppHandle; ThreadIndex: Integer);
   end;
 
-constructor TConcurrencyThread.Create(App: TAppHandle; ThreadIndex: Integer);
+constructor TConcurrencyThread.Create(App: API.TAppHandle; ThreadIndex: Integer);
 begin
   inherited Create(True); // Create suspended? we will start manually
   FApp := App;
@@ -184,12 +184,12 @@ end;
 procedure TConcurrencyThread.Execute;
 var
   j: Integer;
-  Data, Res: TDataHandle;
+  Data, Res: API.TDataHandle;
   Sum: Integer;
 begin
   for j := 1 to 100 do  // CALLS_PER_THREAD = 100
   begin
-    Data := TDataHandle.Create('add');
+    Data := API.TDataHandle.Create('add');
     try
       Data.WriteInt32(j).WriteInt32(j*2);
       Res := FApp.LocalCall(Data);
@@ -202,19 +202,19 @@ begin
 end;
 
 { ----------------------------------------------------------------------------
-  Test: TDataHandle Basics (chained writes, reads, position/size, buffer)
+  Test: API.TDataHandle Basics (chained writes, reads, position/size, buffer)
 -----------------------------------------------------------------------------}
 procedure TestDataHandleBasics;
 var
-  DH: TDataHandle;
+  DH: API.TDataHandle;
   I8: Int8; U8: UInt8; I16: Int16; U16: UInt16;
   I32: Int32; U32: UInt32; I64: Int64; U64: UInt64;
   Sgl: Single; Dbl: Double; Str: string;
   BufPtr: Pointer;
 begin
-  Report('=== TDataHandle Basic Operations (Chaining) ===');
+  Report('=== API.TDataHandle Basic Operations (Chaining) ===');
 
-  DH := TDataHandle.Create('test_api');
+  DH := API.TDataHandle.Create('test_api');
   try
     // Chain writes: all WriteXXX methods return Self
     DH.WriteInt8(-128)
@@ -277,13 +277,13 @@ end;
 -----------------------------------------------------------------------------}
 procedure TestLocalCalls;
 var
-  App: TAppHandle;
-  Data, Res: TDataHandle;
+  App: API.TAppHandle;
+  Data, Res: API.TDataHandle;
   Sum: Integer; Msg: string;
 begin
   Report('=== Local Calls & Notifications ===');
 
-  App := TAppHandle.Create('LocalApp', 'Local test');
+  App := API.TAppHandle.Create('LocalApp', 'Local test');
   try
     // Register APIs
     if not App.RegisterCall('add', 'Addition', nil, @AddCallback) then
@@ -294,7 +294,7 @@ begin
       ReportFail('RegisterNotify print');
 
     // Local Call: add
-    Data := TDataHandle.Create('add');
+    Data := API.TDataHandle.Create('add');
     try
       Data.WriteInt32(5).WriteInt32(7);
       Res := App.LocalCall(Data);
@@ -307,7 +307,7 @@ begin
     finally Data.Free; end;
 
     // Local Call: echo
-    Data := TDataHandle.Create('echo');
+    Data := API.TDataHandle.Create('echo');
     try
       Data.WriteString('Local Echo Test');
       Res := App.LocalCall(Data);
@@ -320,7 +320,7 @@ begin
     finally Data.Free; end;
 
     // Local Notify
-    Data := TDataHandle.Create('print');
+    Data := API.TDataHandle.Create('print');
     try
       Data.WriteString('Local notify message');
       App.LocalNotify(Data);
@@ -337,13 +337,13 @@ end;
 -----------------------------------------------------------------------------}
 procedure TestNetworkIPC;
 var
-  App: TAppHandle;
-  Data, Res: TDataHandle;
+  App: API.TAppHandle;
+  Data, Res: API.TDataHandle;
   Sum: Integer; Msg: string;
 begin
   Report('=== Remote IPC Network ===');
 
-  App := TAppHandle.Create('TestService', 'IPC test');
+  App := API.TAppHandle.Create('TestService', 'IPC test');
   try
     // Register APIs
     if not App.RegisterCall('add', 'Add', nil, @AddCallback) then
@@ -353,13 +353,13 @@ begin
     if not App.RegisterNotify('print', 'Print', nil, @PrintNotify) then
       ReportFail('RegisterNotify print');
 
-    ResetPrepare;
-    PrepareService('ipc:test_svc', 'ipc:test_svc');
-    PrepareService('0.0.0.0:9988', '127.0.0.1:9988');
-    PrepareClient('ipc:test_svc', App);
-    PrepareClient('127.0.0.1:9988', App);
+    API.ResetPrepare;
+    API.PrepareService('ipc:test_svc', 'ipc:test_svc');
+    API.PrepareService('0.0.0.0:9988', '127.0.0.1:9988');
+    API.PrepareClient('ipc:test_svc', App);
+    API.PrepareClient('127.0.0.1:9988', App);
 
-    if not PrepareDone then
+    if not API.PrepareDone then
     begin
       ReportFail('PrepareDone failed – check console for errors');
       Exit;
@@ -367,10 +367,10 @@ begin
     ReportPass('PrepareDone succeeded');
 
     // Remote add
-    Data := TDataHandle.Create('add');
+    Data := API.TDataHandle.Create('add');
     try
       Data.WriteInt32(100).WriteInt32(200);
-      Res := CallApp('TestService', Data, 3000);
+      Res := API.CallApp('TestService', Data, 3000);
       try
         if Res.ReadInt32(Sum) and (Sum = 300) then
           ReportPass('Remote add(100,200)=300')
@@ -380,10 +380,10 @@ begin
     finally Data.Free; end;
 
     // Remote echo
-    Data := TDataHandle.Create('echo');
+    Data := API.TDataHandle.Create('echo');
     try
       Data.WriteString('Hello from network!');
-      Res := CallApp('TestService', Data, 3000);
+      Res := API.CallApp('TestService', Data, 3000);
       try
         if Res.ReadString(Msg) and (Msg = 'Hello from network!') then
           ReportPass('Remote echo')
@@ -393,17 +393,17 @@ begin
     finally Data.Free; end;
 
     // Remote notify
-    Data := TDataHandle.Create('print');
+    Data := API.TDataHandle.Create('print');
     try
       Data.WriteString('Network notify');
-      NotifyApp('TestService', Data);
+      API.NotifyApp('TestService', Data);
       ReportPass('Remote notify sent (see callback output)');
     finally Data.Free; end;
 
     // Non‑existent API → handle size 0
-    Data := TDataHandle.Create('unknown');
+    Data := API.TDataHandle.Create('unknown');
     try
-      Res := CallApp('TestService', Data, 1000);
+      Res := API.CallApp('TestService', Data, 1000);
       try
         if Res.GetSize = 0 then
           ReportPass('Unknown API returns size 0')
@@ -416,8 +416,8 @@ begin
     App.Free;
   end;
 
-  ExitMainThread;
-  Shutdown;
+  API.ExitMainThread;
+  API.Shutdown;
   ReportPass('Network shutdown complete');
 end;
 
@@ -430,7 +430,7 @@ const
   CALLS_PER_THREAD = 100;
 var
   Threads: array[0..THREAD_COUNT-1] of TConcurrencyThread;
-  App: TAppHandle;
+  App: API.TAppHandle;
   StartTime: TDateTime;
   Elapsed: Double;
   i: Integer;
@@ -439,7 +439,7 @@ begin
     [THREAD_COUNT, CALLS_PER_THREAD]);
 
   ConcurrencyTotalCalls := 0;
-  App := TAppHandle.Create('ConcurrencyApp', 'Concurrency');
+  App := API.TAppHandle.Create('ConcurrencyApp', 'Concurrency');
   try
     if not App.RegisterCall('add', 'Add', nil, @AddCallback) then
     begin
@@ -483,8 +483,8 @@ procedure TestPerformance;
 const
   ITERATIONS = 1000;
 var
-  App: TAppHandle;
-  Data, Res: TDataHandle;
+  App: API.TAppHandle;
+  Data, Res: API.TDataHandle;
   StartTime: TDateTime;
   Elapsed: Double;
   Sum: Integer;
@@ -493,7 +493,7 @@ var
 begin
   Report('=== Performance Test (%d sequential local calls) ===', [ITERATIONS]);
 
-  App := TAppHandle.Create('PerfApp', 'Performance');
+  App := API.TAppHandle.Create('PerfApp', 'Performance');
   try
     if not App.RegisterCall('add', 'Add', nil, @AddCallback) then
     begin
@@ -505,7 +505,7 @@ begin
     SuccessCount := 0;
     for i := 1 to ITERATIONS do
     begin
-      Data := TDataHandle.Create('add');
+      Data := API.TDataHandle.Create('add');
       try
         Data.WriteInt32(i).WriteInt32(i+1);
         Res := App.LocalCall(Data);
@@ -538,14 +538,14 @@ const
   ALLOC_COUNT = 10000;
 var
   i: Integer;
-  Handles: array of TDataHandle;
+  Handles: array of API.TDataHandle;
 begin
   Report('=== Resource Leak Test (allocate %d handles) ===', [ALLOC_COUNT]);
 
   SetLength(Handles, ALLOC_COUNT);
   try
     for i := 0 to ALLOC_COUNT-1 do
-      Handles[i] := TDataHandle.Create(Format('leak_%d', [i]));
+      Handles[i] := API.TDataHandle.Create(Format('leak_%d', [i]));
     Report('Successfully created %d handles', [ALLOC_COUNT]);
     ReportPass('All handles allocated');
   finally
@@ -560,11 +560,11 @@ end;
 -----------------------------------------------------------------------------}
 procedure TestDuplicateRegistration;
 var
-  App: TAppHandle;
+  App: API.TAppHandle;
 begin
   Report('=== Duplicate Registration Detection ===');
 
-  App := TAppHandle.Create('DupApp', 'Duplicate test');
+  App := API.TAppHandle.Create('DupApp', 'Duplicate test');
   try
     if App.RegisterCall('test', 'first', nil, @AddCallback) then
       ReportPass('First registration succeeded')
@@ -586,20 +586,20 @@ end;
 -----------------------------------------------------------------------------}
 procedure TestUTF8International;
 var
-  App: TAppHandle;
-  Data, Res: TDataHandle;
+  App: API.TAppHandle;
+  Data, Res: API.TDataHandle;
   Sum: Integer;
 begin
   Report('=== UTF‑8 Internationalization (Chinese/Emoji) ===');
 
-  App := TAppHandle.Create('中文字符服务', '包含中文描述');
+  App := API.TAppHandle.Create('中文字符服务', '包含中文描述');
   try
     if not App.RegisterCall('加法', '两数相加', nil, @AddCallback) then
       ReportFail('RegisterCall with Chinese name');
     if not App.RegisterNotify('日志', '中文日志', nil, @PrintNotify) then
       ReportFail('RegisterNotify with Chinese name');
 
-    Data := TDataHandle.Create('加法');
+    Data := API.TDataHandle.Create('加法');
     try
       Data.WriteInt32(8).WriteInt32(9);
       Res := App.LocalCall(Data);
@@ -611,7 +611,7 @@ begin
       finally Res.Free; end;
     finally Data.Free; end;
 
-    Data := TDataHandle.Create('日志');
+    Data := API.TDataHandle.Create('日志');
     try
       Data.WriteString('测试通知 🎉');
       App.LocalNotify(Data);
@@ -646,6 +646,6 @@ begin
     on E: Exception do
       ConsoleWriteLn('❌ Test exception: ' + E.ClassName + ': ' + E.Message);
   end;
-  Shutdown();
+  API.Shutdown();
   ReadLn;
 end.

@@ -25,11 +25,11 @@ begin
 end;
 
 var
-  App: TAppHandle=nil;
+  App: API.TAppHandle=nil;
 
 begin
   // 1. 创建应用（RAII，自动释放）
-  App := TAppHandle.Create('CalcService', 'Calculator Demo');
+  App := API.TAppHandle.Create('CalcService', 'Calculator Demo');
 
   // 2. 注册 API
   if not App.RegisterCall('add', 'a + b', nil, @AddCallback) then
@@ -39,12 +39,12 @@ begin
   end;
 
   // 3. 准备网络（IPC 模式）
-  ResetPrepare;
+  API.ResetPrepare;
 
   //App 如果为 nil，则充当纯消费者(不对外提供服务)。
-  PrepareService('ipc:calc_service', 'ipc:calc_service', App);
+  API.PrepareService('ipc:calc_service', 'ipc:calc_service', App);
 
-  if not PrepareDone then
+  if not API.PrepareDone then
   begin
     Writeln('网络启动失败');
     Halt(1);
@@ -54,8 +54,8 @@ begin
   Readln;
 
   // 4. 清理（RAII 会自动释放 App，但我们手动调用网络停止）
-  ExitMainThread;
-  Shutdown;
+  API.ExitMainThread;
+  API.Shutdown;
   Freeandnil(App);  // 非必须，但显式释放更清晰
 end.
 

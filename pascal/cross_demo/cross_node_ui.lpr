@@ -1,7 +1,7 @@
 program cross_node_ui;
 
 {$mode objfpc}{$H+}
-{$apptype console}
+//{$apptype console}
 
 uses
   {$IFDEF UNIX}

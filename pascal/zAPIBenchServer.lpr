@@ -96,8 +96,8 @@ end;
   数据句柄 JSON 辅助函数
 -----------------------------------------------------------------------------}
 
-// 从 TDataHandle 读取 UTF-8 字符串并解码为 TUPascalString
-function ReadJsonString(h: TDataHandle): TUPascalString;
+// 从 API.TDataHandle 读取 UTF-8 字符串并解码为 TUPascalString
+function ReadJsonString(h: API.TDataHandle): TUPascalString;
 var
   s: string;
 begin
@@ -108,8 +108,8 @@ begin
     Result := UTF8Decode(s);
 end;
 
-// 将 TUPascalString 编码为 UTF-8 并写入 TDataHandle
-procedure WriteJsonString(h: TDataHandle; const value: TUPascalString);
+// 将 TUPascalString 编码为 UTF-8 并写入 API.TDataHandle
+procedure WriteJsonString(h: API.TDataHandle; const value: TUPascalString);
 var
   s: string;
 begin
@@ -127,13 +127,13 @@ end;
 // 1. 整数加法: {"a":int, "b":int} -> {"result":int}
 procedure add_callback(trigger: Pointer; input: Pointer; output: Pointer); cdecl;
 var
-  InHnd, OutHnd: TDataHandle;
+  InHnd, OutHnd: API.TDataHandle;
   jo: TZ_JsonObject;
   a, b, sum: Integer;
   res: TUPascalString;
 begin
-  InHnd := TDataHandle.Create(TDataHnd(input), False);
-  OutHnd := TDataHandle.Create(TDataHnd(output), False);
+  InHnd := API.TDataHandle.Create(TDataHnd(input), False);
+  OutHnd := API.TDataHandle.Create(TDataHnd(output), False);
   try
     jo := nil;
     try
@@ -159,13 +159,13 @@ end;
 // 2. 整数减法: {"a":int, "b":int} -> {"result":int}
 procedure sub_callback(trigger: Pointer; input: Pointer; output: Pointer); cdecl;
 var
-  InHnd, OutHnd: TDataHandle;
+  InHnd, OutHnd: API.TDataHandle;
   jo: TZ_JsonObject;
   a, b, diff: Integer;
   res: TUPascalString;
 begin
-  InHnd := TDataHandle.Create(TDataHnd(input), False);
-  OutHnd := TDataHandle.Create(TDataHnd(output), False);
+  InHnd := API.TDataHandle.Create(TDataHnd(input), False);
+  OutHnd := API.TDataHandle.Create(TDataHnd(output), False);
   try
     jo := nil;
     try
@@ -191,13 +191,13 @@ end;
 // 3. 整数乘法: {"a":int, "b":int} -> {"result":int}
 procedure mul_callback(trigger: Pointer; input: Pointer; output: Pointer); cdecl;
 var
-  InHnd, OutHnd: TDataHandle;
+  InHnd, OutHnd: API.TDataHandle;
   jo: TZ_JsonObject;
   a, b, prod: Integer;
   res: TUPascalString;
 begin
-  InHnd := TDataHandle.Create(TDataHnd(input), False);
-  OutHnd := TDataHandle.Create(TDataHnd(output), False);
+  InHnd := API.TDataHandle.Create(TDataHnd(input), False);
+  OutHnd := API.TDataHandle.Create(TDataHnd(output), False);
   try
     jo := nil;
     try
@@ -223,14 +223,14 @@ end;
 // 4. 整数除法: {"a":int, "b":int} -> {"result":float} (b 不能为 0)
 procedure div_callback(trigger: Pointer; input: Pointer; output: Pointer); cdecl;
 var
-  InHnd, OutHnd: TDataHandle;
+  InHnd, OutHnd: API.TDataHandle;
   jo: TZ_JsonObject;
   a, b: Integer;
   quot: Double;
   res: TUPascalString;
 begin
-  InHnd := TDataHandle.Create(TDataHnd(input), False);
-  OutHnd := TDataHandle.Create(TDataHnd(output), False);
+  InHnd := API.TDataHandle.Create(TDataHnd(input), False);
+  OutHnd := API.TDataHandle.Create(TDataHnd(output), False);
   try
     jo := nil;
     try
@@ -260,7 +260,7 @@ end;
 // 基于 Z.Expression 引擎，支持变量传入
 procedure eval_callback(trigger: Pointer; input: Pointer; output: Pointer); cdecl;
 var
-  InHnd, OutHnd: TDataHandle;
+  InHnd, OutHnd: API.TDataHandle;
   jo: TZ_JsonObject;
   expr: string;
   vars: TZ_JsonObject;
@@ -269,8 +269,8 @@ var
   resultVal: Variant;
   res: TUPascalString;
 begin
-  InHnd := TDataHandle.Create(TDataHnd(input), False);
-  OutHnd := TDataHandle.Create(TDataHnd(output), False);
+  InHnd := API.TDataHandle.Create(TDataHnd(input), False);
+  OutHnd := API.TDataHandle.Create(TDataHnd(output), False);
   vl := THashVariantList.Create;
   try
     jo := nil;
@@ -311,14 +311,14 @@ end;
 // 6. MD5 哈希: {"data":string} -> {"md5":string}
 procedure md5_callback(trigger: Pointer; input: Pointer; output: Pointer); cdecl;
 var
-  InHnd, OutHnd: TDataHandle;
+  InHnd, OutHnd: API.TDataHandle;
   jo: TZ_JsonObject;
   data: string;
   md5hex: string;
   res: TUPascalString;
 begin
-  InHnd := TDataHandle.Create(TDataHnd(input), False);
-  OutHnd := TDataHandle.Create(TDataHnd(output), False);
+  InHnd := API.TDataHandle.Create(TDataHnd(input), False);
+  OutHnd := API.TDataHandle.Create(TDataHnd(output), False);
   try
     jo := nil;
     try
@@ -343,15 +343,15 @@ end;
 // 7. SHA-1 哈希: {"data":string} -> {"sha1":string}
 procedure sha1_callback(trigger: Pointer; input: Pointer; output: Pointer); cdecl;
 var
-  InHnd, OutHnd: TDataHandle;
+  InHnd, OutHnd: API.TDataHandle;
   jo: TZ_JsonObject;
   data: string;
   hash: TSHA1Digest;
   hex: string;
   res: TUPascalString;
 begin
-  InHnd := TDataHandle.Create(TDataHnd(input), False);
-  OutHnd := TDataHandle.Create(TDataHnd(output), False);
+  InHnd := API.TDataHandle.Create(TDataHnd(input), False);
+  OutHnd := API.TDataHandle.Create(TDataHnd(output), False);
   try
     jo := nil;
     try
@@ -377,15 +377,15 @@ end;
 // 8. SHA-256 哈希: {"data":string} -> {"sha256":string}
 procedure sha256_callback(trigger: Pointer; input: Pointer; output: Pointer); cdecl;
 var
-  InHnd, OutHnd: TDataHandle;
+  InHnd, OutHnd: API.TDataHandle;
   jo: TZ_JsonObject;
   data: string;
   hash: TSHA256Digest;
   hex: string;
   res: TUPascalString;
 begin
-  InHnd := TDataHandle.Create(TDataHnd(input), False);
-  OutHnd := TDataHandle.Create(TDataHnd(output), False);
+  InHnd := API.TDataHandle.Create(TDataHnd(input), False);
+  OutHnd := API.TDataHandle.Create(TDataHnd(output), False);
   try
     jo := nil;
     try
@@ -411,15 +411,15 @@ end;
 // 9. SHA-512 哈希: {"data":string} -> {"sha512":string}
 procedure sha512_callback(trigger: Pointer; input: Pointer; output: Pointer); cdecl;
 var
-  InHnd, OutHnd: TDataHandle;
+  InHnd, OutHnd: API.TDataHandle;
   jo: TZ_JsonObject;
   data: string;
   hash: TSHA512Digest;
   hex: string;
   res: TUPascalString;
 begin
-  InHnd := TDataHandle.Create(TDataHnd(input), False);
-  OutHnd := TDataHandle.Create(TDataHnd(output), False);
+  InHnd := API.TDataHandle.Create(TDataHnd(input), False);
+  OutHnd := API.TDataHandle.Create(TDataHnd(output), False);
   try
     jo := nil;
     try
@@ -446,13 +446,13 @@ end;
 // 注意: 仅用于压测演示，非真实 AES 加密
 procedure aes_encrypt_callback(trigger: Pointer; input: Pointer; output: Pointer); cdecl;
 var
-  InHnd, OutHnd: TDataHandle;
+  InHnd, OutHnd: API.TDataHandle;
   jo: TZ_JsonObject;
   data: string;
   res: TUPascalString;
 begin
-  InHnd := TDataHandle.Create(TDataHnd(input), False);
-  OutHnd := TDataHandle.Create(TDataHnd(output), False);
+  InHnd := API.TDataHandle.Create(TDataHnd(input), False);
+  OutHnd := API.TDataHandle.Create(TDataHnd(output), False);
   try
     jo := nil;
     try
@@ -478,13 +478,13 @@ end;
 // 注意: 仅用于压测演示，非真实 AES 解密
 procedure aes_decrypt_callback(trigger: Pointer; input: Pointer; output: Pointer); cdecl;
 var
-  InHnd, OutHnd: TDataHandle;
+  InHnd, OutHnd: API.TDataHandle;
   jo: TZ_JsonObject;
   cipher: string;
   res: TUPascalString;
 begin
-  InHnd := TDataHandle.Create(TDataHnd(input), False);
-  OutHnd := TDataHandle.Create(TDataHnd(output), False);
+  InHnd := API.TDataHandle.Create(TDataHnd(input), False);
+  OutHnd := API.TDataHandle.Create(TDataHnd(output), False);
   try
     jo := nil;
     try
@@ -510,14 +510,14 @@ end;
 // 12. Base64 编码: {"data":string} -> {"base64":string}
 procedure base64_encode_callback(trigger: Pointer; input: Pointer; output: Pointer); cdecl;
 var
-  InHnd, OutHnd: TDataHandle;
+  InHnd, OutHnd: API.TDataHandle;
   jo: TZ_JsonObject;
   data: string;
   encoded: string;
   res: TUPascalString;
 begin
-  InHnd := TDataHandle.Create(TDataHnd(input), False);
-  OutHnd := TDataHandle.Create(TDataHnd(output), False);
+  InHnd := API.TDataHandle.Create(TDataHnd(input), False);
+  OutHnd := API.TDataHandle.Create(TDataHnd(output), False);
   try
     jo := nil;
     try
@@ -542,14 +542,14 @@ end;
 // 13. Base64 解码: {"base64":string} -> {"decoded":string}
 procedure base64_decode_callback(trigger: Pointer; input: Pointer; output: Pointer); cdecl;
 var
-  InHnd, OutHnd: TDataHandle;
+  InHnd, OutHnd: API.TDataHandle;
   jo: TZ_JsonObject;
   encoded: string;
   decoded: string;
   res: TUPascalString;
 begin
-  InHnd := TDataHandle.Create(TDataHnd(input), False);
-  OutHnd := TDataHandle.Create(TDataHnd(output), False);
+  InHnd := API.TDataHandle.Create(TDataHnd(input), False);
+  OutHnd := API.TDataHandle.Create(TDataHnd(output), False);
   try
     jo := nil;
     try
@@ -574,14 +574,14 @@ end;
 // 14. 随机整数: {"min":int, "max":int} -> {"value":int}
 procedure random_callback(trigger: Pointer; input: Pointer; output: Pointer); cdecl;
 var
-  InHnd, OutHnd: TDataHandle;
+  InHnd, OutHnd: API.TDataHandle;
   jo: TZ_JsonObject;
   minVal, maxVal: Integer;
   rndVal: Integer;
   res: TUPascalString;
 begin
-  InHnd := TDataHandle.Create(TDataHnd(input), False);
-  OutHnd := TDataHandle.Create(TDataHnd(output), False);
+  InHnd := API.TDataHandle.Create(TDataHnd(input), False);
+  OutHnd := API.TDataHandle.Create(TDataHnd(output), False);
   try
     jo := nil;
     try
@@ -610,13 +610,13 @@ end;
 // 15. 字符串转大写: {"str":string} -> {"result":string}
 procedure upper_callback(trigger: Pointer; input: Pointer; output: Pointer); cdecl;
 var
-  InHnd, OutHnd: TDataHandle;
+  InHnd, OutHnd: API.TDataHandle;
   jo: TZ_JsonObject;
   strVal: string;
   res: TUPascalString;
 begin
-  InHnd := TDataHandle.Create(TDataHnd(input), False);
-  OutHnd := TDataHandle.Create(TDataHnd(output), False);
+  InHnd := API.TDataHandle.Create(TDataHnd(input), False);
+  OutHnd := API.TDataHandle.Create(TDataHnd(output), False);
   try
     jo := nil;
     try
@@ -640,13 +640,13 @@ end;
 // 16. 字符串转小写: {"str":string} -> {"result":string}
 procedure lower_callback(trigger: Pointer; input: Pointer; output: Pointer); cdecl;
 var
-  InHnd, OutHnd: TDataHandle;
+  InHnd, OutHnd: API.TDataHandle;
   jo: TZ_JsonObject;
   strVal: string;
   res: TUPascalString;
 begin
-  InHnd := TDataHandle.Create(TDataHnd(input), False);
-  OutHnd := TDataHandle.Create(TDataHnd(output), False);
+  InHnd := API.TDataHandle.Create(TDataHnd(input), False);
+  OutHnd := API.TDataHandle.Create(TDataHnd(output), False);
   try
     jo := nil;
     try
@@ -670,15 +670,15 @@ end;
 // 17. 字符串反转: {"str":string} -> {"result":string}
 procedure reverse_callback(trigger: Pointer; input: Pointer; output: Pointer); cdecl;
 var
-  InHnd, OutHnd: TDataHandle;
+  InHnd, OutHnd: API.TDataHandle;
   jo: TZ_JsonObject;
   strVal: string;
   rev: string;
   i: Integer;
   res: TUPascalString;
 begin
-  InHnd := TDataHandle.Create(TDataHnd(input), False);
-  OutHnd := TDataHandle.Create(TDataHnd(output), False);
+  InHnd := API.TDataHandle.Create(TDataHnd(input), False);
+  OutHnd := API.TDataHandle.Create(TDataHnd(output), False);
   try
     jo := nil;
     try
@@ -705,12 +705,12 @@ end;
 // 18. Unix 时间戳: {} -> {"timestamp":int64}
 procedure timestamp_callback(trigger: Pointer; input: Pointer; output: Pointer); cdecl;
 var
-  OutHnd: TDataHandle;
+  OutHnd: API.TDataHandle;
   jo: TZ_JsonObject;
   ts: Int64;
   res: TUPascalString;
 begin
-  OutHnd := TDataHandle.Create(TDataHnd(output), False);
+  OutHnd := API.TDataHandle.Create(TDataHnd(output), False);
   try
     jo := nil;
     try
@@ -732,13 +732,13 @@ end;
 // 注意: 此 API 会阻塞当前线程，压测时会影响整体吞吐量
 procedure sleep_callback(trigger: Pointer; input: Pointer; output: Pointer); cdecl;
 var
-  InHnd, OutHnd: TDataHandle;
+  InHnd, OutHnd: API.TDataHandle;
   jo: TZ_JsonObject;
   ms: Integer;
   res: TUPascalString;
 begin
-  InHnd := TDataHandle.Create(TDataHnd(input), False);
-  OutHnd := TDataHandle.Create(TDataHnd(output), False);
+  InHnd := API.TDataHandle.Create(TDataHnd(input), False);
+  OutHnd := API.TDataHandle.Create(TDataHnd(output), False);
   try
     jo := nil;
     try
@@ -764,13 +764,13 @@ end;
 // 20. 回显: {"msg":string} -> {"echo":string}
 procedure echo_callback(trigger: Pointer; input: Pointer; output: Pointer); cdecl;
 var
-  InHnd, OutHnd: TDataHandle;
+  InHnd, OutHnd: API.TDataHandle;
   jo: TZ_JsonObject;
   msg: string;
   res: TUPascalString;
 begin
-  InHnd := TDataHandle.Create(TDataHnd(input), False);
-  OutHnd := TDataHandle.Create(TDataHnd(output), False);
+  InHnd := API.TDataHandle.Create(TDataHnd(input), False);
+  OutHnd := API.TDataHandle.Create(TDataHnd(output), False);
   try
     jo := nil;
     try
@@ -795,7 +795,7 @@ end;
   主程序
 -----------------------------------------------------------------------------}
 var
-  App: TAppHandle;
+  App: API.TAppHandle;
   i: Integer;
   input_: string;
   apiNames: array[0..19] of string = (
@@ -814,7 +814,7 @@ begin
   InitSysCBCAndDefaultKey(Random(High(Integer)));
 
   // 创建应用句柄（helper 单元自动加载动态库）
-  App := TAppHandle.Create('BenchServer', 'zAPI 压测服务器 (20 个内置 API)');
+  App := API.TAppHandle.Create('BenchServer', 'zAPI 压测服务器 (20 个内置 API)');
   ConsoleWriteLn('应用句柄创建成功: "BenchServer"');
 
   // 注册 20 个 API
@@ -845,15 +845,16 @@ begin
   ConsoleWriteLn('');
 
   // 准备网络（同时监听 IPC 和 TCP）
-  ResetPrepare;
-  PrepareService('ipc:bench_service', 'ipc:bench_service');
-  PrepareService('0.0.0.0', '0.0.0.0:9898');
-  PrepareClient('ipc:bench_service', App);
-  PrepareClient('127.0.0.1:9898', App);
+  API.ResetPrepare;
+  API.PrepareService('ipc:bench_service', 'ipc:bench_service');
+  API.PrepareService('0.0.0.0', '0.0.0.0:9898');
+  API.PrepareClient('ipc:bench_service', App);
+  API.PrepareClient('127.0.0.1:9898', App);
 
-  if not PrepareDone then
+  if not API.PrepareDone then
   begin
     ConsoleWriteLn('网络启动失败，请检查端口/IPC 是否被占用');
+    API.Shutdown;
     Halt(1);
   end;
 
@@ -869,8 +870,8 @@ begin
 
   // 清理资源
   ConsoleWriteLn('正在停止服务器...');
-  ExitMainThread;
-  Shutdown;
+  API.ExitMainThread;
+  API.Shutdown;
   App.Free;
   ConsoleWriteLn('服务器已停止');
 end.
