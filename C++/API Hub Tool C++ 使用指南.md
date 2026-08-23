@@ -2,6 +2,8 @@
 
 **用现代 C++ 拥抱分布式 API 生态，一行代码打通所有语言**
 
+**版本：** 2.1（与 ZAPI 核心 v2.1 同步）
+
 ---
 
 ## 目录
@@ -13,16 +15,17 @@
 5. [数据句柄（DataHandle）操作](#5-数据句柄datahandle操作)
 6. [应用句柄（App）与 API 注册](#6-应用句柄app与-api-注册)
 7. [本地调用（无网络）](#7-本地调用无网络)
-8. [动态注销 API（新增）](#8-动态注销-api新增)
-9. [运行时配置（新增）](#9-运行时配置新增)
+8. [动态注销 API](#8-动态注销-api)
+9. [运行时配置](#9-运行时配置)
 10. [网络层准备与启动](#10-网络层准备与启动)
 11. [远程调用与通知](#11-远程调用与通知)
-12. [线程安全与回调上下文（重要）](#12-线程安全与回调上下文重要)
-13. [高级主题](#13-高级主题)
-14. [调试与错误处理](#14-调试与错误处理)
-15. [完整示例：服务端 + 客户端](#15-完整示例服务端--客户端)
-16. [FAQ](#16-faq)
-17. [总结与资源](#17-总结与资源)
+12. [状态与检查 API（新增）](#12-状态与检查-api新增)
+13. [线程安全与回调上下文（重要）](#13-线程安全与回调上下文重要)
+14. [高级主题](#14-高级主题)
+15. [调试与错误处理](#15-调试与错误处理)
+16. [完整示例：服务端 + 客户端](#16-完整示例服务端--客户端)
+17. [FAQ](#17-faq)
+18. [总结与资源](#18-总结与资源)
 
 ---
 
@@ -33,14 +36,14 @@ API Hub Tool 是一个**基于纯 C ABI 的分布式 RPC 框架**，并提供**�
 - 将任何 C++ 函数暴露为远程可调用 API（请求-响应或单向通知）
 - 无缝调用其他语言（C、Python、Go、Rust、Java、C#、Pascal、PHP、Node.js 等）注册的服务
 - 在同一台机器上通过 IPC（< 1ms）或跨机器通过 TCP 进行通信
-- **v2.0 新增**：支持 PHP 和 Node.js 通过 ZAPI Bridge 调用 C++ 服务
+- **v2.1 新增**：提供 `API_Check_MainThread`、`API_Check_App`、`API_Get_Status_Num`、`API_Get_Status`、`API_Post_Status` 五个状态与检查 API，方便调试和监控。
 
 **C++ 包装的核心优势：**
 - **RAII 自动管理**：`DataHandle`、`App`、`LibraryLoader` 自动构造/析构，告别手动 `new`/`delete` 和资源泄漏。
 - **类型安全**：`write()` / `read()` 模板函数支持任意可平凡复制类型。
 - **异常安全**：所有错误抛出 `z_api_hub::ApiError` 异常。
 - **零额外开销**：头文件实现，内联函数，性能与裸 C 调用无异。
-- **v2.0 新增**：支持 `App::unregister()` 动态注销和 `setOption()` 运行时配置。
+- **v2.1 新增**：支持通过 C 函数直接使用状态与检查 API（未来 RAII 包装将提供更友好的封装）。
 
 本指南将手把手带您从零开始掌握 API Hub 的 C++ 接口，并深入理解其设计哲学。
 
@@ -108,11 +111,12 @@ try {
 
 在开始编码前，理解以下核心概念：
 
-- **TDataHnd（C 句柄）** → **`z_api_hub::DataHandle`（C++ 类）**：一个二进制缓冲区，内部存储"API 名称"和"载荷数据"。RAII 管理，自动释放。
-- **TAppHnd（C 句柄）** → **`z_api_hub::App`（C++ 类）**：一个逻辑应用，可注册多个 API。RAII 管理。
+- **TDataHnd（C 句柄）** → **`z_api_hub::DataHandle`（C++ 类）**：二进制缓冲区，存储"API 名称"和"载荷数据"。RAII 管理，自动释放。
+- **TAppHnd（C 句柄）** → **`z_api_hub::App`（C++ 类）**：逻辑应用，可注册多个 API。RAII 管理。
 - **回调函数（`TAPI_Call` / `TAPI_Notify`）**：实现业务逻辑的 C 风格函数（`__cdecl`），在 RAII 包装中仍使用原始 C 回调（因为需要 ABI 稳定）。
-- **动态注销（v2.0）**：`App::unregister()` 运行时移除 API，触发网络广播。
-- **运行时配置（v2.0）**：`setOption()` 动态调整认证密码、等待连接、IPC 线程池等参数。
+- **动态注销**：`App::unregister()` 运行时移除 API，触发网络广播。
+- **运行时配置**：`setOption()` 动态调整认证密码、等待连接、IPC 线程池等参数。
+- **状态与检查（v2.1 新增）**：`API_Check_MainThread`、`API_Check_App` 用于查询框架状态，`API_Get_Status_Num`/`API_Get_Status`/`API_Post_Status` 提供日志队列访问。
 
 **RAII 生命周期示意：**
 ```cpp
@@ -285,7 +289,7 @@ std::cout << "10 + 20 = " << sum << std::endl;
 
 ---
 
-## 8. 动态注销 API（新增）
+## 8. 动态注销 API
 
 `App::unregister()` 方法允许您在运行时移除已注册的 API。
 
@@ -328,7 +332,7 @@ if (app.unregister("add")) {
 
 ---
 
-## 9. 运行时配置（新增）
+## 9. 运行时配置
 
 `setOption()` 函数允许您在运行时动态调整 API Hub 框架的全局配置选项。
 
@@ -450,15 +454,105 @@ API_Notify("MyService", param.get());
 
 ---
 
-## 12. 线程安全与回调上下文（重要）
+## 12. 状态与检查 API（新增）
 
-### 12.1 导出函数线程安全
+本版本新增了五个 C 函数，您可以直接调用它们（即使使用 C++ RAII 包装，这些函数也是可用的，因为它们来自底层 C API）。未来版本可能提供更友好的 C++ 封装，但目前您可以直接使用 `API_` 前缀的函数。
+
+### 12.1 `API_Check_MainThread`
+
+```c
+int API_Check_MainThread(void);
+```
+
+检查模拟主线程（C4 事件循环）是否正在运行。
+
+- **返回值**：`1` 表示正在运行，`0` 表示已停止或尚未启动。
+- **用途**：在调用远程 API 前确认框架已就绪，或在退出前确认主循环状态。
+- **示例**：
+  ```cpp
+  if (API_Check_MainThread()) {
+      std::cout << "主线程正在运行\n";
+  } else {
+      std::cout << "主线程已停止\n";
+  }
+  ```
+
+### 12.2 `API_Check_App`
+
+```c
+int API_Check_App(const char* appName);
+```
+
+检查网络中是否存在指定名称的应用（基于本地缓存，可能有短暂滞后）。
+
+- **参数**：`appName` – 应用名称（UTF‑8，区分大小写）。
+- **返回值**：`1` 表示存在至少一个实例，`0` 表示不存在。
+- **用途**：在调用 `API_Call` 前探测目标应用是否在线，避免无效超时。
+- **示例**：
+  ```cpp
+  if (API_Check_App("MyService")) {
+      // 安全调用
+      DataHandle result(API_Call("MyService", param.get(), 5000), true);
+  } else {
+      std::cout << "MyService 当前不可用\n";
+  }
+  ```
+
+### 12.3 日志队列 API
+
+库内部维护一个 FIFO 日志队列，最多存储 **1000 条**消息，溢出时丢弃最旧的消息。
+
+#### `API_Get_Status_Num`
+
+```c
+int API_Get_Status_Num(void);
+```
+
+返回当前队列中待读取的日志条数。
+
+#### `API_Get_Status`
+
+```c
+const char* API_Get_Status(void);
+```
+
+取出队列头部的一条日志消息，返回指向内部静态缓冲区的指针（UTF‑8 编码，空终止）。**注意**：该指针在下次调用 `API_Get_Status` 时可能被覆盖，调用者应尽快复制内容。
+
+- **返回**：若队列为空，返回空字符串 `""`。
+- **示例**：
+  ```cpp
+  while (API_Get_Status_Num() > 0) {
+      const char* msg = API_Get_Status();
+      std::cout << "[库日志] " << msg << std::endl;
+  }
+  ```
+
+#### `API_Post_Status`
+
+```c
+void API_Post_Status(const char* status);
+```
+
+向队列中注入一条自定义日志消息，与库自身日志混合输出。
+
+- **参数**：`status` – UTF‑8 字符串，会原样加入队列。
+- **用途**：将应用层日志统一纳入 API Hub 的日志流，便于集中监控。
+- **示例**：
+  ```cpp
+  API_Post_Status("应用初始化完成");
+  ```
+
+---
+
+## 13. 线程安全与回调上下文（重要）
+
+### 13.1 导出函数线程安全
 
 **所有 API 函数都是完全线程安全的**。您可以在多个线程中同时调用 `API_Call`、`DataHandle::write` 等，无需外部锁。
 
 但**同一 `DataHandle` 对象的写操作（`write`、`seek`、`reset`）应串行化**，避免数据竞争。不同句柄可自由并发。
 
-### 12.2 回调执行上下文
+### 13.2 回调执行上下文
 
 **您的回调函数（`TAPI_Call`、`TAPI_Notify`）是在后台线程池线程中执行的**，而不是在调用 `API_Call` 的线程。
 
@@ -485,15 +579,15 @@ static void __cdecl GoodCallback(void*, void* input, void*) {
 }
 ```
 
-### 12.3 执行顺序不保证
+### 13.3 执行顺序不保证
 
 由于负载均衡，并发请求可能被路由到不同实例，**调用顺序不保证**。需要顺序的业务请自行实现序列号或单线程调度。
 
 ---
 
-## 13. 高级主题
+## 14. 高级主题
 
-### 13.1 并发调用
+### 14.1 并发调用
 
 利用线程安全轻松实现高并发：
 
@@ -519,16 +613,16 @@ for (int i = 0; i < 100; ++i)
 for (auto& t : threads) t.join();
 ```
 
-### 13.2 IPC vs TCP
+### 14.2 IPC vs TCP
 
 - **IPC**（`ipc:服务名`）：同机通信，延迟 < 1 ms，吞吐极高。适合单机微服务。
 - **TCP**：跨机通信，支持 IPv4/IPv6，可配置端口。延迟取决于网络。
 
-### 13.3 多实例部署
+### 14.3 多实例部署
 
 多个服务实例注册**相同应用名**，客户端自动负载均衡。每个实例可监听不同地址。
 
-### 13.4 自定义类型序列化
+### 14.4 自定义类型序列化
 
 由于 `DataHandle::write` 和 `read` 支持任意可平凡复制类型，可直接传递结构体：
 
@@ -548,13 +642,26 @@ in.read(pt);
 
 ---
 
-## 14. 调试与错误处理
+## 15. 调试与错误处理
 
-### 14.1 控制台日志
+### 15.1 利用日志 API 获取详细运行信息
 
-库会在控制台自动输出详细的运行日志（包括连接状态、注册信息、错误原因）。你可以在 `<可执行文件名>.api-tool.ini` 配置文件中调整日志行为。
+库会在运行过程中自动输出大量诊断信息（连接状态、注册结果、错误原因等）。您可以通过 `API_Get_Status_Num` / `API_Get_Status` 在自己的主循环中拉取这些日志，实时监控框架状态。
 
-### 14.2 捕获异常
+**典型用法**（在主循环中定期调用）：
+```cpp
+void PollLogs() {
+    while (API_Get_Status_Num() > 0) {
+        const char* msg = API_Get_Status();
+        // 将 msg 写入文件、网络或控制台
+        std::cout << msg << std::endl;
+    }
+}
+```
+
+也可通过 `API_Post_Status` 注入自定义日志，统一管理所有输出。
+
+### 15.2 捕获异常
 
 ```cpp
 try {
@@ -564,20 +671,20 @@ try {
 }
 ```
 
-### 14.3 常见错误
+### 15.3 常见错误
 
 | 错误信息 | 原因 | 解决方案 |
 |---------|------|---------|
-| `no found app("XXX") api("YYY")` | 目标应用未注册或 API 名不匹配 | 检查大小写，确认客户端已注册成功 |
+| `no found app("XXX") api("YYY")` | 目标应用未注册或 API 名不匹配 | 检查大小写，确认客户端已注册成功；使用 `API_Check_App` 提前探测 |
 | `bind address already in use` | 端口被占用 | 更换端口或结束占用进程 |
-| `timeout` | 响应超时 | 增加超时值，检查网络 |
-| `Prepare_Done failed` | 网络初始化失败 | 查看控制台输出 |
+| `timeout` | 响应超时 | 增加超时值，检查网络连通性；查看日志排查目标是否在线 |
+| `Prepare_Done failed` | 网络初始化失败 | 查看 `API_Get_Status` 输出的具体错误信息 |
 
 ---
 
-## 15. 完整示例：服务端 + 客户端
+## 16. 完整示例：服务端 + 客户端
 
-### 15.1 服务端（使用 RAII）
+### 16.1 服务端（使用 RAII + 日志轮询）
 
 ```cpp
 #include "API_HubTool.hpp"
@@ -623,7 +730,15 @@ int main() {
             return 1;
         }
         std::cout << "Service running. Press Enter to exit." << std::endl;
-        std::cin.get();
+
+        // 在主循环中轮询日志
+        while (!std::cin.get()) {
+            while (API_Get_Status_Num() > 0) {
+                const char* msg = API_Get_Status();
+                std::cout << "[Log] " << msg << std::endl;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
 
         API_Exit_MainThread();
         API_shutdown();
@@ -635,7 +750,7 @@ int main() {
 }
 ```
 
-### 15.2 客户端（使用 RAII）
+### 16.2 客户端（使用 RAII + 状态检查）
 
 ```cpp
 #include "API_HubTool.hpp"
@@ -655,6 +770,18 @@ int main() {
             return 1;
         }
 
+        // 检查主线程是否运行
+        if (!API_Check_MainThread()) {
+            std::cerr << "Main thread not running." << std::endl;
+            return 1;
+        }
+
+        // 检查目标应用是否在线
+        if (!API_Check_App("ServiceApp")) {
+            std::cerr << "ServiceApp not available." << std::endl;
+            return 1;
+        }
+
         // 调用 add
         DataHandle param("add");
         param.write(10);
@@ -664,6 +791,8 @@ int main() {
             int sum;
             result.read(sum);
             std::cout << "10 + 20 = " << sum << std::endl;
+        } else {
+            std::cout << "add call failed." << std::endl;
         }
 
         // 调用 echo
@@ -688,10 +817,10 @@ int main() {
 
 ---
 
-## 16. FAQ
+## 17. FAQ
 
 **Q1: 为什么我的回调没有被调用？**
-A: 检查应用名和 API 名是否完全匹配（大小写）。确认客户端已成功连接并注册（查看控制台输出）。`API_Prepare_Done` 是否成功？
+A: 检查应用名和 API 名是否完全匹配（大小写）。确认客户端已成功连接并注册（查看控制台输出或使用 `API_Get_Status` 拉取日志）。`API_Prepare_Done` 是否成功？
 
 **Q2: 可以在回调中调用 `API_Call` 吗？**
 A: **不可以**。会导致死锁。请将请求放入队列，由独立线程处理。
@@ -711,15 +840,19 @@ A: 使用 `DataHandle::buffer()` 零拷贝访问，或直接操作指针。可�
 **Q7: 动态注销 API 后，正在进行的调用会怎样？**
 A: 正在执行中的回调不会被打断，它们会正常完成。新到达的请求会在广播传播后收到"未找到"错误。
 
+**Q8: 如何查看库内部的详细运行日志？**
+A: 使用 `API_Get_Status_Num` 和 `API_Get_Status` 在您的循环中拉取日志。库会输出连接状态、注册结果、错误原因等详细信息。您也可以使用 `API_Post_Status` 注入自定义日志。
+
 ---
 
-## 17. 总结与资源
+## 18. 总结与资源
 
-您已掌握 API Hub Tool 的 C++ RAII 包装的全部核心用法。现在您可以：
+您已掌握 API Hub Tool 的 C++ RAII 包装的全部核心用法，包括新增的状态与检查 API。现在您可以：
 
 - 用现代 C++ 编写高性能服务，暴露给任何语言消费。
 - 用 C++ 编写客户端，调用其他语言的服务。
 - 利用 IPC 实现微秒级同机通信，或通过 TCP 构建跨云分布式系统。
+- 通过新日志 API 实现精细化的运行时监控。
 
 **进一步学习资源：**
 - [API_HubTool.hpp](API_HubTool.hpp) —— 完整 C++ RAII API 参考（内含详尽注释）
@@ -727,17 +860,11 @@ A: 正在执行中的回调不会被打断，它们会正常完成。新到达�
 - [Pascal 完整指南](../pascal/API%20Hub%20Tool%20for%20Pascal.md) —— 概念相通，可作为补充
 - 示例代码：`HelloWorldSTL.cpp`（RAII 本地调用）、`Service.cpp` / `Client1.cpp`（网络调用）、`func_service.cpp` / `func_client.cpp`（复杂示例）
 
-
-## 📬 联系 & 社区
-
-### 👨‍💻 作者
-
-**（QQ：600585）**
-项目发起人 & 核心开发者。欢迎技术交流、问题反馈。
+**社区支持：** 作者（QQ：600585）
 
 ---
 
-**从今天起，您的 C++ 代码可以轻松拥抱多语言生态。**
+**从今天起，您的 C++ 代码可以轻松拥抱多语言生态。**  
 API Hub Tool 让语言边界消失，让分布式开发回归简单。
 
 ## 📚 相关资源（其他语言指南）
