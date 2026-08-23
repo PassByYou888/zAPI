@@ -25,6 +25,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CrossNode", "CrossNode\Cros
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CrossCall", "CrossCall\CrossCall.csproj", "{7EF615AC-360A-49FC-A7C2-16CE6D927EEA}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CrossNodeUI", "CrossNodeUI\CrossNodeUI.csproj", "{17CAC95B-1CF4-4DC5-A18A-DCDC87250CDD}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -75,6 +77,10 @@ Global
 		{7EF615AC-360A-49FC-A7C2-16CE6D927EEA}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{7EF615AC-360A-49FC-A7C2-16CE6D927EEA}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{7EF615AC-360A-49FC-A7C2-16CE6D927EEA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{17CAC95B-1CF4-4DC5-A18A-DCDC87250CDD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{17CAC95B-1CF4-4DC5-A18A-DCDC87250CDD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{17CAC95B-1CF4-4DC5-A18A-DCDC87250CDD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{17CAC95B-1CF4-4DC5-A18A-DCDC87250CDD}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
