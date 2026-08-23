@@ -2,7 +2,7 @@
 
 ## 一个头文件，让所有语言无缝互通
 
-**版本：** 2.0（与 ZAPI 核心 v2.0 同步）
+**版本：** 2.1（与 ZAPI 核心 v2.1 同步）
 
 ---
 
@@ -41,22 +41,22 @@ int main() {
 
 ## 🌍 支持的语言（远不止这些）
 
-| 语言 | 接入方式 | 难度 | v2.0 新特性 |
+| 语言 | 接入方式 | 难度 | v2.1 新特性 |
 |------|---------|------|-------------|
-| **C** | `#include "API_HubTool.h"` | ⭐ | ✅ 动态注销 `API_UnReg` |
-| **C++** | `#include "API_HubTool.hpp"` | ⭐ | ✅ 运行时配置 `API_SetOption` |
-| **Pascal (Delphi/FPC)** | `uses z_api_hubtool_import` | ⭐ | ✅ 热卸载支持 |
-| **Python** | `ctypes.CDLL` | ⭐⭐ | ✅ `@expose` 装饰器 |
-| **C#** | `[DllImport]` | ⭐⭐ | ✅ 自动库加载 |
-| **Java** | JNA / JNI | ⭐⭐ | ✅ AutoCloseable 资源管理 |
-| **Go** | `cgo` | ⭐⭐ | ✅ 动态注册/注销 |
-| **Rust** | `extern "C"` | ⭐⭐ | ✅ RAII 封装 |
-| **PHP** | HTTP Bridge (v2.0 新增) | ⭐ | ✅ 通过 ZAPI Bridge 双向调用 |
-| **Node.js** | HTTP Bridge (v2.0 新增) | ⭐ | ✅ 零原生依赖，v2.0 全新体验 |
+| **C** | `#include "API_HubTool.h"` | ⭐ | ✅ 状态与检查 API（`API_Check_MainThread`, `API_Check_App`, 日志队列等） |
+| **C++** | `#include "API_HubTool.hpp"` | ⭐ | ✅ 同上，所有 C API 可直接调用 |
+| **Pascal (Delphi/FPC)** | `uses z_api_hubtool_import` | ⭐ | ✅ 热卸载支持 + 状态查询 |
+| **Python** | `ctypes.CDLL` | ⭐⭐ | ✅ `@expose` 装饰器 + 日志监控 |
+| **C#** | `[DllImport]` | ⭐⭐ | ✅ 自动库加载 + 状态 API |
+| **Java** | JNA / JNI | ⭐⭐ | ✅ AutoCloseable 资源管理 + 状态检查 |
+| **Go** | `cgo` | ⭐⭐ | ✅ 动态注册/注销 + 运行状态查询 |
+| **Rust** | `extern "C"` | ⭐⭐ | ✅ RAII 封装 + 日志轮询 |
+| **PHP** | HTTP Bridge (v2.0) | ⭐ | ✅ 通过 ZAPI Bridge 双向调用，现支持状态查询 |
+| **Node.js** | HTTP Bridge (v2.0) | ⭐ | ✅ 零原生依赖，可获取框架运行状态 |
 
 **没有任何语言限制。任何能调用动态库的语言，都能立即接入。**
 
-> **v2.0 重大升级：** PHP 和 Node.js 现在可以通过 **ZAPI Bridge** 直接调用所有 zAPI 服务，实现双向跨语言调用。详见 [📖 ZAPI Bridge 完整使用手册](../Py/bridge/📖%20ZAPI%20Bridge%20完整使用手册.md)。
+> **v2.1 重大升级：** 新增 **五个状态与检查 API**——`API_Check_MainThread`、`API_Check_App`、`API_Get_Status_Num`、`API_Get_Status`、`API_Post_Status`，让您能够实时监控框架运行状态、探测目标应用在线情况、拉取和注入日志信息，极大地提升了调试和运维的便捷性。
 
 ---
 
@@ -79,11 +79,16 @@ API Hub 底层是成熟的 **C4 分布式服务网格**，具备企业级通信�
 ### 🚄 IPC 零拷贝通道
 同机通信使用操作系统级 IPC（命名管道/共享内存），延迟 **< 1 毫秒**，吞吐量 **10,000+ 请求/秒**。
 
-### 🔧 动态 API 注销（v2.0 新增）
+### 🔧 动态 API 注销（v2.0）
 `API_UnReg` 运行时移除 API，自动广播至所有对等节点（约 3 秒传播）。适合热卸载插件、临时维护、权限动态调整。
 
-### ⚙️ 运行时配置（v2.0 新增）
+### ⚙️ 运行时配置（v2.0）
 `API_SetOption` 动态调整认证密码、等待连接、IPC 线程池等参数，无需重启应用。
+
+### 📊 状态与检查（v2.1 新增）
+- **`API_Check_MainThread`**：检查模拟主线程（C4 事件循环）是否运行。
+- **`API_Check_App`**：基于本地缓存探测指定应用是否在线。
+- **日志队列 API**（`API_Get_Status_Num`、`API_Get_Status`、`API_Post_Status`）：提供内部日志的轮询、消费和注入能力，方便统一日志管理和实时监控。
 
 ---
 
@@ -125,11 +130,26 @@ int main() {
         result.read(sum);
         std::cout << "5 + 7 = " << sum << '\n';
 
-        // v2.0 新增：动态注销 API
+        // v2.0：动态注销 API
         app.unregister("add");
 
-        // v2.0 新增：运行时配置
+        // v2.0：运行时配置
         setOption("Wait_Connection_ReadyOk", "False");
+
+        // v2.1：状态检查
+        if (API_Check_MainThread()) {
+            std::cout << "Main thread is running.\n";
+        }
+        if (API_Check_App("Calculator")) {
+            std::cout << "Calculator app is online.\n";
+        }
+        // 拉取日志
+        while (API_Get_Status_Num() > 0) {
+            const char* msg = API_Get_Status();
+            std::cout << "[Log] " << msg << std::endl;
+        }
+        // 注入自定义日志
+        API_Post_Status("Application started successfully.");
 
         // 所有资源在析构时自动释放
     } catch (const std::exception& e) {
@@ -238,7 +258,7 @@ var result = API_Call("Calculator", data, 5000);
 
 ## ⚖️ 方案对比——为什么选 API Hub
 
-| 特性 | API Hub v2.0 | gRPC | REST | ZeroMQ | 手工 Socket |
+| 特性 | API Hub v2.1 | gRPC | REST | ZeroMQ | 手工 Socket |
 |------|---------|------|------|--------|-------------|
 | **多语言 C ABI** | ✅ | ❌ | ❌ | ✅ | ❌ |
 | **无需 IDL/代码生成** | ✅ | ❌ | ❌ | ❌ | ❌ |
@@ -248,8 +268,10 @@ var result = API_Call("Calculator", data, 5000);
 | **自动重连** | ✅ | ❌ | ❌ | ❌ | ❌ |
 | **IPC（<1ms）** | ✅ | ❌ | ❌ | ✅ | ❌ |
 | **零拷贝** | ✅ | ❌ | ❌ | ❌ | ❌ |
-| **动态注销 API** | ✅ (v2.0) | ❌ | ❌ | ❌ | ❌ |
-| **运行时配置** | ✅ (v2.0) | ❌ | ❌ | ❌ | ❌ |
+| **动态注销 API** | ✅ | ❌ | ❌ | ❌ | ❌ |
+| **运行时配置** | ✅ | ❌ | ❌ | ❌ | ❌ |
+| **状态与检查 API** | ✅ (v2.1) | ❌ | ❌ | ❌ | ❌ |
+| **日志队列** | ✅ (v2.1) | ❌ | ❌ | ❌ | ❌ |
 | **PHP/Node.js 支持** | ✅ (v2.0) | ✅ | ✅ | ❌ | ❌ |
 | **学习曲线** | **极低** | 高 | 中 | 中 | 高 |
 | **代码量** | **极少** | 多 | 中 | 中 | 极多 |
@@ -258,8 +280,8 @@ var result = API_Call("Calculator", data, 5000);
 
 ## 🔒 线程安全与回调执行上下文
 
-> **API Hub 的 API 函数（除 `API_Get_Status` 外）都是完全线程安全的。**  
-> 你可以在成千上万个线程中同时调用 `API_Call`，库会自动处理所有并发。
+> **所有 API 导出函数都是完全线程安全的。**  
+> 你可以在成千上万个线程中同时调用 `API_Call`、`API_Get_Status` 等，库会自动处理所有并发。
 
 **但需要注意回调执行上下文：**
 
@@ -290,9 +312,9 @@ static void __cdecl GoodCallback(void* trigger, void* input, void* output) {
 ## 📂 文件结构
 
 ```
-API_HubTool.h       - C 接口声明
-API_HubTool.hpp     - C++ RAII 包装（推荐）
-API_HubTool.c       - 动态库加载器实现
+API_HubTool.h       - C 接口声明（含 v2.1 新增状态与检查 API）
+API_HubTool.hpp     - C++ RAII 包装（推荐，可直接调用底层 C API）
+API_HubTool.c       - 动态库加载器实现（自动解析所有 30 个导出函数）
 z_api_hubtool_import.pas - Pascal 导入单元
 ```
 
@@ -334,8 +356,8 @@ server.exe
 
 - [C API 完整参考](API_HubTool.h)（内含详细注释）
 - [C++ RAII 包装文档](API_HubTool.hpp)（内含示例）
-- [C 语言使用指南](API%20Hub%20Tool%20C%20语言使用指南.md)
-- [C++ 使用指南](API%20Hub%20Tool%20C++%20使用指南.md)
+- [C 语言使用指南](API%20Hub%20Tool%20C%20语言使用指南.md)（已更新至 v2.1）
+- [C++ 使用指南](API%20Hub%20Tool%20C++%20使用指南.md)（已更新至 v2.1）
 - [Pascal 完整使用指南](../pascal/API%20Hub%20Tool%20for%20Pascal.md)
 - [📖 ZAPI Bridge 完整使用手册](../Py/bridge/📖%20ZAPI%20Bridge%20完整使用手册.md)
 
