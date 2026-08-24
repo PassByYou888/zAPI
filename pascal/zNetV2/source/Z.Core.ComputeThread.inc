@@ -79,7 +79,7 @@ type
   { Global state for the thread pool and dispatch system. }
 var
   Core_Dispatch_Order__: TCompute_Dispatch_Order; // task queue
-  Core_Dispatch_Order_Activted__, Core_Dispatch_Order_IsExit__: Boolean; // dispatcher status
+  Core_Dispatch_Order_Activted__, Core_Dispatch_Order_IsExit__: TAtomBool; // dispatcher status
   Core_Thread_Pool__: TCoreCompute_Thread_Pool; // pool of worker threads
   Core_Thread_Dispatch_Critical__: TCritical; // protects shared data
   Core_Thread_Task_Runing__: TAtomInt; // number of active workers
@@ -266,7 +266,7 @@ var
   Last_TK, IDLE_TK: TTimeTick;
 begin
   Last_TK := GetTimeTick();
-  while Core_Dispatch_Order_Activted__ do
+  while Core_Dispatch_Order_Activted__.V do
     begin
       if Core_Dispatch_Order__.Num > 0 then
         begin
@@ -286,7 +286,7 @@ begin
         end;
     end;
 
-  Core_Dispatch_Order_IsExit__ := True;
+  Core_Dispatch_Order_IsExit__.V := True;
 end;
 
 constructor TCore_Dispatch_Order_Thread.Create;
@@ -328,8 +328,8 @@ begin
       Write('Init Compute.');
 {$ENDIF DEBUG}
   Core_Dispatch_Order__ := TCompute_Dispatch_Order.Create;
-  Core_Dispatch_Order_Activted__ := True;
-  Core_Dispatch_Order_IsExit__ := False;
+  Core_Dispatch_Order_Activted__ := TAtomBool.Create(True);
+  Core_Dispatch_Order_IsExit__ := TAtomBool.Create(False);
   Core_Thread_Pool__ := TCoreCompute_Thread_Pool.Create;
   Core_Thread_Task_Runing__ := TAtomInt.Create(0);
   Core_Thread_Dispatch_Queue_Pool__ := TCompute_Dispatch_Queue_Pool.Create;
@@ -368,11 +368,11 @@ end;
   - Marks the system as active and creates a new dispatcher thread. }
 procedure Open_Core_Dispatch_Thread();
 begin
-  if Core_Dispatch_Order_Activted__ then
+  if Core_Dispatch_Order_Activted__.V then
       exit;
 
-  Core_Dispatch_Order_Activted__ := True;
-  Core_Dispatch_Order_IsExit__ := False;
+  Core_Dispatch_Order_Activted__.V := True;
+  Core_Dispatch_Order_IsExit__.V := False;
 
   Core_Dispatch_Order_Thread := TCore_Dispatch_Order_Thread.Create;
   Core_Dispatch_Order_Thread.Start();
@@ -386,15 +386,15 @@ procedure Close_Core_Dispatch_Thread();
 var
   tk: TTimeTick;
 begin
-  if not Core_Dispatch_Order_Activted__ then
+  if not Core_Dispatch_Order_Activted__.V then
       exit;
-  if Core_Dispatch_Order_IsExit__ then
+  if Core_Dispatch_Order_IsExit__.V then
       exit;
 
-  Core_Dispatch_Order_Activted__ := False;
+  Core_Dispatch_Order_Activted__.V := False;
 
   tk := GetTimeTick + 1000;
-  while not Core_Dispatch_Order_IsExit__ do
+  while not Core_Dispatch_Order_IsExit__.V do
     begin
       TCompute.Sleep(100);
       if GetTimeTick > tk then
@@ -426,12 +426,12 @@ begin
   if IsConsole then
       WriteLn('Free Compute Pool.');
 {$ENDIF DEBUG}
-  if Core_Dispatch_Order_Activted__ then
+  if Core_Dispatch_Order_Activted__.V then
     begin
-      Core_Dispatch_Order_Activted__ := False;
+      Core_Dispatch_Order_Activted__.V := False;
 
       tk := GetTimeTick + 1000;
-      while not Core_Dispatch_Order_IsExit__ do
+      while not Core_Dispatch_Order_IsExit__.V do
         begin
           TCompute.Sleep(100);
           if GetTimeTick > tk then
@@ -464,6 +464,12 @@ begin
 
   Core_Thread_Wait_Sum__.Free;
   Core_Thread_Wait_Sum__ := nil;
+
+  Core_Dispatch_Order_Activted__.Free;
+  Core_Dispatch_Order_Activted__ := nil;
+
+  Core_Dispatch_Order_IsExit__.Free;
+  Core_Dispatch_Order_IsExit__ := nil;
 end;
 
 { ****************************************************************************
