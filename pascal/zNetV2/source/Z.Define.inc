@@ -82,9 +82,6 @@
   // CriticalSimulateAtomic defined so performance to be reduced
   {$DEFINE CriticalSimulateAtomic}
 
-  // used soft Simulate Critical(ring)
-  // SoftCritical defined so performance to be reduced
-  {$UNDEF SoftCritical}
   {$UNDEF ANTI_DEAD_ATOMIC_LOCK}
 
   // ZNet Physics-IO used CrossSocket for FPC
@@ -222,9 +219,6 @@
   // CriticalSimulateAtomic defined so performance to be reduced
   {$UNDEF CriticalSimulateAtomic}
 
-  // used soft Simulate Critical(ring)
-  // SoftCritical defined so performance to be reduced
-  {$UNDEF SoftCritical}
   {$UNDEF ANTI_DEAD_ATOMIC_LOCK}
 
   // It only slows down Delphi strings, doesn't help C++Builder migration and is finally gone in XE+
