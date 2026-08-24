@@ -1,11 +1,11 @@
 ﻿{
   * --------------------------------------------------------------------------
   * Z.API_HubTool – Core RPC framework for defining, registering, and invoking
-  *               language-neutral APIs locally or over a distributed network.
+  *               language‑neutral APIs locally or over a distributed network.
   *
   * This unit is the backbone of the API Hub system. It provides the data
   * structures and logic that allow an application (TAPI_APP) to expose
-  * callable functions (APIs) and one-way notifications. These APIs can be
+  * callable functions (APIs) and one‑way notifications. These APIs can be
   * executed directly inside the same process or routed over a network using
   * the companion C4 transport layer.
   *
@@ -18,28 +18,28 @@
   *   – TAPI_Tool: The engine that holds the registry of all APIs for a given
   *                app. It provides methods to register new APIs (Reg_Call,
   *                Reg_Notify) and to execute them locally (Execute_Call,
-  *                Execute_Notify). It uses a thread-safe hash pool to store
+  *                Execute_Notify). It uses a thread‑safe hash pool to store
   *                API metadata (TAPI_Info).
   *
   *   – TMemory_Param_Tool: A helper that packs an API name and a binary
   *                payload into a single TMem64 block. This block can be sent
   *                over the network or passed between threads. The format is:
-  *                [API name as a Pascal string] + [4-byte payload size] +
+  *                [API name as a Pascal string] + [4‑byte payload size] +
   *                [payload bytes]. This is the standard wire format used by
   *                the API Hub system.
   *
-  * The unit also defines an opaque handle (TDataHnd) and an application
+  * The unit also defines an opaque handle (TDataHnd___) and an application
   * handle (TAppHnd) that are used by the C ABI export layer (in the separate
   * unit API_HubTool_Export). This allows the framework to be called from
   * other languages (C, C++, Python, etc.) via a cdecl interface.
   *
-  * All public classes and methods are designed to be thread-safe, except for
-  * the TMemory_Param_Tool which is not thread-safe when shared between
+  * All public classes and methods are designed to be thread‑safe, except for
+  * the TMemory_Param_Tool which is not thread‑safe when shared between
   * threads. Use separate instances per thread or synchronise access.
   *
-  * The unit depends on:
+  * Dependencies:
   *   – Z.Core                 (foundation: threads, containers, memory)
-  *   – Z.PascalStrings        (TPascalString handling)
+  *   – Z.PascalStrings        (Pascal string handling)
   *   – Z.UPascalStrings       (Unicode string handling)
   *   – Z.Status               (global logging)
   *   – Z.UnicodeMixedLib      (utility functions)
@@ -124,15 +124,15 @@ uses
 
 type
   { * TAPI_String: Unicode string type used for all textual identifiers and descriptions.
-    * Alias for TUPascalString, providing high-performance Unicode handling.
-    * @Note Used for API names, descriptions, and all text data exchanged by the framework. }
+    * Alias for TUPascalString, providing high‑performance Unicode handling.
+    * Used for API names, descriptions, and all text data exchanged by the framework. }
   TAPI_String = TUPascalString;
 
   { * TAPI_Mode: Classification of an API operation.
     * - amUnknow : Unspecified, placeholder or error state.
-    * - amCall   : Request-response style. Caller expects a result.
+    * - amCall   : Request‑response style. Caller expects a result.
     *              Callback receives Input and Output handles.
-    * - amNotify : One-way message. Caller does not wait for response.
+    * - amNotify : One‑way message. Caller does not wait for response.
     *              Callback receives only an Input handle. }
   TAPI_Mode = (
     amUnknow = 0,
@@ -141,9 +141,9 @@ type
     );
 
   { * TMemory_Param_Tool: Packs an API name and binary parameter into a TMem64.
-    * Packed format: [API name as Pascal string] + [4-byte payload size] + [payload bytes].
+    * Packed format: [API name as Pascal string] + [4‑byte payload size] + [payload bytes].
     * Used for both local and remote calls.
-    * Not thread-safe; create separate instances per thread or synchronise access.
+    * Not thread‑safe; create separate instances per thread or synchronise access.
     *
     * @Field apiName: Name of the target API.
     * @Field Param: Binary payload for the API call/notification.
@@ -163,38 +163,59 @@ type
     destructor Destroy; override;
 
     { * Encodes the current apiName and Param into the provided TMem64.
-      * The format is: Pascal-string for apiName, then 32-bit size, then raw bytes.
-      * @Param m64: Destination TMem64. It is cleared before writing. }
+      * The format is: Pascal‑string for apiName, then 32‑bit size, then raw bytes.
+      * @Param m64: Destination TMem64. It is cleared before writing.
+      * @Example:
+      *   var Tool := TMemory_Param_Tool.Create;
+      *   Tool.apiName := 'echo';
+      *   Tool.Param.WriteString('Hello');
+      *   var m64 := TMem64.Create;
+      *   Tool.EncryptToMem(m64);   // m64 now contains packed data
+      *   Tool.Free;
+      *   // m64 can be sent over network or passed to Execute_Call.
+      *   DisposeObject(m64); }
     procedure EncryptToMem(m64: TMem64);
+
     { * Decodes a TMem64 block that was previously packed by EncryptToMem.
       * Restores apiName and Param.
-      * @Param m64: Source TMem64 containing the packed data. }
+      * @Param m64: Source TMem64 containing the packed data.
+      * @Note If m64 is in protected mode (read‑only), we read directly from it.
+      *       Otherwise, we swap its content into tmp to avoid modifying the original.
+      *       The resulting Param is a fresh mapping of the payload.
+      * @Example:
+      *   var Tool := TMemory_Param_Tool.Create;
+      *   Tool.DecryptFromMem(packedM64);   // restores apiName and Param
+      *   // Now Tool.apiName and Tool.Param contain the decoded data. }
     procedure DecryptFromMem(m64: TMem64);
+
     { * Extracts just the API name from a packed TMem64 without full decoding.
       * Lightweight operation; does not modify m64's position.
       * @Param m64: The packed TMem64.
-      * @Returns: The API name as a TAPI_String. }
+      * @Returns: The API name as a TAPI_String.
+      * @Example:
+      *   var name := TMemory_Param_Tool.Get_apiName(packedM64);
+      *   // name is the API name without decoding the whole payload. }
     class function Get_apiName(m64: TMem64): TAPI_String;
   end;
 
   { * TAPI_Info: Metadata record for a single registered API.
-    * Stores name, description, mode (Call/Notify), user-supplied trigger,
+    * Stores name, description, mode (Call/Notify), user‑supplied trigger,
     * and the appropriate cdecl callback.
     * Stored in TAPI_Info_Pool. }
   TAPI_Info = class
   public
-    Name: TAPI_String; // Unique identifier of the API (case-sensitive)
-    Desc: TAPI_String; // Human-readable description
+    Name: TAPI_String; // Unique identifier of the API (case‑sensitive)
+    Desc: TAPI_String; // Human‑readable description
     Mode: TAPI_Mode; // Whether this is a Call or Notify API
-    Trigger: Pointer; // User-defined data passed back to the callback
-    On_Call: TAPI_Call; // Callback for Call-mode APIs (cdecl)
-    On_Notify: TAPI_Notify; // Callback for Notify-mode APIs (cdecl)
+    Trigger: Pointer; // User‑defined data passed back to the callback
+    On_Call: TAPI_Call; // Callback for Call‑mode APIs (cdecl)
+    On_Notify: TAPI_Notify; // Callback for Notify‑mode APIs (cdecl)
 
     constructor Create;
     destructor Destroy; override;
   end;
 
-  { * TAPI_Info_Pool: Thread-safe hash map storing TAPI_Info objects keyed by API name.
+  { * TAPI_Info_Pool: Thread‑safe hash map storing TAPI_Info objects keyed by API name.
     * Used by TAPI_Tool to manage API registry.
     * Automatically frees TAPI_Info objects when entries are removed.
     * @InheritsFrom TString_Big_Hash_Pair_Pool<TAPI_Info>
@@ -204,16 +225,27 @@ type
     procedure DoFree(var Key: SystemString; var Value: TAPI_Info); override;
   end;
 
-  { * PAPI_Data: Pointer to a TAPI_Data record. Used as opaque TDataHnd in C export layer.
+  { * PAPI_Data: Pointer to a TAPI_Data record. Used as opaque TDataHnd___ in C export layer.
     * External code must never dereference; only pass to API functions. }
   PAPI_Data = ^TAPI_Data;
 
   TAPI_Data_Order = class(TOrderStruct<PAPI_Data>)
   end;
 
+  { * TAPI_Data_Pool: Global pool that tracks all active TAPI_Data handles.
+    * It stores each handle with a timestamp of its last usage.
+    * Periodically (every 5 seconds) it scans and automatically frees handles
+    * that have been idle for more than 5 minutes. This acts as a garbage collector
+    * for handles that were not explicitly freed.
+    *
+    * @Field Update_Time__: Last time the Progress method ran (used for throttling).
+    * @Method CreateAfter: Initializes Update_Time__.
+    * @Method Progress: Scans the pool and frees idle handles.
+    * @Method Free_All_Hnd: Frees all handles in the pool.
+    * @Method Update_Hnd_For_Usage: Updates the timestamp for a given handle. }
   TAPI_Data_Pool = class(TBig_Hash_Pair_Pool<PAPI_Data, TTimeTick>)
   private
-    Update_Time__: TTimeTick;
+    Update_Time__: TTimeTick; // last time Progress() was executed (for throttling)
   public
     procedure CreateAfter; override;
     procedure Progress;
@@ -222,17 +254,19 @@ type
   end;
 
   { * TAPI_Data: Represents either a parameter or a result for an API invocation.
-    * Discriminated union: either Data_Param (input) or Data_Result (output) is non-nil.
+    * Discriminated union: either Data_Param (input) or Data_Result (output) is non‑nil.
     * Static factory methods simplify creation and destruction.
-    * @Field Data_Param: Non-nil if input parameter (TMemory_Param_Tool).
-    * @Field Data_Result: Non-nil if output result (TMem64).
+    *
+    * @Field Data_Param: Non‑nil if input parameter (TMemory_Param_Tool).
+    * @Field Data_Result: Non‑nil if output result (TMem64).
+    * @Field Data_Info: Debug info string (used for logging).
     * @Method Init: Initialises record to nil pointers.
     * @ClassMethod New_Param: Creates input parameter record with given API name.
     * @ClassMethod New_Param_From: Creates input parameter by unpacking a packed TMem64.
     * @ClassMethod New_Result: Creates empty output result record.
     * @ClassMethod New_Result_From: Creates output result taking ownership of a TMem64.
     * @ClassMethod Free_Data: Frees TAPI_Data record and all owned objects.
-    * @Method GetBuffer: Returns raw data buffer pointer (read-only).
+    * @Method GetBuffer: Returns raw data buffer pointer (read‑only).
     * @Method WriteBuff: Writes data to buffer at current position.
     * @Method ReadBuff: Reads data from buffer at current position.
     * @Method Get_Pos: Returns current read/write position.
@@ -267,10 +301,10 @@ type
 
   { * TAPI_Tool: Core API registry and execution engine for an application.
     * Maintains a pool of registered APIs and provides methods to invoke them locally.
-    * All registration and execution methods are thread-safe.
+    * All registration and execution methods are thread‑safe.
     *
-    * @Field API_Pool: Thread-safe hash pool of registered APIs.
-    * @Field APP: Back-reference to the owning application.
+    * @Field API_Pool: Thread‑safe hash pool of registered APIs.
+    * @Field APP: Back‑reference to the owning application.
     * @Constructor Create: Initializes the API pool.
     * @Destructor Destroy: Frees the API pool.
     * @Method Reg_Call: Registers a new Call API.
@@ -301,8 +335,7 @@ type
     *   var Result := Tool.Execute_Call(Param); // Result is a TMem64 with Sum.
     *   DisposeObject(Result);
     *   DisposeObject(Param);
-    *   DisposeObject(Tool);
-  }
+    *   DisposeObject(Tool); }
   TAPI_Tool = class
   public
     API_Pool: TAPI_Info_Pool;
@@ -325,7 +358,7 @@ type
     * @Param Sender: The TAPI_APP instance that changed. }
   TOn_API_Update = procedure(Sender: TAPI_APP) of object;
 
-  { * TAPIUpdate_Event_Pool: Thread-safe hash map storing event callbacks keyed by binding object.
+  { * TAPIUpdate_Event_Pool: Thread‑safe hash map storing event callbacks keyed by binding object.
     * Used by TAPI_APP to notify subscribers of API list changes.
     * @InheritsFrom TCritical_Big_Hash_Pair_Pool<TCore_Object, TOn_API_Update> }
   TAPIUpdate_Event_Pool = class(TCritical_Big_Hash_Pair_Pool<TCore_Object, TOn_API_Update>)
@@ -335,10 +368,11 @@ type
     * Each app has a unique Name (used for network routing) and Description.
     * Contains a TAPI_Tool instance holding the actual API registry.
     * Notifies subscribers via Subscribe_Update when its API list changes.
-    * @Field Name: Unique identifier (case-sensitive).
-    * @Field Desc: Human-readable description.
+    *
+    * @Field Name: Unique identifier (case‑sensitive).
+    * @Field Desc: Human‑readable description.
     * @Field API: The registry and execution engine (TAPI_Tool).
-    * @Constructor Create: Initializes the API tool and event pool, starts a 1-second timer for coalescing updates.
+    * @Constructor Create: Initializes the API tool and event pool, starts a 1‑second timer for coalescing updates.
     * @Destructor Destroy: Frees the API tool and event pool.
     * @Method DoChange: Marks the app as changed and schedules a broadcast.
     * @Method Subscribe_Update: Subscribes a listener to update events.
@@ -351,8 +385,7 @@ type
     *   App.API.Reg_Call('ping', 'Ping', nil, MyPingCallback);
     *   // Subscribe to changes.
     *   App.Subscribe_Update(MyObject, MyUpdateHandler);
-    *   // ... later, when the app changes, MyUpdateHandler will be called.
-  }
+    *   // ... later, when the app changes, MyUpdateHandler will be called. }
   TAPI_APP = class
   private
     FAPIUpdate_Event_Pool: TAPIUpdate_Event_Pool; // stores subscribers and their callbacks
@@ -361,7 +394,7 @@ type
     procedure DoTimer(); // timer callback that triggers broadcast if changed
   public
     Name: TAPI_String; // unique application identifier
-    Desc: TAPI_String; // human-readable description
+    Desc: TAPI_String; // human‑readable description
     API: TAPI_Tool; // the API registry and execution engine
 
     constructor Create;
@@ -373,7 +406,7 @@ type
   end;
 
 var
-  API_Data_Pool: TAPI_Data_Pool;
+  API_Data_Pool: TAPI_Data_Pool; // global pool for automatic handle recycling
   Running_API_Num: TAtomInt; // global atomic counter of currently executing API calls
 
 implementation
@@ -403,8 +436,8 @@ end;
 procedure TMemory_Param_Tool.EncryptToMem(m64: TMem64);
 { * Encodes the current apiName and Param into the provided TMem64.
   * The encoded format is:
-  *   - Pascal-style string (length prefix) for apiName.
-  *   - 32-bit integer for the payload size.
+  *   - Pascal‑style string (length prefix) for apiName.
+  *   - 32‑bit integer for the payload size.
   *   - raw payload bytes.
   * @Param m64: Destination TMem64. It is cleared before writing. }
 begin
@@ -418,7 +451,7 @@ procedure TMemory_Param_Tool.DecryptFromMem(m64: TMem64);
 { * Decodes a TMem64 block that was previously packed by EncryptToMem,
   * restoring apiName and Param.
   * @Param m64: Source TMem64 containing the packed data.
-  * @Note If m64 is in protected mode (read-only), we read directly from it.
+  * @Note If m64 is in protected mode (read‑only), we read directly from it.
   *       Otherwise, we swap its content into tmp to avoid modifying the original.
   *       The resulting Param is a fresh mapping of the payload. }
 var
@@ -490,47 +523,58 @@ begin
   inherited;
 end;
 
+{ ----------------------------------------------------------------------------
+  TAPI_Data_Pool Implementation
+  ---------------------------------------------------------------------------- }
+
 procedure TAPI_Data_Pool.CreateAfter;
+{ * Initializes the Update_Time__ field to the current tick. }
 begin
   inherited CreateAfter;
   Update_Time__ := GetTimeTick;
 end;
 
 procedure TAPI_Data_Pool.Progress;
+{ * Scans the pool and automatically frees handles that have been idle
+  * for more than 5 minutes. This runs at most once every 5 seconds.
+  * @Note It collects handles to free in a temporary list, then frees them
+  *       outside the lock to minimize contention. }
 var
   tk: TTimeTick;
   L: TAPI_Data_Order;
 begin
   tk := GetTimeTick();
-  if tk - Update_Time__ < 5000 then exit;
+  if tk - Update_Time__ < 5000 then exit; // throttle: run at most every 5s
   Update_Time__ := tk;
   L := TAPI_Data_Order.Create;
 
-  Lock;
+  Lock; // acquire the hash map lock
   try
     if Num > 0 then
       with repeat_ do
         repeat
+          // Check if the handle's last usage time is older than 5 minutes
           if tk - queue^.Data^.Data.Second > Z.Core.C_Tick_Second * 60 * 5 then
             begin
-              L.Push(queue^.Data^.Data.Primary);
-              Push_To_Recycle_Pool2(queue);
+              L.Push(queue^.Data^.Data.Primary); // collect handle
+              Push_To_Recycle_Pool2(queue); // mark entry for removal
             end;
         until not Next;
-    Free_Recycle_Pool;
+    Free_Recycle_Pool; // physically remove all marked entries
   finally
-      UnLock;
+    UnLock;
   end;
 
+  // Free the collected handles outside the lock to reduce contention
   if L.Num > 0 then
     begin
       DoStatus('hint: Data handle pool "%d" handles were idle for more than 5 minutes and have been automatically freed.', [L.Num]);
       if L.Num > 5 then
-          DoStatus('...');
+        DoStatus('...');
       repeat
         if L.Num < 5 then
-            DoStatus('hint: automatically free handles ' + L.First^.Data^.Data_Info.Text);
-        TAPI_Data.Free_Data(L.First^.Data);
+          DoStatus('hint: automatically free handles ' + L.First^.Data^.Data_Info.Text);
+        TAPI_Data.Free_Data(L.First^.Data); // actually free the handle
         L.Next;
       until L.Num <= 0;
     end;
@@ -539,6 +583,7 @@ begin
 end;
 
 procedure TAPI_Data_Pool.Free_All_Hnd;
+{ * Frees all handles currently in the pool. Used during finalization. }
 var
   L: TAPI_Data_Order;
 begin
@@ -549,13 +594,14 @@ begin
     if Num > 0 then
       with repeat_ do
         repeat
-            L.Push(queue^.Data^.Data.Primary);
+          L.Push(queue^.Data^.Data.Primary);
         until not Next;
-    Clear;
+    Clear; // clears the hash map without freeing the handles themselves
   finally
-      UnLock;
+    UnLock;
   end;
 
+  // Free all collected handles outside the lock
   if L.Num > 0 then
     begin
       if L.Num > 5 then
@@ -565,7 +611,7 @@ begin
         end;
       repeat
         if L.Num < 5 then
-            DoStatus('hint: automatically free handles ' + L.First^.Data^.Data_Info.Text);
+          DoStatus('hint: automatically free handles ' + L.First^.Data^.Data_Info.Text);
         TAPI_Data.Free_Data(L.First^.Data);
         L.Next;
       until L.Num <= 0;
@@ -575,6 +621,10 @@ begin
 end;
 
 procedure TAPI_Data_Pool.Update_Hnd_For_Usage(hnd: PAPI_Data);
+{ * Updates the timestamp for the given handle to the current time,
+  * effectively resetting its idle timer.
+  * @Param hnd: The handle to update.
+  * @Note This is called on every read/write operation on a handle. }
 var
   p: PValue_;
 begin
@@ -582,9 +632,9 @@ begin
   try
     p := Get_Value_Ptr(hnd);
     if p <> nil then
-        p^ := GetTimeTick;
+      p^ := GetTimeTick;
   finally
-      UnLock;
+    UnLock;
   end;
 end;
 
@@ -679,7 +729,8 @@ end;
 class procedure TAPI_Data.Free_Data(hnd: PAPI_Data);
 { * Frees a TAPI_Data record and all its owned objects.
   * @Param hnd: The pointer returned by one of the New_* methods.
-  * @Note This will free Data_Param (if any) and Data_Result (if any), then dispose the record itself. }
+  * @Note This will free Data_Param (if any) and Data_Result (if any), then dispose the record itself.
+  *       It also removes the handle from the global pool. }
 begin
   if hnd = nil then exit;
 
@@ -694,14 +745,14 @@ begin
 end;
 
 function TAPI_Data.GetBuffer: Pointer;
-{ * Returns a pointer to the raw data buffer. Read-only; do not free the pointer.
+{ * Returns a pointer to the raw data buffer. Read‑only; do not free the pointer.
   * @Returns: Pointer to the internal buffer, or nil if neither field is set. }
 begin
   Result := nil;
   if Data_Param <> nil then
-      Result := Data_Param.Param.Memory
+    Result := Data_Param.Param.Memory
   else if Data_Result <> nil then
-      Result := Data_Result.Memory;
+    Result := Data_Result.Memory;
 end;
 
 function TAPI_Data.WriteBuff(Buff: Pointer; Size: Int64): Int64;
@@ -712,9 +763,9 @@ function TAPI_Data.WriteBuff(Buff: Pointer; Size: Int64): Int64;
 begin
   Result := 0;
   if Data_Param <> nil then
-      Result := Data_Param.Param.WritePtr(Buff, Size)
+    Result := Data_Param.Param.WritePtr(Buff, Size)
   else if Data_Result <> nil then
-      Result := Data_Result.WritePtr(Buff, Size);
+    Result := Data_Result.WritePtr(Buff, Size);
 end;
 
 function TAPI_Data.ReadBuff(Buff: Pointer; Size: Int64): Int64;
@@ -725,9 +776,9 @@ function TAPI_Data.ReadBuff(Buff: Pointer; Size: Int64): Int64;
 begin
   Result := 0;
   if Data_Param <> nil then
-      Result := Data_Param.Param.ReadPtr(Buff, Size)
+    Result := Data_Param.Param.ReadPtr(Buff, Size)
   else if Data_Result <> nil then
-      Result := Data_Result.ReadPtr(Buff, Size);
+    Result := Data_Result.ReadPtr(Buff, Size);
 end;
 
 function TAPI_Data.Get_Pos: Int64;
@@ -735,9 +786,9 @@ function TAPI_Data.Get_Pos: Int64;
 begin
   Result := 0;
   if Data_Param <> nil then
-      Result := Data_Param.Param.Position
+    Result := Data_Param.Param.Position
   else if Data_Result <> nil then
-      Result := Data_Result.Position;
+    Result := Data_Result.Position;
 end;
 
 procedure TAPI_Data.Set_Pos(Pos_: Int64);
@@ -745,9 +796,9 @@ procedure TAPI_Data.Set_Pos(Pos_: Int64);
   * @Param Pos_: New position (must be >= 0). }
 begin
   if Data_Param <> nil then
-      Data_Param.Param.Position := Pos_
+    Data_Param.Param.Position := Pos_
   else if Data_Result <> nil then
-      Data_Result.Position := Pos_;
+    Data_Result.Position := Pos_;
 end;
 
 function TAPI_Data.Get_Size: Int64;
@@ -755,9 +806,9 @@ function TAPI_Data.Get_Size: Int64;
 begin
   Result := 0;
   if Data_Param <> nil then
-      Result := Data_Param.Param.Size
+    Result := Data_Param.Param.Size
   else if Data_Result <> nil then
-      Result := Data_Result.Size;
+    Result := Data_Result.Size;
 end;
 
 procedure TAPI_Data.Set_Size(Size_: Int64);
@@ -765,9 +816,9 @@ procedure TAPI_Data.Set_Size(Size_: Int64);
   * @Param Size_: New size. }
 begin
   if Data_Param <> nil then
-      Data_Param.Param.Size := Size_
+    Data_Param.Param.Size := Size_
   else if Data_Result <> nil then
-      Data_Result.Size := Size_;
+    Data_Result.Size := Size_;
 end;
 
 { ----------------------------------------------------------------------------
@@ -775,7 +826,7 @@ end;
   ---------------------------------------------------------------------------- }
 
 constructor TAPI_Tool.Create;
-{ * Creates the API pool with 255 hash buckets. The pool is thread-safe. }
+{ * Creates the API pool with 255 hash buckets. The pool is thread‑safe. }
 begin
   inherited Create;
   API_Pool := TAPI_Info_Pool.Create($FF, nil);
@@ -790,7 +841,7 @@ end;
 
 function TAPI_Tool.Reg_Call(apiName, Desc: TAPI_String; Trigger: Pointer; On_Call: TAPI_Call): Boolean;
 { * Registers a new Call API in the pool.
-  * @Param apiName: Unique name (case-sensitive).
+  * @Param apiName: Unique name (case‑sensitive).
   * @Param Desc: Optional description.
   * @Param Trigger: User data passed to the callback.
   * @Param On_Call: The callback function (cdecl).
@@ -801,7 +852,7 @@ var
 begin
   Result := False;
   if API_Pool.Exists_Key(apiName) then
-      exit;
+    exit;
   api_ := TAPI_Info.Create;
   api_.Name := apiName;
   api_.Desc := Desc;
@@ -826,7 +877,7 @@ var
 begin
   Result := False;
   if API_Pool.Exists_Key(apiName) then
-      exit;
+    exit;
   api_ := TAPI_Info.Create;
   api_.Name := apiName;
   api_.Desc := Desc;
@@ -848,7 +899,7 @@ var
 begin
   Result := False;
   if not API_Pool.Exists_Key(apiName) then
-      exit;
+    exit;
   API_Pool.Delete(apiName);
   APP.DoChange();
   Result := True;
@@ -978,7 +1029,7 @@ begin
       repeat
         try
           if Assigned(queue^.Data^.Data.Second) then
-              queue^.Data^.Data.Second(Self);
+            queue^.Data^.Data.Second(Self);
         except
         end;
       until not Next;
@@ -999,7 +1050,7 @@ end;
 
 constructor TAPI_APP.Create;
 { * Initializes the application with empty Name and Desc, creates the API tool,
-  * and starts a 1-second timer to handle update coalescing.
+  * and starts a 1‑second timer to handle update coalescing.
   * @Note The timer is managed by the Z.Core timer system (Subscribe_Timer_M). }
 begin
   inherited Create;
@@ -1058,3 +1109,4 @@ DisposeObjectAndNil(Running_API_Num);
 DisposeObjectAndNil(API_Data_Pool);
 
 end.
+
