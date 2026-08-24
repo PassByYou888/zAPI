@@ -1,28 +1,45 @@
 # Pascal Demo 使用说明（Delphi / Free Pascal）
 
-**版本：** 2.0（与 ZAPI 核心 v2.0 同步）
+**版本：** 2.1（与 ZAPI 核心 v2.1 同步）
 
 本目录提供了一套完整的 **Pascal 绑定** 和 **示例程序**，让您的 Delphi 或 Free Pascal 应用能够轻松接入 **zAPI** 分布式服务网格，实现跨语言、跨进程、跨机器的函数调用。
 
-> **v2.0 新特性：** 支持 `API_UnReg` 动态注销 API 和 `API_SetOption` 运行时配置；PHP 和 Node.js 可通过 ZAPI Bridge 调用 Pascal 服务。
+> **v2.1 新特性：** 新增状态与检查 API（`API_Check_MainThread`、`API_Check_App`、`API_Get_Status_Num`、`API_Get_Status`、`API_Post_Status`），支持程序化日志拉取和运行状态监控。v2.0 特性（`API_UnReg` 动态注销、`API_SetOption` 运行时配置、PHP/Node.js Bridge 支持）均已包含。
 
 
 ## 📂 文件结构
 
 ```text
 pascal/
-├── z_api_hubtool_import.pas          // 核心绑定单元（自动加载动态库）
-├── z_api_hubtool_helper.pas          // RAII 封装（TDataHandle、TAppHandle 等）
+├── z_api_hubtool_import.pas          // 核心绑定单元（自动加载动态库，v2.1）
+├── z_api_hubtool_helper.pas          // RAII 封装（TDataHandle、TAppHandle 等，v2.5.0）
 ├── zAPIBench_API_Check.lpr           // 单 API 功能验证工具
 ├── zAPIBenchServer.lpr               // 20 个 API 的压测服务端
 ├── zAPIBenchClient.lpr               // 并发压测客户端（每调用一线程）
-├── fpc_tester_for_zAPI.lpr           // 完整功能测试套件
+├── fpc_tester_for_zAPI.lpr           // 完整功能测试套件（v2.3）
+├── Compute_Grid_Demo/                // 表达式计算网格示例
+│   ├── compute_service.lpr           // 服务注册中心
+│   ├── compute_node.lpr              // 计算节点（暴露 exp API）
+│   └── compute_call.lpr              // 客户端（每秒约 1000 次调用）
+├── cross_demo/                       // 跨语言负载均衡演示
+│   ├── cross_service.lpr             // 服务注册中心（IPC 信标）
+│   ├── cross_node.lpr                // 工作节点（add + inv_seri）
+│   ├── cross_node_ui.lpr             // 带 GUI 的工作节点（LCL）
+│   └── cross_call.lpr                // 客户端（随机调用 add/inv_seri）
+├── SequenceData/                     // 序列化通信示例
+│   ├── sequence_serv.lpr             // 服务端（会话管理 + 乱序重排 + MD5）
+│   └── sequence_cli.lpr              // 客户端（分块发送 10MB 数据）
+├── EasyCS_Demo/                      // Delphi 版简易 C/S 示例（含 VCL/FMX）
 └── ZNetV2/                           // Z 系列基础库（用于压测服务端/客户端）
-    └── source/                       // 核心源码目录
-        ├── Z.Core.pas
-        ├── Z.Net.pas
-        ├── Z.Json.pas
-        ├── Z.Expression.pas
+    └── source/                       // 核心源码目录（150+ 单元）
+        ├── Z.Core.pas                // 线程池、原子操作、时间
+        ├── Z.Net.pas                 // C4 服务网格核心
+        ├── Z.Net.C4.API_Hub.pas      // zAPI 与 C4 集成层
+        ├── Z.Json.pas                // JSON 序列化
+        ├── Z.Expression.pas          // 表达式求值引擎
+        ├── Z.MD5.pas                 // MD5 哈希
+        ├── Z.Cipher.pas              // SHA1/SHA256/SHA512/AES
+        ├── Z.Compress.pas            // 压缩支持
         └── ...（所有 Z 系列依赖单元）
 ```
 
@@ -33,14 +50,14 @@ pascal/
 
 从 [Releases](https://github.com/PassByYou888/zAPI/releases) 下载对应平台的动态库，并放置到可执行文件目录或系统 `PATH` 中：
 
-| 平台           | 核心库               | IPC 依赖库       |
-| -------------- | -------------------- | ---------------- |
-| Windows 64-bit | `z_api_hub64.dll`    | `z_ipc_64.dll`   |
-| Windows 32-bit | `z_api_hub32.dll`    | `z_ipc_32.dll`   |
-| Linux / BSD    | `libz_api_hub.so`       | `libz_ipc.so`    |
-| macOS          | `libz_api_hub.dylib`    | `libz_ipc.dylib` |
+| 平台           | 核心库               | IPC 依赖库       | 内存分配器（可选） |
+| -------------- | -------------------- | ---------------- | ------------------ |
+| Windows 64-bit | `z_api_hub64.dll`    | `z_ipc_64.dll`   | `mimalloc64.dll`   |
+| Windows 32-bit | `z_api_hub32.dll`    | `z_ipc_32.dll`   | `mimalloc32.dll`   |
+| Linux / BSD    | `libz_api_hub.so`    | `libz_ipc.so`    | —                  |
+| macOS          | `libz_api_hub.dylib` | `libz_ipc.dylib` | —                  |
 
-**注意**：动态库会自动加载，无需手动 `LoadLibrary`。
+**注意**：动态库会在第一次调用 API 函数时自动加载，无需手动 `LoadLibrary`。
 
 
 ### 2️⃣ 编译最简单的服务端（CalcServer）
@@ -160,19 +177,26 @@ end.
 
 ### `z_api_hubtool_import.pas`（必需）
 
-- 所有 C 函数的 Pascal 声明（`external` 自动加载）。
+- 所有 C 函数的 Pascal 声明（`external` 自动加载），**版本 2.1**。
 - 定义了 `TDataHnd`、`TAppHnd`、`TAPI_Call`、`TAPI_Notify` 等类型。
-- 包含完整的 API 参考文档（注释）。
+- 包含完整的 API 参考文档（注释），涵盖 **v2.1 新增**：
+  - `API_Check_MainThread` / `API_Check_MainThread2` — 检查模拟主线程是否运行
+  - `API_Check_App` / `API_Check_App2` — 探测目标应用是否在线
+  - `API_Get_Status_Num` — 获取日志队列长度
+  - `API_Get_Status` / `API_Get_Status2` — 取出一条日志消息
+  - `API_Post_Status` / `API_Post_Status2` — 注入自定义日志
 - **完全兼容 Delphi 和 Free Pascal**，可直接复制到任何项目中使用。
-- **v2.0 新增**：`API_UnReg` 和 `API_SetOption` 函数声明。
 
-### `z_api_hubtool_helper.pas`（可选）
+### `z_api_hubtool_helper.pas`（可选，强烈推荐）
 
-- 提供 `TDataHandle` 和 `TAppHandle` 的 RAII 封装（自动释放）。
+- 提供 `TDataHandle` 和 `TAppHandle` 的 **RAII 封装**（构造时创建，析构时自动释放）。
 - 简化读写操作，支持方法链式调用（如 `WriteInt32(5).WriteInt32(7)`）。
-- 提供全局便捷函数（`CallApp`、`NotifyApp`、`ResetPrepare` 等）。
+- 提供全局便捷函数（`API.CallApp`、`API.NotifyApp`、`API.ResetPrepare`、`API.SetOption` 等）。
+- 封装了 **v2.1 新增的状态与检查 API**：
+  - `API.CheckMainThread` / `API.CheckApp`
+  - `API.GetStatus` / `API.PostStatus`
 - **同样完全兼容 Delphi/FPC**，建议在新项目中使用。
-- **v2.0 新增**：`TAppHandle.Unregister` 方法和全局 `SetOption` 函数。
+- 内部版本号 v2.5.0，包含完整的线程安全保护和软同步机制。
 
 
 ## 🔧 编译与运行
@@ -191,8 +215,8 @@ end.
 
 ### 依赖项
 
-- 仅依赖标准 RTL（System、SysUtils 等）。
-- 压测服务端/客户端（`zAPIBenchServer`/`zAPIBenchClient`）还依赖 `ZNetV2/source` 目录中的 Z 系列库（如 Z.Json、Z.Expression 等），但**核心绑定本身不依赖任何 Z 库**。
+- 核心绑定（`import` + `helper`）**仅依赖标准 RTL**（System、SysUtils、SyncObjs 等），**不依赖任何 Z 库**。
+- 压测服务端/客户端（`zAPIBenchServer`/`zAPIBenchClient`）及各类 Demo（`Compute_Grid_Demo`、`cross_demo`、`SequenceData`）依赖 `ZNetV2/source` 目录中的 Z 系列库（如 Z.Core、Z.Net、Z.Json、Z.Expression、Z.Cipher 等）。这些 Demo 的 `.lpi` 项目文件已配置好搜索路径，直接打开编译即可。
 
 
 ## 📊 提供的示例程序
@@ -205,44 +229,75 @@ end.
 
 ### 2. `zAPIBenchServer.lpr` – 压测服务端（20 个 API）
 
-- 包含算术、哈希、加密（模拟 Base64）、字符串操作、时间戳、随机数等 20 个 API。
-- 同时监听 IPC（`ipc:bench_service`）和 TCP（`127.0.0.1:9898`）。
+- 包含算术（add/sub/mul/div）、表达式求值（eval）、哈希（MD5/SHA1/SHA256/SHA512）、对称加密模拟（AES enc/dec）、Base64 编解码、字符串操作（upper/lower/reverse/echo）、随机数、时间戳、sleep 等 20 个 API。
+- 同时监听 IPC（`ipc:bench_service`）和 TCP（`0.0.0.0:9898`）。
 - **用途**：作为压力测试的目标服务器，也作为跨语言服务演示。
 
 ### 3. `zAPIBenchClient.lpr` – 并发压测客户端
 
-- 每个 API 调用在独立线程中执行（每调用一线程）。
+- 每个 API 调用在独立线程中执行（每调用一线程），50 线程 × 20 次/线程 = 1000 次调用。
 - 统计平均、最小、最大、中位数、标准差、成功率、QPS。
 - **用途**：评估服务端在高并发下的性能和稳定性。
 
-### 4. `fpc_tester_for_zAPI.lpr` – 完整功能测试套件
+### 4. `fpc_tester_for_zAPI.lpr` – 完整功能测试套件（v2.3）
 
-- 覆盖 TDataHandle 所有读写方法、TAppHandle 注册/调用、并发、性能、资源泄漏、UTF-8 国际化等。
+- 覆盖 `TDataHandle` 所有读写方法（含链式调用）、`TAppHandle` 注册/本地调用/网络调用、并发（10 线程 × 100 次）、性能（1000 次顺序调用）、资源泄漏（10000 个句柄分配/释放）、重复注册检测、UTF-8 国际化（中文/Emoji）。
 - **用途**：验证绑定单元的正确性，适合开发者运行自检。
+
+### 5. `Compute_Grid_Demo/` – 表达式计算网格
+
+- `compute_service.lpr`：服务注册中心（IPC 信标 `ipc:compute_grid`）
+- `compute_node.lpr`：计算节点，注册 `exp` API（基于 Z.Expression 求值），支持多开
+- `compute_call.lpr`：客户端，每秒约 1000 次随机表达式调用
+- **用途**：演示 CPU 密集型任务的分布式调度
+
+### 6. `cross_demo/` – 跨语言负载均衡演示
+
+- `cross_service.lpr`：服务注册中心（IPC 信标 `ipc:cross`）
+- `cross_node.lpr`：工作节点，注册 `add` 和 `inv_seri`（序列化逆序）API，支持多开
+- `cross_node_ui.lpr`：带 LCL GUI 的工作节点（可视化显示收到的请求）
+- `cross_call.lpr`：客户端，随机调用 `add` 或 `inv_seri`，持续 10 秒后退出
+- **用途**：直观展示 C4 服务网格的负载均衡（多节点窗口同时刷屏）
+
+### 7. `SequenceData/` – 序列化通信示例
+
+- `sequence_serv.lpr`：服务端，实现会话管理（SessionID + Index），乱序数据重排，超时回收（5 秒），最终聚合 MD5
+- `sequence_cli.lpr`：客户端，生成 10MB 随机数据，分块（1536 字节/块）通过 `Notify` 发送，支持模拟丢包（脏数据模式）
+- **用途**：演示 `Notify` 模式下的有序传输补偿机制（Session + Index + 后台排序）
+
+### 8. `EasyCS_Demo/` – Delphi 版简易 C/S
+
+- 包含 VCL 和 FMX 版本的客户端/服务端，适合 Delphi 开发者快速入门。
+- **用途**：Delphi 桌面应用接入 zAPI 的参考模板。
 
 
 ## 🧠 核心 API 速查
 
-| 函数 / 类                         | 说明                            | v2.0 新增 |
-| --------------------------------- | ------------------------------- | --------- |
-| `API_Create_DataHnd(apiName)`     | 创建数据句柄（参数/结果容器）   | |
-| `API_WriteBuffer`                 | 写入二进制数据                  | |
-| `API_ReadBuffer`                  | 读取二进制数据                  | |
-| `API_GetSize` / `API_SetSize`     | 获取/设置缓冲区大小             | |
-| `API_GetPos` / `API_SetPos`       | 获取/设置读写位置               | |
-| `API_Create_APPHnd(appName)`      | 创建应用句柄（暴露 API 的容器） | |
-| `API_Reg_Call` / `API_Reg_Notify` | 注册请求-响应 / 单向通知 API    | |
-| `API_UnReg`                       | **动态注销 API（v2.0）**        | ✅ |
-| `API_SetOption`                   | **运行时配置（v2.0）**          | ✅ |
-| `API_Local_APP_Call`              | 本地调用（不经过网络）          | |
-| `API_Call`                        | 远程同步调用                    | |
-| `API_Notify`                      | 远程单向通知                    | |
-| `API_Reset_Prepare`               | 清除网络配置                    | |
-| `API_Prepare_Service`             | 准备服务端监听                  | |
-| `API_Prepare_Client`              | 准备客户端连接（可暴露应用）    | |
-| `API_Prepare_Done`                | 启动网络框架（阻塞直到就绪）    | |
-| `API_Exit_MainThread`             | 停止内部事件循环                | |
-| `API_shutdown`                    | 关闭框架，释放资源              | |
+| 函数 / 类                         | 说明                            | 版本   |
+| --------------------------------- | ------------------------------- | ------ |
+| `API_Create_DataHnd(apiName)`     | 创建数据句柄（参数/结果容器）   | v2.1   |
+| `API_WriteBuffer`                 | 写入二进制数据                  | v2.1   |
+| `API_ReadBuffer`                  | 读取二进制数据                  | v2.1   |
+| `API_GetSize` / `API_SetSize`     | 获取/设置缓冲区大小             | v2.1   |
+| `API_GetPos` / `API_SetPos`       | 获取/设置读写位置               | v2.1   |
+| `API_Create_APPHnd(appName)`      | 创建应用句柄（暴露 API 的容器） | v2.1   |
+| `API_Reg_Call` / `API_Reg_Notify` | 注册请求-响应 / 单向通知 API    | v2.1   |
+| `API_UnReg`                       | **动态注销 API**                | **v2.0** |
+| `API_SetOption`                   | **运行时配置**                  | **v2.0** |
+| `API_Check_MainThread`            | **检查主线程是否运行**          | **v2.1** |
+| `API_Check_App`                   | **探测目标应用是否在线**        | **v2.1** |
+| `API_Get_Status_Num`              | **获取日志队列长度**            | **v2.1** |
+| `API_Get_Status`                  | **取出一条日志消息**            | **v2.1** |
+| `API_Post_Status`                 | **注入自定义日志**              | **v2.1** |
+| `API_Local_APP_Call`              | 本地调用（不经过网络）          | v2.1   |
+| `API_Call`                        | 远程同步调用                    | v2.1   |
+| `API_Notify`                      | 远程单向通知                    | v2.1   |
+| `API_Reset_Prepare`               | 清除网络配置                    | v2.1   |
+| `API_Prepare_Service`             | 准备服务端监听（支持运行时动态添加） | v2.1 |
+| `API_Prepare_Client`              | 准备客户端连接（可暴露应用）    | v2.1   |
+| `API_Prepare_Done`                | 启动网络框架（阻塞直到就绪）    | v2.1   |
+| `API_Exit_MainThread`             | 停止内部事件循环                | v2.1   |
+| `API_shutdown`                    | 关闭框架，释放资源              | v2.1   |
 
 
 ## ⚠️ 重要注意事项
@@ -257,13 +312,13 @@ end.
 ### 🟢 UTF-8 编码
 
 - 所有字符串参数（API 名称、描述、地址）必须为 **UTF-8** 编码，并以 `#0` 结尾。
-- 使用 `PAnsiChar(Utf8String(...))` 进行转换。
+- 使用 `PAnsiChar(UTF8Encode(...))` 进行转换。
 - 在 Delphi 中，`string` 类型默认是 Unicode（UTF-16），但 `PAnsiChar` 期望的是 UTF-8 字节，**不要直接强制转换**。
 
 **正确做法**：
 
 ```pascal
-API_Reg_Call(app, PAnsiChar(Utf8String('中文API')), ...);
+API_Reg_Call(app, PAnsiChar(UTF8Encode('中文API')), ...);
 ```
 
 ### 🟡 线程安全
@@ -276,11 +331,12 @@ API_Reg_Call(app, PAnsiChar(Utf8String('中文API')), ...);
 - 在多个进程中启动相同应用名的服务，客户端会自动负载均衡。
 - 每个实例监听不同地址（如不同 IPC 名称或不同 TCP 端口）。
 
-### 🔵 v2.0 新特性注意事项
+### 🔵 v2.0/v2.1 新特性注意事项
 
 - **动态注销**：`API_UnReg` 立即从本地移除 API，网络广播约 3 秒传播。
 - **运行时配置**：`API_SetOption` 支持动态调整认证密码、等待连接、IPC 线程池等。
-- **PHP/Node.js 支持**：通过 ZAPI Bridge 调用 Pascal 服务，详见 [Bridge 完整手册](../Py/bridge/📖%20ZAPI%20Bridge%20完整使用手册.md)。
+- **状态与检查**：`API_Check_MainThread` / `API_Check_App` 基于本地缓存查询；`API_Get_Status` 队列最多缓存 1000 条消息。
+- **PHP/Node.js 支持**：通过 ZAPI Bridge v2.0 调用 Pascal 服务，详见 [Bridge 完整手册](../Py/bridge/📖%20ZAPI%20Bridge%20完整使用手册.md)。
 
 
 ## 🧩 迁移到 Delphi（无痛）
@@ -296,7 +352,7 @@ API_Reg_Call(app, PAnsiChar(Utf8String('中文API')), ...);
 
 ## 🛠 更多资源
 
-- [API Hub Tool for Pascal 完整指南](./API%20Hub%20Tool%20for%20Pascal.md)
+- [API Hub Tool for Pascal 完整指南](./API%20Hub%20Tool%20for%20Pascal.md)（含所有 API 详细说明和 RAII 封装用法）
 - [zAPI 概览](./zAPI：让所有编程语言平等对话的分布式服务网格.md)
 - [其他语言绑定（C++、Python、Go 等）](../)
 - [📖 ZAPI Bridge 完整使用手册](../Py/bridge/📖%20ZAPI%20Bridge%20完整使用手册.md)
@@ -309,7 +365,7 @@ API_Reg_Call(app, PAnsiChar(Utf8String('中文API')), ...);
 - 欢迎 Star、Fork、Issue 和 PR！
 
 
-**现在，您可以在 Delphi 或 Free Pascal 中直接使用 zAPI，让您的 Pascal 代码融入多语言分布式生态！** 🚀
+**现在，您可以在 Delphi 或 Free Pascal 中直接使用 zAPI v2.1，让您的 Pascal 代码融入多语言分布式生态！** 🚀
 
 ## 📚 相关资源（其他语言指南）
 
@@ -325,3 +381,4 @@ API_Reg_Call(app, PAnsiChar(Utf8String('中文API')), ...);
 - [浏览器调用 C++ 的三种方案对比：为什么我们选择了 zAPI 网关](../Py/web/浏览器调用%20C++%20的三种方案对比：为什么我们选择了%20zAPI%20网关.md)
 - [js_api.py 使用指南](../Py/web/js_api.py%20使用指南.md)
 - [📖 ZAPI Bridge 完整使用手册](../Py/bridge/📖%20ZAPI%20Bridge%20完整使用手册.md)
+- [序列化通信技术指南：Call 与 Notify 的选型与实现](../pascal/SequenceData/序列化通信技术指南：Call%20与%20Notify%20的选型与实现.md)
