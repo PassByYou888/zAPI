@@ -295,7 +295,6 @@ A: `js_api.py` 是 ZAPI Bridge v2.0 生态的一部分，专门为浏览器 Java
 - **开源首页**：[https://github.com/PassByYou888/zAPI](https://github.com/PassByYou888/zAPI)
 - **仓库地址**：[https://github.com/PassByYou888/zAPI.git](https://github.com/PassByYou888/zAPI.git)
 - **作者 QQ**：`600585`
-- **社区 QQ 群**：`1101023687`
 
 **Star、Fork、Issue、PR——欢迎一切形式的参与！**
 
