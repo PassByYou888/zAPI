@@ -410,7 +410,6 @@ A: 能。IPC 在容器里需要用 `--ipc=host` 或者宿主机共享 IPC 命名
 **开源首页**：[https://github.com/PassByYou888/zAPI](https://github.com/PassByYou888/zAPI)
 **仓库地址**：[https://github.com/PassByYou888/zAPI.git](https://github.com/PassByYou888/zAPI.git)
 **作者 QQ**：`600585`
-**社区 QQ 群**：`1101023687`
 
 Star、Fork、Issue、PR——欢迎一切形式的参与！🎉
 
