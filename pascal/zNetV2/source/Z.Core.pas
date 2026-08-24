@@ -476,6 +476,7 @@ type
     constructor Create; virtual;
     destructor Destroy; override;
     procedure DoFree(var Data: T_); virtual;
+    procedure SwapInstance(source: TOrderStruct<T_>); // only reserved FOnFreeOrderStruct
     procedure Clear;
     property Current: POrderStruct read FFirst;
     property First: POrderStruct read FFirst;
@@ -506,6 +507,7 @@ type
     constructor Create; virtual;
     destructor Destroy; override;
     procedure DoFree(Data: PT_); virtual;
+    procedure SwapInstance(source: TOrderPtrStruct<T_>); // only reserved FOnFreeOrderStruct
     procedure Clear;
     property Current: POrderPtrStruct read FFirst;
     property First: POrderPtrStruct read FFirst;
@@ -537,6 +539,7 @@ type
     constructor Create; virtual;
     destructor Destroy; override;
     procedure DoFree(var Data: T_); virtual;
+    procedure SwapInstance(source: TCriticalOrderStruct<T_>); // only reserved FCritical__ + FOnFreeOrderStruct
     procedure Clear;
     function GetCurrent: POrderStruct;
     property Current: POrderStruct read GetCurrent;
@@ -570,6 +573,7 @@ type
     constructor Create; virtual;
     destructor Destroy; override;
     procedure DoFree(Data: PT_); virtual;
+    procedure SwapInstance(source: TCriticalOrderPtrStruct<T_>); // only reserved FCritical__ + FOnFreeOrderStruct
     procedure Clear;
     function GetCurrent: POrderPtrStruct;
     property Current: POrderPtrStruct read GetCurrent;
@@ -957,20 +961,20 @@ type
   The tool classes (TPair*_Tool) provide a list that stores these pairs and
   offers automatic memory management via the list's OnFree/OnAdd events.
 }
-  TPair2<T1, T2> = packed record
+  TPair2<T1, T2> = record
     Primary: T1;
     Second: T2;
     class function Init(Primary_: T1; Second_: T2): TPair2<T1, T2>; static;
   end;
 
-  TPair3<T1, T2, T3> = packed record
+  TPair3<T1, T2, T3> = record
     Primary: T1;
     Second: T2;
     Third: T3;
     class function Init(Primary_: T1; Second_: T2; Third_: T3): TPair3<T1, T2, T3>; static;
   end;
 
-  TPair4<T1, T2, T3, T4> = packed record
+  TPair4<T1, T2, T3, T4> = record
     Primary: T1;
     Second: T2;
     Third: T3;
@@ -978,7 +982,7 @@ type
     class function Init(Primary_: T1; Second_: T2; Third_: T3; Fourth_: T4): TPair4<T1, T2, T3, T4>; static;
   end;
 
-  TPair5<T1, T2, T3, T4, T5> = packed record
+  TPair5<T1, T2, T3, T4, T5> = record
     Primary: T1;
     Second: T2;
     Third: T3;
@@ -987,7 +991,7 @@ type
     class function Init(Primary_: T1; Second_: T2; Third_: T3; Fourth_: T4; Five_: T5): TPair5<T1, T2, T3, T4, T5>; static;
   end;
 
-  TPair6<T1, T2, T3, T4, T5, T6> = packed record
+  TPair6<T1, T2, T3, T4, T5, T6> = record
     Primary: T1;
     Second: T2;
     Third: T3;
@@ -1387,10 +1391,12 @@ type
 
   TSoft_Synchronize_Tool = class(TCore_Object_Intermediate)
   private type
-    TSynchronize_Data___ = TPair4<TOnSynchronize_C_NP, TOnSynchronize_M_NP, TOnSynchronize_P_NP, PBoolean>;
-    TSynchronize_Queue___ = TCriticalOrderStruct<TSynchronize_Data___>;
+    TSynchronize_Data___ = TPair4<TOnSynchronize_C_NP, TOnSynchronize_M_NP, TOnSynchronize_P_NP, Boolean>;
+    PSynchronize_Data___ = ^TSynchronize_Data___;
+    TSynchronize_Queue___ = TOrderStruct<PSynchronize_Data___>;
   private
     SyncQueue__: TSynchronize_Queue___;
+    Critical__: TCritical;
   public
     Soft_Synchronize_Main_Thread: TCore_Thread;
     constructor Create(Soft_Synchronize_Main_Thread_: TCore_Thread);
@@ -2836,5 +2842,6 @@ finalization
   DisposeObjectAndNil(Boot_Thread_Sync_Tool);
   Free_System_Critical_Recycle_Pool();
 end.
+
 
  
