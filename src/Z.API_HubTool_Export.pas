@@ -494,49 +494,83 @@ end;
 { * API_Free_DataHnd: Frees the TAPI_Data record pointed to by Hnd. }
 procedure API_Free_DataHnd(Hnd: TDataHnd);
 begin
-  TAPI_Data.Free_Data(Hnd);
+    if Simulator_Main_Thread_Activted and (Hnd <> nil) then
+        TAPI_Data.Free_Data(Hnd);
 end;
 
 { * API_GetBuffer: Returns the raw data pointer from the TAPI_Data record. }
 function API_GetBuffer(Hnd: TDataHnd): Pointer;
 begin
-  Result := PAPI_Data(Hnd)^.GetBuffer;
+  if Hnd <> nil then
+    begin
+      Result := PAPI_Data(Hnd)^.GetBuffer;
+      API_Data_Pool.Update_Hnd_For_Usage(Hnd);
+    end
+  else Result := nil;
 end;
 
 { * API_WriteBuffer: Delegates to TAPI_Data.WriteBuff. }
 function API_WriteBuffer(Hnd: TDataHnd; Buff: Pointer; Size: int64): int64;
 begin
-  Result := PAPI_Data(Hnd)^.WriteBuff(Buff, Size);
+  if Hnd <> nil then
+    begin
+      Result := PAPI_Data(Hnd)^.WriteBuff(Buff, Size);
+      API_Data_Pool.Update_Hnd_For_Usage(Hnd);
+    end
+  else Result := 0;
 end;
 
 { * API_ReadBuffer: Delegates to TAPI_Data.ReadBuff. }
 function API_ReadBuffer(Hnd: TDataHnd; Buff: Pointer; Size: int64): int64;
 begin
-  Result := PAPI_Data(Hnd)^.ReadBuff(Buff, Size);
+  if Hnd <> nil then
+    begin
+      Result := PAPI_Data(Hnd)^.ReadBuff(Buff, Size);
+      API_Data_Pool.Update_Hnd_For_Usage(Hnd);
+    end
+  else Result := 0;
 end;
 
 { * API_GetPos: Delegates to TAPI_Data.Get_Pos. }
 function API_GetPos(Hnd: TDataHnd): int64;
 begin
-  Result := PAPI_Data(Hnd)^.Get_Pos;
+  if Hnd <> nil then
+    begin
+      Result := PAPI_Data(Hnd)^.Get_Pos;
+      API_Data_Pool.Update_Hnd_For_Usage(Hnd);
+    end
+  else Result := 0;
 end;
 
 { * API_SetPos: Delegates to TAPI_Data.Set_Pos. }
 procedure API_SetPos(Hnd: TDataHnd; Pos_: int64);
 begin
-  PAPI_Data(Hnd)^.Set_Pos(Pos_);
+  if Hnd <> nil then
+    begin
+      PAPI_Data(Hnd)^.Set_Pos(Pos_);
+      API_Data_Pool.Update_Hnd_For_Usage(Hnd);
+    end;
 end;
 
 { * API_GetSize: Delegates to TAPI_Data.Get_Size. }
 function API_GetSize(Hnd: TDataHnd): int64;
 begin
-  Result := PAPI_Data(Hnd)^.Get_Size;
+  if Hnd <> nil then
+    begin
+      Result := PAPI_Data(Hnd)^.Get_Size;
+      API_Data_Pool.Update_Hnd_For_Usage(Hnd);
+    end
+  else Result := 0;
 end;
 
 { * API_SetSize: Delegates to TAPI_Data.Set_Size. }
 procedure API_SetSize(Hnd: TDataHnd; Size_: int64);
 begin
-  PAPI_Data(Hnd)^.Set_Size(Size_);
+  if Hnd <> nil then
+    begin
+      PAPI_Data(Hnd)^.Set_Size(Size_);
+      API_Data_Pool.Update_Hnd_For_Usage(Hnd);
+    end;
 end;
 
 { ---- AppHnd Implementation ---- }
@@ -629,6 +663,7 @@ begin
   tmp := TMem64.Create;
   PAPI_Data(Param).Data_Param.EncryptToMem(tmp);
   Result := TAPI_Data.New_Result_From(app.API.Execute_Call(tmp));
+  PAPI_Data(Result)^.Data_Info := PFormat('result for app:%s api:%s', [app.Name.Text, PAPI_Data(Param)^.Data_Param.APIName.Text]);
   DisposeObject(tmp);
 end;
 
@@ -1073,10 +1108,23 @@ begin
 
   if Init_Successed then
     while Simulated_Main_Thread_Running do
+      begin
         C40Progress(if_(Running_API_Num.V > 0, 0, 10));
 
+        try
+            API_Data_Pool.Progress();
+        except
+        end;
+      end;
+
   try
-      C40Clean();
+    DoStatus('Clean Framework.');
+    C40Clean();
+  except
+  end;
+
+  try
+      API_Data_Pool.Free_All_Hnd();
   except
   end;
   DoStatus('API-Hub Main Thread Exit');
@@ -1151,6 +1199,7 @@ begin
   if Output = nil then
       Output := TMem64.Create;
   Result := TAPI_Data.New_Result_From(Output);
+  PAPI_Data(Result)^.Data_Info := PFormat('result for app:%s api:%s', [DS(appName).Text, PAPI_Data(Param)^.Data_Param.APIName.Text]);
 end;
 
 { * API_Notify: Sends a notification. Finds a connected client, packs the
@@ -1354,6 +1403,10 @@ end;
   * the core dispatch thread. }
 procedure API_shutdown;
 begin
+  try
+      API_Data_Pool.Free_All_Hnd();
+  except
+  end;
   API_Exit_MainThread();
   UnloadIPCLibrary();
   Close_Core_Dispatch_Thread();
