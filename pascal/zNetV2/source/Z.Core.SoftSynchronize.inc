@@ -67,19 +67,22 @@ constructor TSoft_Synchronize_Tool.Create(Soft_Synchronize_Main_Thread_: TCore_T
 begin
   inherited Create;
   SyncQueue__ := TSynchronize_Queue___.Create;
+  Critical__ := TCritical.Create(ClassName + '.Critical__');
   Soft_Synchronize_Main_Thread := Soft_Synchronize_Main_Thread_;
 end;
 
 destructor TSoft_Synchronize_Tool.Destroy;
 begin
   DisposeObjectAndNil(SyncQueue__);
+  DisposeObjectAndNil(Critical__);
   inherited Destroy;
 end;
 
 function TSoft_Synchronize_Tool.Check_Synchronize(Check_Time_: TTimeTick): NativeInt;
 var
   tk: TTimeTick;
-  sync_: TSynchronize_Data___; // anti dead loop
+  Temp_SyncQueue__: TSynchronize_Queue___;
+  sync_: PSynchronize_Data___;
 begin
   Result := 0;
   if (TCore_Thread.CurrentThread <> Soft_Synchronize_Main_Thread) then
@@ -88,29 +91,35 @@ begin
   if Check_Time_ > 0 then tk := GetTimeTick
   else tk := 0;
 
+  Temp_SyncQueue__ := TSynchronize_Queue___.Create;
   while True do
     begin
-      while SyncQueue__.Num > 0 do
+      Critical__.Lock;
+      Temp_SyncQueue__.SwapInstance(SyncQueue__);
+      Critical__.UnLock;
+
+      while Temp_SyncQueue__.Num > 0 do
         begin
-          sync_ := SyncQueue__.First^.Data; // anti dead loop
-          SyncQueue__.Next; // anti dead loop
+          sync_ := Temp_SyncQueue__.First^.Data;
           try
-            if Assigned(sync_.Primary) then
-                sync_.Primary()
-            else if Assigned(sync_.Second) then
-                sync_.Second()
-            else if Assigned(sync_.Third) then
-                sync_.Third();
+            if Assigned(sync_^.Primary) then
+                sync_^.Primary()
+            else if Assigned(sync_^.Second) then
+                sync_^.Second()
+            else if Assigned(sync_^.Third) then
+                sync_^.Third();
           except
           end;
-          sync_.Fourth^ := False;
+          sync_^.Fourth := False;
           inc(Result);
+          Temp_SyncQueue__.Next;
         end;
 
       if Check_Time_ = 0 then break;
       if GetTimeTick - tk > Check_Time_ then break;
       TCompute.Sleep(1);
     end;
+  DisposeObject(Temp_SyncQueue__);
 end;
 
 procedure TSoft_Synchronize_Tool.Synchronize(OnSync: TOnSynchronize_P_NP);
@@ -140,7 +149,7 @@ end;
 
 procedure TSoft_Synchronize_Tool.Synchronize_C(Thread_: TCore_Thread; OnSync: TOnSynchronize_C_NP);
 var
-  Wait_Signal__: Boolean;
+  tmp: TSynchronize_Data___;
 begin
   if Thread_ = Soft_Synchronize_Main_Thread then
     begin
@@ -152,16 +161,18 @@ begin
     end
   else
     begin
-      Wait_Signal__ := True;
-      SyncQueue__.Push(TSynchronize_Data___.Init(OnSync, nil, nil, @Wait_Signal__));
-      while Wait_Signal__ do
+      tmp := TSynchronize_Data___.Init(OnSync, nil, nil, True);
+      Critical__.Lock;
+      SyncQueue__.Push(@tmp);
+      Critical__.UnLock;
+      while tmp.Fourth do
           TCompute.Sleep(1);
     end;
 end;
 
 procedure TSoft_Synchronize_Tool.Synchronize_M(Thread_: TCore_Thread; OnSync: TOnSynchronize_M_NP);
 var
-  Wait_Signal__: Boolean;
+  tmp: TSynchronize_Data___;
 begin
   if Thread_ = Soft_Synchronize_Main_Thread then
     begin
@@ -173,16 +184,18 @@ begin
     end
   else
     begin
-      Wait_Signal__ := True;
-      SyncQueue__.Push(TSynchronize_Data___.Init(nil, OnSync, nil, @Wait_Signal__));
-      while Wait_Signal__ do
+      tmp := TSynchronize_Data___.Init(nil, OnSync, nil, True);
+      Critical__.Lock;
+      SyncQueue__.Push(@tmp);
+      Critical__.UnLock;
+      while tmp.Fourth do
           TCompute.Sleep(1);
     end;
 end;
 
 procedure TSoft_Synchronize_Tool.Synchronize_P(Thread_: TCore_Thread; OnSync: TOnSynchronize_P_NP);
 var
-  Wait_Signal__: Boolean;
+  tmp: TSynchronize_Data___;
 begin
   if Thread_ = Soft_Synchronize_Main_Thread then
     begin
@@ -194,9 +207,11 @@ begin
     end
   else
     begin
-      Wait_Signal__ := True;
-      SyncQueue__.Push(TSynchronize_Data___.Init(nil, nil, OnSync, @Wait_Signal__));
-      while Wait_Signal__ do
+      tmp := TSynchronize_Data___.Init(nil, nil, OnSync, True);
+      Critical__.Lock;
+      SyncQueue__.Push(@tmp);
+      Critical__.UnLock;
+      while tmp.Fourth do
           TCompute.Sleep(1);
     end;
 end;
@@ -295,3 +310,4 @@ begin
         end;
     end;
 end;
+
