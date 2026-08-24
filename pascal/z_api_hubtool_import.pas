@@ -920,19 +920,19 @@ procedure API_Notify2(appName: string; Param: TDataHnd);
     │   进行握手。服务端和客户端必须匹配，否则连接失败。                │
     │   ⚠️ 仅影响新建连接，已有连接不受影响。                           │
     │   ⚠️ 日志中密码会以掩码（* 和 **）显示，防止泄露。                │
-    │   生效时机：立即生效（新建连接）。                                 │
+    │   生效时机：立即生效（新建连接）。                                │
     ├───────────────────────────────────────────────────────────────────┤
     │ 2. 日志与调试                                                     │
     ├───────────────────────────────────────────────────────────────────┤
     │ • "Quiet"                                                         │
     │   启用/禁用静默模式（True/False）。True 时抑制大多数调试日志。    │
-    │   生效时机：立即生效。                                             │
+    │   生效时机：立即生效。                                            │
     │ • "ConsoleOutput" / "Console_Output"                              │
     │   启用/禁用控制台（stdout/stderr）日志输出（True/False）。        │
-    │   生效时机：立即生效。                                             │
+    │   生效时机：立即生效。                                            │
     │ • "ShowThreadID" / "ShowThread" / "Show_Thread"                   │
     │   控制状态日志是否显示线程 ID（True/False）。                     │
-    │   生效时机：立即生效。                                             │
+    │   生效时机：立即生效。                                            │
     ├───────────────────────────────────────────────────────────────────┤
     │ 3. 网络启动与部署                                                 │
     ├───────────────────────────────────────────────────────────────────┤
@@ -943,34 +943,34 @@ procedure API_Notify2(appName: string; Param: TDataHnd);
     │   True（默认）：阻塞直到所有客户端完成连接和注册。                │
     │   False：立即返回，客户端将自动重连（适用于弹性部署）。           │
     │   ⚠️ 此选项仅在 API_Prepare_Done 调用前设置有效。                 │
-    │   生效时机：仅在 API_Prepare_Done 前设置有效。                     │
+    │   生效时机：仅在 API_Prepare_Done 前设置有效。                    │
     │ • "Wait_Connection_Timeout" / "Wait_TimeOut" /                    │
     │   "API_Prepare_Done_TimeOut" / "WaitTimeOut"                      │
     │   当 Wait_Connection_ReadyOk=True 时的最大等待时间（毫秒）。      │
     │   默认 30000。仅 API_Prepare_Done 前设置有效。                    │
-    │   生效时机：仅在 API_Prepare_Done 前设置有效。                     │
+    │   生效时机：仅在 API_Prepare_Done 前设置有效。                    │
     ├───────────────────────────────────────────────────────────────────┤
     │ 4. IPC（进程间通信）调优                                          │
     ├───────────────────────────────────────────────────────────────────┤
     │ • "IPC_Serv_ThreadCount" / "IPC_ThreadCount" /                    │
     │   "IPC_Server_ThreadCount"                                        │
     │   IPC 服务线程池大小（整数）。影响后续新建的 IPC 服务。           │
-    │   默认 4。生效时机：对新创建的 IPC 服务生效，已有不受影响。      │
+    │   默认 4。生效时机：对新创建的 IPC 服务生效，已有不受影响。       │
     │ • "IPC_Serv_MaxQueueLength" / "IPC_MaxQueueLength" /              │
     │   "IPC_Server_MaxQueueLength"                                     │
     │   IPC 消息队列最大长度（整数）。默认 4096。                       │
-    │   生效时机：对新创建的 IPC 服务生效，已有不受影响。              │
+    │   生效时机：对新创建的 IPC 服务生效，已有不受影响。               │
     │ • "IPC_Serv_MaxMsgSize" / "IPC_MaxMsgSize" /                      │
     │   "IPC_Server_MaxMsgSize"                                         │
     │   单条 IPC 消息最大大小（字节）。默认 32768。                     │
-    │   生效时机：对新创建的 IPC 服务生效，已有不受影响。              │
+    │   生效时机：对新创建的 IPC 服务生效，已有不受影响。               │
     ├───────────────────────────────────────────────────────────────────┤
     │ 5. 配置文件保存                                                   │
     ├───────────────────────────────────────────────────────────────────┤
     │ • "External_Conf_Auto_Save" / "Conf_Auto_Save"                    │
     │   程序退出时自动保存当前配置到 .api-tool.ini 文件                 │
     │   （True/False）。默认 True。                                     │
-    │   生效时机：程序退出时。                                           │
+    │   生效时机：程序退出时。                                          │
     └───────────────────────────────────────────────────────────────────┘
 
   返回值：
@@ -1096,8 +1096,13 @@ function API_Check_MainThread2(): boolean;
     参数：
       appName : PAnsiChar – 目标应用名（UTF‑8 + #0）。
     返回：1 表示存在至少一个实例，0 表示不存在。
+
     设计意图：在调用 API_Call 前快速探测目标是否可达。
+
     注意事项：此函数基于本地缓存查询，不保证实时性，可能过时。
+    可以在线程里面使用, 也可以高频功率调用, 例如跑大型api的前置条件判断.
+    可以支持 while CheckApp do Sleep(10) 这种高频率调用
+
     线程安全：是。
   ****************************************************************************}
 function API_Check_App(appName: pansichar): integer; cdecl; external libapi_hub name 'API_Check_App';
