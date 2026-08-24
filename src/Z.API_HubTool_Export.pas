@@ -1314,10 +1314,6 @@ begin
   Result := if_((Find_Local_APP_Hub(DS(appName), False) <> nil) or (Find_Remote_APP_Hub(DS(appName), False) <> nil), 1, 0);
 end;
 
-var
-  External_Conf_FileName: TAPI_String;
-  External_Conf_Auto_Save: boolean = True;
-
   { * API_SetOption: Implementation. See interface comment for details.
     * @Param Option: Configuration key.
     * @Param Value: New value.
@@ -1342,11 +1338,6 @@ begin
     begin
       C40SetQuietMode(EStrToBool(V.Text));
       DoStatus('Quiet = %s', [umlBoolToStr(EStrToBool(V.Text)).Text]);
-    end
-  else if opt.Same('External_Conf_Auto_Save', 'Conf_Auto_Save') then
-    begin
-      External_Conf_Auto_Save := EStrToBool(V.Text);
-      DoStatus('External Config Auto Save(.api-tool.ini) = %s', [umlBoolToStr(External_Conf_Auto_Save).Text]);
     end
   else if opt.Same('Wait_Connection_ReadyOk', 'Wait_API_Prepare_Done', 'API_Prepare_Done_Wait', 'WaitConnect', 'Wait_Ready', 'WaitReady') then
     begin
