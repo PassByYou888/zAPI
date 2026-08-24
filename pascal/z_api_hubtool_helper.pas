@@ -143,7 +143,7 @@ type
           @param Owned 是否拥有所有权，若为 True 则析构时释放该句柄
           注意：若 Owned=False，调用者需自行释放原句柄。
         }
-        constructor Create(AHandle: TDataHnd; Owned: boolean = True); overload;
+        constructor Create(AHandle: TDataHnd; const Owned: boolean = False); overload;
 
         destructor Destroy; override;
 
@@ -225,7 +225,8 @@ type
         function ReadStringNullTerminated: string;
 
         { 已弃用，请使用 ReadStringNullTerminated: string }
-        function ReadString(out Value: string): boolean; deprecated 'Use ReadStringNullTerminated: string instead';
+        function ReadString(out Value: string): boolean; overload;
+        function ReadString(): string; overload;
 
         // ---- 位置与大小 ----
         { 获取当前读写位置（字节偏移，从 0 开始） }
@@ -377,6 +378,14 @@ type
       示例：
         API.PrepareService('0.0.0.0', '127.0.0.1:9898');
         API.PrepareService('ipc:demo', 'ipc:demo');
+
+      调用时机与行为：
+        • 在调用 API_Prepare_Done 之前调用：该服务会被加入准备队列，
+          等到 API_Prepare_Done 启动时统一创建并开始监听。
+        • 在 API_Prepare_Done 已经执行且主线程（C4 事件循环）已启动之后调用：
+          该服务会立即被创建并开始监听，无需重启框架或再次调用
+          API_Prepare_Done。这允许在运行时动态添加新的服务实例，
+          实现热扩展。
     }
     class function PrepareService(const ListeningAddr, PhysicsAddr: string): integer; overload;
 
@@ -392,10 +401,36 @@ type
       @param PhysicsAddr 远程服务地址
       @param App 可选应用句柄（若提供则暴露该应用，否则纯消费）
       @return 内部标签
+
+      调用时机与行为：
+        • 在调用 API_Prepare_Done 之前调用：该客户端会被加入准备队列，
+          等到 API_Prepare_Done 启动时统一建立连接并注册应用（如果有）。
+        • 在 API_Prepare_Done 已经执行且主线程（C4 事件循环）已启动之后调用：
+          该客户端会立即尝试连接远程服务，并自动注册应用（如果有）。
+          这允许在运行时动态添加新的客户端连接，实现热扩展。
     }
     class function PrepareClient(const PhysicsAddr: string; App: TAppHandle): integer;
 
     { 启动网络框架，阻塞直到所有准备的服务/客户端就绪。
+
+    调用行为：
+      • 当主线程尚未启动时：启动模拟主线程（C4 事件循环），并等待所有准备
+        的服务/客户端就绪（取决于 Wait_Connection_ReadyOk 设置）。
+      • 当主线程已经启动时（即框架已在运行）：再次调用此函数会立即返回 1
+        （不做任何操作），不会产生副作用。
+      • 在调用 API_shutdown 之后，框架被完全关闭，此时可以再次调用
+        API_Prepare_Done 重新启动框架（需先调用 API_Reset_Prepare 重新配置）。
+
+    设计意图：
+      启动网络框架，使远程调用功能可用。
+
+    注意事项：
+      • 只能有效启动一次（除非在 shutdown 后重新准备）。
+      • 可通过 API_SetOption 控制是否等待客户端就绪（Wait_Connection_ReadyOk）。
+      • 该函数只在初始化时生效，选项修改仅在调用前有效。
+      • 在应用程序或动态库退出前，必须调用 API_shutdown 释放资源，否则可能导致
+        资源泄漏或进程无法正常退出。
+
       @return True 成功，False 失败（错误信息会打印到控制台）
     }
     class function PrepareDone: boolean;
@@ -436,7 +471,26 @@ type
     class function Sync: integer;
 
     { 完全关闭框架，释放所有资源。
-      建议顺序：先 ExitMainThread，再 Shutdown。
+      调用行为：
+        • 如果框架正在运行，会首先停止主线程（相当于调用 API_Exit_MainThread），
+          然后释放所有内部资源（网络连接、线程池、内存等）。
+        • 如果框架已经停止，再次调用此函数无任何效果，直接返回。
+        • 该函数可以安全地多次调用。
+
+      设计意图：
+        清理所有资源，使框架恢复到未初始化的状态。之后可以重新调用
+        API_Reset_Prepare 和 API_Prepare_Done 重新启动。
+
+      ⚠️ 重要：
+        在应用程序退出（或动态库卸载）之前，必须调用此函数！
+        否则可能导致：
+          • 资源泄漏（内存、套接字、线程等）
+          • 进程无法正常退出（线程未终止）
+          • 动态库卸载时崩溃（未清理的全局对象）
+
+      建议顺序：
+        先调用 API_Exit_MainThread（可选，因为 shutdown 内部会调用），
+        然后调用 API_shutdown。
     }
     class procedure Shutdown;
 
@@ -446,6 +500,7 @@ type
       注意：内部自动复制数据，不受缓冲区覆盖影响。
     }
     class function GetStatus: string;
+    class function Get_Status_Num: Integer;
 
     { 向状态队列写入一条自定义日志消息。
       @param Status 要写入的消息（Pascal string）
@@ -461,6 +516,8 @@ type
       @param AppName 应用名
       @return True 表示存在至少一个实例，False 表示不存在。
       注意：此函数基于本地缓存，不保证实时性。
+      可以在线程里面使用, 也可以高频功率调用, 例如跑大型api的前置条件判断.
+      可以支持 while CheckApp do Sleep(10) 这种高频率调用
     }
     class function CheckApp(const AppName: string): Boolean;
   end;
@@ -1064,7 +1121,7 @@ begin
   FLock := TCritical.Create;
 end;
 
-constructor API.TDataHandle.Create(AHandle: TDataHnd; Owned: boolean);
+constructor API.TDataHandle.Create(AHandle: TDataHnd; const Owned: boolean = False);
 begin
   inherited Create;
   FHandle := AHandle;
@@ -1543,6 +1600,11 @@ begin
   end;
 end;
 
+function API.TDataHandle.ReadString(): string;
+begin
+  Result := ReadStringNullTerminated();
+end;
+
 function API.TDataHandle.GetPos: int64;
 begin
   FLock.Enter;
@@ -1790,6 +1852,11 @@ end;
 class function API.GetStatus: string;
 begin
   Result := API_Get_Status2;
+end;
+
+class function API.Get_Status_Num: Integer;
+begin
+  Result := API_Get_Status_Num;
 end;
 
 class procedure API.PostStatus(const Status: string);
