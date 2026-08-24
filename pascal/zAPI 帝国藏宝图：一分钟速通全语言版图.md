@@ -2,7 +2,7 @@
 
 > **“这不是一个文件夹，这是你征服异构世界的弹药库。”**
 >
-> **版本：** 2.0（与 ZAPI 核心 v2.0 同步）
+> **版本：** 2.1（与 ZAPI 核心 v2.1 同步）
 
 欢迎来到 zAPI 的多语言大本营！如果你是第一次推开这扇门，可能会被眼前密密麻麻的文件夹吓到——别慌，这份文档就是你的“藏宝图”。
 
@@ -33,24 +33,24 @@
 
 这里是 zAPI 最引以为傲的“多语言矩阵”。无论你是哪种语言的拥趸，都能在这里找到“母语级”的调用体验。**表格里的星星（⭐）越多，说明接入越丝滑。**
 
-| 语言 | 核心文件 / 入口 | 难度 | 典型受众 |
-| :--- | :--- | :--- | :--- |
-| **🐍 Python** | `/Py/api_hub` + 装饰器 `@expose` | ⭐ 极简 | AI 工程师、胶水大师、快速原型党 |
-| **⚡ C++** | `/C++/API_HubTool.hpp` (RAII 封装) | ⭐⭐ | 硬核性能党、游戏引擎大佬、嵌入式高手 |
-| **🐹 Go** | `/Go/api_hub` (CGO 绑定) | ⭐⭐ | 云原生布道师、微服务网格管理员 |
-| **☕ Java** | `/java/src/com/apihub` (JNA) | ⭐⭐ | 企业级架构师、大数据平台守护者 |
-| **🦀 Rust** | `/rust/src/lib.rs` (libloading) | ⭐⭐ | 系统级安全狂魔、拒绝崩溃的偏执狂 |
-| **🔷 C# / VB.NET** | `/C#/API_HubTool.cs` (P/Invoke) | ⭐⭐ | 微软生态钉子户、Unity 游戏开发者 |
-| **📐 Pascal (Delphi/FPC)** | 根目录 `z_api_hubtool_import.pas` | ⭐ 极简 | 二十年的老司机、工业控制领域的隐形大佬 |
-| **🐘 PHP (v2.0 新增)** | `/Py/bridge/PHP/ZAPIBridgeClient.php` (HTTP 网关) | ⭐ 极简 | Web 后端开发者、LAMP 栈守护者 |
-| **🟢 Node.js (v2.0 新增)** | `/Py/bridge/node.js/ZAPIBridgeClient.js` (HTTP 网关) | ⭐ 极简 | 全栈指挥官、想让 JavaScript 征服世界的“卷王” |
-| **🌐 Web.js (浏览器)** | `/Py/web/js_api.py` (HTTP 网关) | ⭐ 极简 | 前端高性能计算、浏览器黑科技玩家 |
+| 语言 | 核心文件 / 入口 | 难度 | 典型受众 | v2.1 新特性 |
+| :--- | :--- | :--- | :--- | :--- |
+| **🐍 Python** | `/Py/api_hub` + 装饰器 `@expose` | ⭐ 极简 | AI 工程师、胶水大师、快速原型党 | ✅ 状态与检查 API（`check_app`、`get_status` 等） |
+| **⚡ C++** | `/C++/API_HubTool.hpp` (RAII 封装) | ⭐⭐ | 硬核性能党、游戏引擎大佬、嵌入式高手 | ✅ `API_Check_MainThread` / `API_Check_App` / 日志队列 |
+| **🐹 Go** | `/Go/api_hub` (CGO 绑定) | ⭐⭐ | 云原生布道师、微服务网格管理员 | ✅ `CheckMainThread`、`CheckApp`、`GetStatus` 等 |
+| **☕ Java** | `/java/src/com/apihub` (JNA) | ⭐⭐ | 企业级架构师、大数据平台守护者 | ✅ `checkMainThread()`、`checkApp()`、日志拉取/注入 |
+| **🦀 Rust** | `/rust/src/lib.rs` (libloading) | ⭐⭐ | 系统级安全狂魔、拒绝崩溃的偏执狂 | ✅ `set_option`、`unregister` + 状态检查 |
+| **🔷 C# / VB.NET** | `/C#/API_HubTool.cs` (P/Invoke) | ⭐⭐ | 微软生态钉子户、Unity 游戏开发者 | ✅ `API_Check_MainThread` / `API_Get_Status` 等 |
+| **📐 Pascal (Delphi/FPC)** | `z_api_hubtool_import.pas` | ⭐ 极简 | 二十年的老司机、工业控制领域的隐形大佬 | ✅ `API_Check_MainThread2`、`API_Check_App2`、`API_Get_Status2` |
+| **🐘 PHP** | `/Py/bridge/PHP/ZAPIBridgeClient.php` (HTTP 网关) | ⭐ 极简 | Web 后端开发者、LAMP 栈守护者 | ✅ Bridge v2.0 双向调用 + 状态查询 |
+| **🟢 Node.js** | `/Py/bridge/node.js/ZAPIBridgeClient.js` (HTTP 网关) | ⭐ 极简 | 全栈指挥官、想让 JavaScript 征服世界的“卷王” | ✅ Bridge v2.0 双向调用 + 状态查询 |
+| **🌐 Web.js (浏览器)** | `/Py/web/js_api.py` (HTTP 网关) | ⭐ 极简 | 前端高性能计算、浏览器黑科技玩家 | ✅ 通过 Bridge v2.0 接入，支持健康检查 |
 
-**专家解读（v2.0 更新）：** PHP、Node.js 和浏览器 JavaScript 现在统一通过 **ZAPI Bridge v2.0**（HTTP 网关）接入，无需 FFI、无需编译、零原生依赖。其他所有语言都是**直接通过 FFI 调用 C 核心库**，没有中间商赚差价！
+**专家解读（v2.1 更新）：** PHP、Node.js 和浏览器 JavaScript 现在统一通过 **ZAPI Bridge v2.0**（HTTP 网关）接入，无需 FFI、无需编译、零原生依赖。其他所有语言都是**直接通过 FFI 调用 C 核心库**，没有中间商赚差价！**v2.1 为所有原生 FFI 语言新增了状态与检查 API**（主线程健康检查、应用在线探测、程序化日志拉取/注入），让跨语言调用的调试和运维体验提升了一个维度。
 
 ---
 
-## 📚 第三站：新手村与藏经阁 —— 文档与示例 (`/docs` 及根目录下的 .md)
+## 📚 第三站：新手村与藏经阁 —— 文档与示例 (各语言目录及子目录)
 
 **入口暗号：** “别百度了，答案都在这里。”
 
@@ -74,9 +74,15 @@
 *   **`老哥别卷了，你的 VB.NET 代码今天开始全栈通杀.md`**
     > **核心看点：** 50 岁老程序员看完默默点了 Star，并转手调用了 Python 的 AI 模型。
 
+### 4. 给“极客”的硬核参考 —— 协议与架构深潜
+*   **`序列化通信技术指南：Call 与 Notify 的选型与实现.md`**
+    > **核心看点：** 深入剖析同步 Call 与单向 Notify 在保证数据有序到达方面的差异、取舍与实现技巧，附带 `SequenceData` 完整示例。
+*   **`ZAPI 桥接开发踩坑记录.md`**
+    > **核心看点：** Bridge 开发过程中遇到的 10 个典型问题及解决方案（含 Windows 下 localhost IPv6 解析延迟、动态注销广播延迟等），是 AI 和开发者的实战避坑指南。
+
 ---
 
-## 🧩 第四站：军火库与演武场 —— 示例源码 (`/demos` 遍布各语言目录)
+## 🧩 第四站：军火库与演武场 —— 示例源码 (各语言目录下的 `demos`/`examples`)
 
 **入口暗号：** “Talk is cheap, show me the code.”
 
@@ -86,8 +92,11 @@
 *   **`file_server/client`**：文件传输（演示大文件零拷贝分块传输）。
 *   **`pubsub_server/client`**：发布订阅（演示事件驱动的解耦设计）。
 *   **`concurrent_client`**：并发压测（演示 API Hub 在线程爆炸下的稳定性）。
+*   **`cross_service/node/call`**（跨语言负载均衡演示）：多语言节点自动注册到同一服务网格，客户端请求被 C4 网格均匀分发，**肉眼可见的负载均衡**。
+*   **`Compute_Grid_Demo`**（表达式计算网格）：Pascal 实现的分布式表达式求值集群，每秒千次调用，展示 CPU 密集型任务的弹性调度。
+*   **`SequenceData`**（序列化通信示例）：演示基于 `Notify` 的大数据分块有序传输（Session + Index + 后台重排 + MD5 聚合）。
 
-**寻宝法则：** 先从你熟悉的语言开始跑通一个 `calc_server`，然后再尝试用另一个语言去调用它。那一刻的快感，堪比第一次点亮 LED 灯。
+**寻宝法则：** 先从你熟悉的语言开始跑通一个 `calc_server`，然后再尝试用另一个语言去调用它。那一刻的快感，堪比第一次点亮 LED 灯。接着可以挑战 `cross_demo`，感受多语言节点同时刷屏的视觉冲击。
 
 ---
 
@@ -101,8 +110,13 @@
    各语言绑定文件 (如 API_HubTool.hpp, api_hub/__init__.py, ZAPIBridgeClient.php)
         ↓ 动态加载 / HTTP 转发
 ┌───────────────────────────────────────────────┐
-│          z_api_hub64.dll / .so               │  ← 核心 C ABI 动态库
+│          z_api_hub64.dll / .so               │  ← 核心 C ABI 动态库 (v2.1)
 │        (C4 分布式服务网格内核)                │
+│   + 状态与检查 API (v2.1 新增)               │
+│   - API_Check_MainThread                     │
+│   - API_Check_App                            │
+│   - API_Get_Status_Num / API_Get_Status      │
+│   - API_Post_Status                          │
 └───────────────────────────────────────────────┘
         ↓ 依赖
 ┌───────────────────────────────────────────────┐
@@ -119,7 +133,7 @@
 ## 🎯 最后的嘱托
 
 如果你是**新手**：直接看根目录下的 `什么？浏览器里能直接跑 C++ 代码了？.md`，先把页面跑起来，建立信心。
-如果你是**老鸟**：直奔你熟悉的语言目录（如 `/Go`），跑通 `calc_server` 和 `cross_client`，感受一下 1ms 调用 Rust 模块的快感。
+如果你是**老鸟**：直奔你熟悉的语言目录（如 `/Go`），跑通 `calc_server` 和 `cross_client`，感受一下 1ms 调用 Rust 模块的快感。再深入 `SequenceData` 和 `Compute_Grid_Demo`，体验 zAPI 在复杂分布式场景下的真正威力。
 
 **记住：这里的每一个文件夹，都是为了消灭“语言壁垒”而生的。现在，选一个你最爱的语言，开始你的征服之旅吧！**
 
@@ -139,3 +153,4 @@
 - [浏览器调用 C++ 的三种方案对比：为什么我们选择了 zAPI 网关](../Py/web/浏览器调用%20C++%20的三种方案对比：为什么我们选择了%20zAPI%20网关.md)
 - [js_api.py 使用指南](../Py/web/js_api.py%20使用指南.md)
 - [📖 ZAPI Bridge 完整使用手册](../Py/bridge/📖%20ZAPI%20Bridge%20完整使用手册.md)
+- [序列化通信技术指南：Call 与 Notify 的选型与实现](../pascal/SequenceData/序列化通信技术指南：Call%20与%20Notify%20的选型与实现.md)
