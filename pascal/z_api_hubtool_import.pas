@@ -33,8 +33,8 @@
 
   3. 句柄生命周期（强制显式管理）
      ──────────────────────────────
-     • TDataHnd 和 TAppHnd 由用户显式创建和释放。
-     • API_Call 返回的 TDataHnd 永远非 nil，但可能大小为 0，
+     • TDataHnd___ 和 TAppHnd___ 由用户显式创建和释放。
+     • API_Call 返回的 TDataHnd___ 永远非 nil，但可能大小为 0，
        调用者必须始终释放它（即使大小为 0），否则内存泄漏。
      • 回调传入的 Input/Output 句柄由库管理，回调内不得释放。
 
@@ -113,7 +113,7 @@ uses SysUtils, Classes;
 
 type
   {****************************************************************************
-    TDataHnd
+    TDataHnd___
     不透明指针，指向内部二进制缓冲区。
     用途：存储“API 名称 + 载荷数据”，作为输入参数和输出结果的容器。
     创建：API_Create_DataHnd（external 导入）
@@ -122,10 +122,11 @@ type
               （WriteBuffer/SetPos/SetSize）对同一句柄需串行。
     AI 翻译提示：其他语言应封装为 RAII 类（如 C++ unique_ptr、Python with 语句）。
   ****************************************************************************}
-  TDataHnd = Pointer;
+  TDataHnd___ = Pointer;
+  TDataHnd = TDataHnd___;
 
   {****************************************************************************
-    TAppHnd
+    TAppHnd___
     不透明指针，指向应用上下文。
     用途：将一组 API 注册到一个逻辑应用下，应用名在网络中唯一（区分大小写）。
     创建：API_Create_APPHnd（external 导入）
@@ -133,7 +134,8 @@ type
     线程安全：句柄本身线程安全，注册和本地调用可并发执行。
     AI 翻译提示：其他语言应封装为生命周期管理的对象。
   ****************************************************************************}
-  TAppHnd = Pointer;
+  TAppHnd___ = Pointer;
+  TAppHnd = TAppHnd___;
 
   {****************************************************************************
     TAPI_Call
@@ -141,8 +143,8 @@ type
     此类型必须为 cdecl 并导出，因为它将被 C 动态库直接调用。
     参数：
       Trigger : Pointer – 注册时传入的用户数据，回调时原样传回。
-      Input   : TDataHnd – 只读，包含请求载荷（不要释放）。
-      Output  : TDataHnd – 只写，用于写入响应载荷（不要释放）。
+      Input   : TDataHnd___ – 只读，包含请求载荷（不要释放）。
+      Output  : TDataHnd___ – 只写，用于写入响应载荷（不要释放）。
     调用约定：cdecl（与 C ABI 一致）。
     执行上下文：后台 C 线程池（非主线程）。
     ⚠️ 重要：
@@ -157,7 +159,7 @@ type
                   并注意调用约定的匹配（必须为 cdecl 或等效）。
     设计意图：此类型专为 FFI 导出而设计，确保回调地址可被 C 层正确调用。
   ****************************************************************************}
-  TAPI_Call = procedure(Trigger: Pointer; Input: TDataHnd; Output: TDataHnd); cdecl; // 此回调必须导出（供 C 层调用）
+  TAPI_Call = procedure(Trigger: Pointer; Input: TDataHnd___; Output: TDataHnd___); cdecl; // 此回调必须导出（供 C 层调用）
 
   {****************************************************************************
     TAPI_Call_M
@@ -168,7 +170,7 @@ type
               内部通过桥接函数（Do_Internal_Call__）将对象方法适配为 cdecl 回调。
     AI 翻译提示：其他语言无需实现此类型，只需提供对应语言的函数/委托即可。
   ****************************************************************************}
-  TAPI_Call_M = procedure(Input: TDataHnd; Output: TDataHnd) of object;
+  TAPI_Call_M = procedure(Input: TDataHnd___; Output: TDataHnd___) of object;
 
   {****************************************************************************
     TAPI_Notify
@@ -176,21 +178,21 @@ type
     此类型必须为 cdecl 并导出，因为它将被 C 动态库直接调用。
     参数：
       Trigger : Pointer – 注册时传入的用户数据。
-      Input   : TDataHnd – 只读，包含通知载荷（不要释放）。
+      Input   : TDataHnd___ – 只读，包含通知载荷（不要释放）。
     无返回值，无输出。
     调用约定：cdecl。
     执行上下文：后台 C 线程池（非主线程）。
     ⚠️ 约束同 TAPI_Call。
     AI 翻译提示：其他语言应使用无返回值的 C 函数指针。
   ****************************************************************************}
-  TAPI_Notify = procedure(Trigger: Pointer; Input: TDataHnd); cdecl; // 此回调必须导出（供 C 层调用）
+  TAPI_Notify = procedure(Trigger: Pointer; Input: TDataHnd___); cdecl; // 此回调必须导出（供 C 层调用）
 
   {****************************************************************************
     TAPI_Notify_M
     对象方法版本的 Notify 回调，仅供 Pascal 内部使用，不跨语言导出。
     设计意图同 TAPI_Call_M。
   ****************************************************************************}
-  TAPI_Notify_M = procedure(Input: TDataHnd) of object;
+  TAPI_Notify_M = procedure(Input: TDataHnd___) of object;
 
 
 {===============================================================================
@@ -229,7 +231,7 @@ const
     功能：创建数据句柄，绑定 API 名称。
     参数：
       APIName : PAnsiChar – UTF‑8 编码、以 #0 结尾的 API 名称。
-    返回：新 TDataHnd，正常情况永不返回 nil。
+    返回：新 TDataHnd___，正常情况永不返回 nil。
     设计意图：句柄创建后，API 名称固定，后续所有读写只影响载荷。
     关联：API_Free_DataHnd（external 导入）
     注意事项：名称被内部复制，调用后可立即释放原字符串。
@@ -237,35 +239,35 @@ const
     AI 翻译提示：其他语言应直接 FFI 调用同名 C 函数，
                   并确保传入的字符串为 UTF‑8 + #0。
     示例：
-      var d: TDataHnd;
+      var d: TDataHnd___;
       d := API_Create_DataHnd('add');
       ...
       API_Free_DataHnd(d);
   ****************************************************************************}
-function API_Create_DataHnd(APIName: pansichar): TDataHnd; cdecl; external libapi_hub name 'API_Create_DataHnd';
+function API_Create_DataHnd(APIName: pansichar): TDataHnd___; cdecl; external libapi_hub name 'API_Create_DataHnd';
 
   {****************************************************************************
     API_Create_DataHnd2
     【Pascal 辅助函数】自动将 Pascal string 转为 UTF‑8 并调用 API_Create_DataHnd。
     仅供 Pascal 便利，其他语言无需实现。
   ****************************************************************************}
-function API_Create_DataHnd2(APIName: string): TDataHnd;
+function API_Create_DataHnd2(APIName: string): TDataHnd___;
 
   {****************************************************************************
     API_Free_DataHnd
     【external 导入】销毁数据句柄，释放内存。
     参数：
-      Hnd : TDataHnd – 要释放的句柄，传 nil 无操作。
+      Hnd : TDataHnd___ – 要释放的句柄，传 nil 无操作。
     线程安全：是，但释放后句柄不可再用。
     AI 翻译提示：其他语言应确保每个 Create 都有对应的 Free（或 RAII 自动释放）。
   ****************************************************************************}
-procedure API_Free_DataHnd(Hnd: TDataHnd); cdecl; external libapi_hub name 'API_Free_DataHnd';
+procedure API_Free_DataHnd(Hnd: TDataHnd___); cdecl; external libapi_hub name 'API_Free_DataHnd';
 
   {****************************************************************************
     API_GetBuffer
     【external 导入】返回内部缓冲区的直接指针（零拷贝访问）。
     参数：
-      Hnd : TDataHnd – 数据句柄。
+      Hnd : TDataHnd___ – 数据句柄。
     返回：Pointer – 缓冲区起始地址，若无数据则返回 nil。
     设计意图：高性能场景下直接读写原始内存，避免复制。
     注意事项：
@@ -275,20 +277,20 @@ procedure API_Free_DataHnd(Hnd: TDataHnd); cdecl; external libapi_hub name 'API_
     线程安全：读安全，写需串行化。
     AI 翻译提示：其他语言可通过 FFI 获取指针，然后用 Unsafe 操作访问。
   ****************************************************************************}
-function API_GetBuffer(Hnd: TDataHnd): Pointer; cdecl; external libapi_hub name 'API_GetBuffer';
+function API_GetBuffer(Hnd: TDataHnd___): Pointer; cdecl; external libapi_hub name 'API_GetBuffer';
 
   {****************************************************************************
     API_GetBuffer2
     【Pascal 辅助函数】返回带偏移的缓冲区指针，便于索引访问。
     基于 API_GetBuffer 实现，仅供 Pascal 便利。
   ****************************************************************************}
-function API_GetBuffer2(Hnd: TDataHnd; Offset: nativeint): Pointer;
+function API_GetBuffer2(Hnd: TDataHnd___; Offset: nativeint): Pointer;
 
   {****************************************************************************
     API_WriteBuffer
     【external 导入】向句柄缓冲区写入原始字节（从当前位置开始）。
     参数：
-      Hnd  : TDataHnd – 数据句柄。
+      Hnd  : TDataHnd___ – 数据句柄。
       Buff : Pointer – 源数据指针。
       Size : int64   – 要写入的字节数。
     返回：实际写入字节数（通常等于 Size）。
@@ -297,13 +299,13 @@ function API_GetBuffer2(Hnd: TDataHnd; Offset: nativeint): Pointer;
     线程安全：同一句柄的写操作需串行化。
     AI 翻译提示：其他语言应直接调用同名 C 函数，传递字节数组指针。
   ****************************************************************************}
-function API_WriteBuffer(Hnd: TDataHnd; Buff: Pointer; Size: int64): int64; cdecl; external libapi_hub name 'API_WriteBuffer';
+function API_WriteBuffer(Hnd: TDataHnd___; Buff: Pointer; Size: int64): int64; cdecl; external libapi_hub name 'API_WriteBuffer';
 
   {****************************************************************************
     API_ReadBuffer
     【external 导入】从当前位置读取原始字节到调用者缓冲区。
     参数：
-      Hnd  : TDataHnd – 数据句柄。
+      Hnd  : TDataHnd___ – 数据句柄。
       Buff : Pointer – 目标缓冲区指针。
       Size : int64   – 最大读取字节数。
     返回：实际读取字节数（可能小于 Size，若到达缓冲区尾部）。
@@ -311,7 +313,7 @@ function API_WriteBuffer(Hnd: TDataHnd; Buff: Pointer; Size: int64): int64; cdec
     线程安全：同一句柄的读与写不可并发；多读可并发。
     AI 翻译提示：其他语言直接调用同名 C 函数。
   ****************************************************************************}
-function API_ReadBuffer(Hnd: TDataHnd; Buff: Pointer; Size: int64): int64; cdecl; external libapi_hub name 'API_ReadBuffer';
+function API_ReadBuffer(Hnd: TDataHnd___; Buff: Pointer; Size: int64): int64; cdecl; external libapi_hub name 'API_ReadBuffer';
 
 // ---------- 原子写入辅助（Pascal 实现，非 external） ----------
 // 这些函数是对 API_WriteBuffer 的类型安全包装，方便读写基本类型。
@@ -323,58 +325,58 @@ function API_ReadBuffer(Hnd: TDataHnd; Buff: Pointer; Size: int64): int64; cdecl
     API_WriteInt8
     【Pascal 辅助】写入有符号 8 位整数。
   ****************************************************************************}
-function API_WriteInt8(Hnd: TDataHnd; Value: int8): boolean;
+function API_WriteInt8(Hnd: TDataHnd___; Value: int8): boolean;
   {****************************************************************************
     API_WriteUInt8
     【Pascal 辅助】写入无符号 8 位整数。
   ****************************************************************************}
-function API_WriteUInt8(Hnd: TDataHnd; Value: uint8): boolean;
+function API_WriteUInt8(Hnd: TDataHnd___; Value: uint8): boolean;
   {****************************************************************************
     API_WriteInt16
     【Pascal 辅助】写入有符号 16 位整数（小端）。
   ****************************************************************************}
-function API_WriteInt16(Hnd: TDataHnd; Value: int16): boolean;
+function API_WriteInt16(Hnd: TDataHnd___; Value: int16): boolean;
   {****************************************************************************
     API_WriteUInt16
     【Pascal 辅助】写入无符号 16 位整数（小端）。
   ****************************************************************************}
-function API_WriteUInt16(Hnd: TDataHnd; Value: uint16): boolean;
+function API_WriteUInt16(Hnd: TDataHnd___; Value: uint16): boolean;
   {****************************************************************************
     API_WriteInt32
     【Pascal 辅助】写入有符号 32 位整数（小端）。
   ****************************************************************************}
-function API_WriteInt32(Hnd: TDataHnd; Value: int32): boolean;
+function API_WriteInt32(Hnd: TDataHnd___; Value: int32): boolean;
   {****************************************************************************
     API_WriteUInt32
     【Pascal 辅助】写入无符号 32 位整数（小端）。
   ****************************************************************************}
-function API_WriteUInt32(Hnd: TDataHnd; Value: uint32): boolean;
+function API_WriteUInt32(Hnd: TDataHnd___; Value: uint32): boolean;
   {****************************************************************************
     API_WriteInt64
     【Pascal 辅助】写入有符号 64 位整数（小端）。
   ****************************************************************************}
-function API_WriteInt64(Hnd: TDataHnd; Value: int64): boolean;
+function API_WriteInt64(Hnd: TDataHnd___; Value: int64): boolean;
   {****************************************************************************
     API_WriteUInt64
     【Pascal 辅助】写入无符号 64 位整数（小端）。
   ****************************************************************************}
-function API_WriteUInt64(Hnd: TDataHnd; Value: uint64): boolean;
+function API_WriteUInt64(Hnd: TDataHnd___; Value: uint64): boolean;
   {****************************************************************************
     API_WriteSingle
     【Pascal 辅助】写入 32 位浮点数（小端 IEEE 754）。
   ****************************************************************************}
-function API_WriteSingle(Hnd: TDataHnd; Value: single): boolean;
+function API_WriteSingle(Hnd: TDataHnd___; Value: single): boolean;
   {****************************************************************************
     API_WriteDouble
     【Pascal 辅助】写入 64 位浮点数（小端 IEEE 754）。
   ****************************************************************************}
-function API_WriteDouble(Hnd: TDataHnd; Value: double): boolean;
+function API_WriteDouble(Hnd: TDataHnd___; Value: double): boolean;
 
   {****************************************************************************
     API_WriteString
     【Pascal 辅助】写入 Pascal 字符串，自动转换为 UTF‑8 字节，并追加一个 #0 终止符。
     参数：
-      Hnd   : TDataHnd – 数据句柄。
+      Hnd   : TDataHnd___ – 数据句柄。
       Value : string   – Pascal 字符串（将按 UTF‑8 编码）。
     返回：Boolean – 写入成功（含终止符）返回 True。
     设计意图：统一跨语言字符串协议（UTF‑8 + #0）。
@@ -382,7 +384,7 @@ function API_WriteDouble(Hnd: TDataHnd; Value: double): boolean;
     线程安全：同一句柄写操作需串行。
     AI 翻译提示：其他语言应写入 UTF‑8 字节序列后显式追加一个 0 字节。
   ****************************************************************************}
-function API_WriteString(Hnd: TDataHnd; const Value: string): boolean;
+function API_WriteString(Hnd: TDataHnd___; const Value: string): boolean;
 
 // ---------- 原子读取辅助（Pascal 实现，非 external） ----------
 // 这些函数从当前位置读取基本类型，并自动前进位置。
@@ -392,110 +394,110 @@ function API_WriteString(Hnd: TDataHnd; const Value: string): boolean;
     API_ReadInt8 (out 版本)
     【Pascal 辅助】读取有符号 8 位整数。
   ****************************************************************************}
-function API_ReadInt8(Hnd: TDataHnd; out Value: int8): boolean; overload;
+function API_ReadInt8(Hnd: TDataHnd___; out Value: int8): boolean; overload;
   {****************************************************************************
     API_ReadUInt8 (out 版本)
     【Pascal 辅助】读取无符号 8 位整数。
   ****************************************************************************}
-function API_ReadUInt8(Hnd: TDataHnd; out Value: uint8): boolean; overload;
+function API_ReadUInt8(Hnd: TDataHnd___; out Value: uint8): boolean; overload;
   {****************************************************************************
     API_ReadInt16 (out 版本)
     【Pascal 辅助】读取有符号 16 位整数（小端）。
   ****************************************************************************}
-function API_ReadInt16(Hnd: TDataHnd; out Value: int16): boolean; overload;
+function API_ReadInt16(Hnd: TDataHnd___; out Value: int16): boolean; overload;
   {****************************************************************************
     API_ReadUInt16 (out 版本)
     【Pascal 辅助】读取无符号 16 位整数（小端）。
   ****************************************************************************}
-function API_ReadUInt16(Hnd: TDataHnd; out Value: uint16): boolean; overload;
+function API_ReadUInt16(Hnd: TDataHnd___; out Value: uint16): boolean; overload;
   {****************************************************************************
     API_ReadInt32 (out 版本)
     【Pascal 辅助】读取有符号 32 位整数（小端）。
   ****************************************************************************}
-function API_ReadInt32(Hnd: TDataHnd; out Value: int32): boolean; overload;
+function API_ReadInt32(Hnd: TDataHnd___; out Value: int32): boolean; overload;
   {****************************************************************************
     API_ReadUInt32 (out 版本)
     【Pascal 辅助】读取无符号 32 位整数（小端）。
   ****************************************************************************}
-function API_ReadUInt32(Hnd: TDataHnd; out Value: uint32): boolean; overload;
+function API_ReadUInt32(Hnd: TDataHnd___; out Value: uint32): boolean; overload;
   {****************************************************************************
     API_ReadInt64 (out 版本)
     【Pascal 辅助】读取有符号 64 位整数（小端）。
   ****************************************************************************}
-function API_ReadInt64(Hnd: TDataHnd; out Value: int64): boolean; overload;
+function API_ReadInt64(Hnd: TDataHnd___; out Value: int64): boolean; overload;
   {****************************************************************************
     API_ReadUInt64 (out 版本)
     【Pascal 辅助】读取无符号 64 位整数（小端）。
   ****************************************************************************}
-function API_ReadUInt64(Hnd: TDataHnd; out Value: uint64): boolean; overload;
+function API_ReadUInt64(Hnd: TDataHnd___; out Value: uint64): boolean; overload;
   {****************************************************************************
     API_ReadSingle (out 版本)
     【Pascal 辅助】读取 32 位浮点数（小端 IEEE 754）。
   ****************************************************************************}
-function API_ReadSingle(Hnd: TDataHnd; out Value: single): boolean; overload;
+function API_ReadSingle(Hnd: TDataHnd___; out Value: single): boolean; overload;
   {****************************************************************************
     API_ReadDouble (out 版本)
     【Pascal 辅助】读取 64 位浮点数（小端 IEEE 754）。
   ****************************************************************************}
-function API_ReadDouble(Hnd: TDataHnd; out Value: double): boolean; overload;
+function API_ReadDouble(Hnd: TDataHnd___; out Value: double): boolean; overload;
 
 // 直接返回版本（若读取失败则返回 0 或 0.0）
   {****************************************************************************
     API_ReadInt8 (直接返回)
     【Pascal 辅助】读取有符号 8 位整数，失败返回 0。
   ****************************************************************************}
-function API_ReadInt8(Hnd: TDataHnd): int8; overload;
+function API_ReadInt8(Hnd: TDataHnd___): int8; overload;
   {****************************************************************************
     API_ReadUInt8 (直接返回)
     【Pascal 辅助】读取无符号 8 位整数，失败返回 0。
   ****************************************************************************}
-function API_ReadUInt8(Hnd: TDataHnd): uint8; overload;
+function API_ReadUInt8(Hnd: TDataHnd___): uint8; overload;
   {****************************************************************************
     API_ReadInt16 (直接返回)
     【Pascal 辅助】读取有符号 16 位整数，失败返回 0。
   ****************************************************************************}
-function API_ReadInt16(Hnd: TDataHnd): int16; overload;
+function API_ReadInt16(Hnd: TDataHnd___): int16; overload;
   {****************************************************************************
     API_ReadUInt16 (直接返回)
     【Pascal 辅助】读取无符号 16 位整数，失败返回 0。
   ****************************************************************************}
-function API_ReadUInt16(Hnd: TDataHnd): uint16; overload;
+function API_ReadUInt16(Hnd: TDataHnd___): uint16; overload;
   {****************************************************************************
     API_ReadInt32 (直接返回)
     【Pascal 辅助】读取有符号 32 位整数，失败返回 0。
   ****************************************************************************}
-function API_ReadInt32(Hnd: TDataHnd): int32; overload;
+function API_ReadInt32(Hnd: TDataHnd___): int32; overload;
   {****************************************************************************
     API_ReadUInt32 (直接返回)
     【Pascal 辅助】读取无符号 32 位整数，失败返回 0。
   ****************************************************************************}
-function API_ReadUInt32(Hnd: TDataHnd): uint32; overload;
+function API_ReadUInt32(Hnd: TDataHnd___): uint32; overload;
   {****************************************************************************
     API_ReadInt64 (直接返回)
     【Pascal 辅助】读取有符号 64 位整数，失败返回 0。
   ****************************************************************************}
-function API_ReadInt64(Hnd: TDataHnd): int64; overload;
+function API_ReadInt64(Hnd: TDataHnd___): int64; overload;
   {****************************************************************************
     API_ReadUInt64 (直接返回)
     【Pascal 辅助】读取无符号 64 位整数，失败返回 0。
   ****************************************************************************}
-function API_ReadUInt64(Hnd: TDataHnd): uint64; overload;
+function API_ReadUInt64(Hnd: TDataHnd___): uint64; overload;
   {****************************************************************************
     API_ReadSingle (直接返回)
     【Pascal 辅助】读取 32 位浮点数，失败返回 0.0。
   ****************************************************************************}
-function API_ReadSingle(Hnd: TDataHnd): single; overload;
+function API_ReadSingle(Hnd: TDataHnd___): single; overload;
   {****************************************************************************
     API_ReadDouble (直接返回)
     【Pascal 辅助】读取 64 位浮点数，失败返回 0.0。
   ****************************************************************************}
-function API_ReadDouble(Hnd: TDataHnd): double; overload;
+function API_ReadDouble(Hnd: TDataHnd___): double; overload;
 
   {****************************************************************************
     API_ReadString (out 版本)
     【Pascal 辅助】从当前位置读取 UTF‑8 字符串，直到遇到 #0 终止符。
     参数：
-      Hnd   : TDataHnd – 数据句柄。
+      Hnd   : TDataHnd___ – 数据句柄。
       out Value : string – 返回解码后的 Pascal 字符串。
     返回：Boolean – 成功读取到终止符返回 True，否则 False（Value 置空）。
     设计意图：与 WriteString 对称，实现跨语言字符串传输。
@@ -503,34 +505,34 @@ function API_ReadDouble(Hnd: TDataHnd): double; overload;
     线程安全：同一句柄读与写不可并发。
     AI 翻译提示：其他语言应实现“逐个字节扫描直到 0”的读取逻辑。
   ****************************************************************************}
-function API_ReadString(Hnd: TDataHnd; out Value: string): boolean; overload;
+function API_ReadString(Hnd: TDataHnd___; out Value: string): boolean; overload;
   {****************************************************************************
     API_ReadString (直接返回)
     【Pascal 辅助】读取字符串，失败返回空字符串。
   ****************************************************************************}
-function API_ReadString(Hnd: TDataHnd): string; overload;
+function API_ReadString(Hnd: TDataHnd___): string; overload;
 
   {****************************************************************************
     API_GetPos
     【external 导入】获取当前读写位置（字节偏移，0‑起始）。
   ****************************************************************************}
-function API_GetPos(Hnd: TDataHnd): int64; cdecl; external libapi_hub name 'API_GetPos';
+function API_GetPos(Hnd: TDataHnd___): int64; cdecl; external libapi_hub name 'API_GetPos';
   {****************************************************************************
     API_SetPos
     【external 导入】设置读写位置，若超出大小则扩展缓冲区（填充零）。
   ****************************************************************************}
-procedure API_SetPos(Hnd: TDataHnd; Pos_: int64); cdecl; external libapi_hub name 'API_SetPos';
+procedure API_SetPos(Hnd: TDataHnd___; Pos_: int64); cdecl; external libapi_hub name 'API_SetPos';
 
   {****************************************************************************
     API_GetSize
     【external 导入】获取缓冲区总大小（字节）。
   ****************************************************************************}
-function API_GetSize(Hnd: TDataHnd): int64; cdecl; external libapi_hub name 'API_GetSize';
+function API_GetSize(Hnd: TDataHnd___): int64; cdecl; external libapi_hub name 'API_GetSize';
   {****************************************************************************
     API_SetSize
     【external 导入】调整缓冲区大小（截断或扩展）。
   ****************************************************************************}
-procedure API_SetSize(Hnd: TDataHnd; Size_: int64); cdecl; external libapi_hub name 'API_SetSize';
+procedure API_SetSize(Hnd: TDataHnd___; Size_: int64); cdecl; external libapi_hub name 'API_SetSize';
 
 
 {===============================================================================
@@ -544,34 +546,34 @@ procedure API_SetSize(Hnd: TDataHnd; Size_: int64); cdecl; external libapi_hub n
     参数：
       appName : PAnsiChar – 应用名称（UTF‑8 + #0，区分大小写，网络唯一）。
       Desc    : PAnsiChar – 描述（UTF‑8 + #0，可为空）。
-    返回：新 TAppHnd，正常情况下不返回 nil。
+    返回：新 TAppHnd___，正常情况下不返回 nil。
     设计意图：应用是 API 的容器，一个应用可注册多个 API。
     关联：API_Free_APPHnd（external 导入）
     线程安全：是。
     AI 翻译提示：其他语言直接调用 C 函数，应用名需全局唯一。
   ****************************************************************************}
-function API_Create_APPHnd(appName, Desc: pansichar): TAppHnd; cdecl; external libapi_hub name 'API_Create_APPHnd';
+function API_Create_APPHnd(appName, Desc: pansichar): TAppHnd___; cdecl; external libapi_hub name 'API_Create_APPHnd';
 
   {****************************************************************************
     API_Create_APPHnd2
     【Pascal 辅助】自动 UTF‑8 转换的便利版本。
   ****************************************************************************}
-function API_Create_APPHnd2(appName, Desc: string): TAppHnd;
+function API_Create_APPHnd2(appName, Desc: string): TAppHnd___;
 
   {****************************************************************************
     API_Free_APPHnd
     【external 导入】销毁应用句柄，释放所有注册的 API 和资源。
     参数：
-      appHnd : TAppHnd – 应用句柄。
+      appHnd : TAppHnd___ – 应用句柄。
     线程安全：是，但确保其他线程不再使用。
   ****************************************************************************}
-procedure API_Free_APPHnd(appHnd: TAppHnd); cdecl; external libapi_hub name 'API_Free_APPHnd';
+procedure API_Free_APPHnd(appHnd: TAppHnd___); cdecl; external libapi_hub name 'API_Free_APPHnd';
 
   {****************************************************************************
     API_Reg_Call
     【external 导入】在应用中注册一个请求-响应（Call）API。
     参数：
-      appHnd   : TAppHnd – 应用句柄。
+      appHnd   : TAppHnd___ – 应用句柄。
       APIName  : PAnsiChar – API 名称（UTF‑8 + #0，应用内唯一）。
       Desc     : PAnsiChar – 描述（UTF‑8 + #0，可选）。
       Trigger  : Pointer – 用户数据，回调时原样传回。
@@ -582,20 +584,20 @@ procedure API_Free_APPHnd(appHnd: TAppHnd); cdecl; external libapi_hub name 'API
     回调约束：见 TAPI_Call 说明。
     AI 翻译提示：其他语言使用对应的注册函数，并确保回调函数遵循 C ABI。
   ****************************************************************************}
-function API_Reg_Call(appHnd: TAppHnd; APIName, Desc: pansichar; Trigger: Pointer; OnCall: TAPI_Call): integer; cdecl; external libapi_hub name 'API_Reg_Call';
+function API_Reg_Call(appHnd: TAppHnd___; APIName, Desc: pansichar; Trigger: Pointer; OnCall: TAPI_Call): integer; cdecl; external libapi_hub name 'API_Reg_Call';
 
   {****************************************************************************
     API_Reg_Call2
     【Pascal 辅助】自动 UTF‑8 转换的便利版本，参数同 API_Reg_Call。
   ****************************************************************************}
-function API_Reg_Call2(appHnd: TAppHnd; APIName, Desc: string; Trigger: Pointer; OnCall: TAPI_Call): integer;
+function API_Reg_Call2(appHnd: TAppHnd___; APIName, Desc: string; Trigger: Pointer; OnCall: TAPI_Call): integer;
 
   {****************************************************************************
     API_Reg_Call_M
     【Pascal 辅助】注册对象方法版本的 Call API，内部通过桥接适配为 cdecl 回调。
     仅供 Pascal 便利，不跨语言导出。
   ****************************************************************************}
-function API_Reg_Call_M(appHnd: TAppHnd; APIName, Desc: string; OnCall: TAPI_Call_M): integer;
+function API_Reg_Call_M(appHnd: TAppHnd___; APIName, Desc: string; OnCall: TAPI_Call_M): integer;
 
   {****************************************************************************
     API_Reg_Sync_Call_M
@@ -603,7 +605,7 @@ function API_Reg_Call_M(appHnd: TAppHnd; APIName, Desc: string; OnCall: TAPI_Cal
     内部使用 TSoft_Synchronize_Tool 实现。
     仅供 Pascal 内部测试/特殊场景使用。
   ****************************************************************************}
-function API_Reg_Sync_Call_M(appHnd: TAppHnd; APIName, Desc: string; OnCall: TAPI_Call_M): integer;
+function API_Reg_Sync_Call_M(appHnd: TAppHnd___; APIName, Desc: string; OnCall: TAPI_Call_M): integer;
 
   {****************************************************************************
     API_Reg_Notify
@@ -613,25 +615,25 @@ function API_Reg_Sync_Call_M(appHnd: TAppHnd; APIName, Desc: string; OnCall: TAP
     注意事项：回调中可调用 API_Notify，但应避免长时间执行。
     AI 翻译提示：其他语言使用对应的无返回值回调函数。
   ****************************************************************************}
-function API_Reg_Notify(appHnd: TAppHnd; APIName, Desc: pansichar; Trigger: Pointer; OnNotify: TAPI_Notify): integer; cdecl; external libapi_hub name 'API_Reg_Notify';
+function API_Reg_Notify(appHnd: TAppHnd___; APIName, Desc: pansichar; Trigger: Pointer; OnNotify: TAPI_Notify): integer; cdecl; external libapi_hub name 'API_Reg_Notify';
 
   {****************************************************************************
     API_Reg_Notify2
     【Pascal 辅助】自动 UTF‑8 转换的便利版本。
   ****************************************************************************}
-function API_Reg_Notify2(appHnd: TAppHnd; APIName, Desc: string; Trigger: Pointer; OnNotify: TAPI_Notify): integer;
+function API_Reg_Notify2(appHnd: TAppHnd___; APIName, Desc: string; Trigger: Pointer; OnNotify: TAPI_Notify): integer;
 
   {****************************************************************************
     API_Reg_Notify_M
     【Pascal 辅助】注册对象方法版本的 Notify API。
   ****************************************************************************}
-function API_Reg_Notify_M(appHnd: TAppHnd; APIName, Desc: string; OnNotify: TAPI_Notify_M): integer;
+function API_Reg_Notify_M(appHnd: TAppHnd___; APIName, Desc: string; OnNotify: TAPI_Notify_M): integer;
 
   {****************************************************************************
     API_Reg_Sync_Notify_M
     【Pascal 辅助】注册对象方法版本的 Notify API，并同步到主线程执行。
   ****************************************************************************}
-function API_Reg_Sync_Notify_M(appHnd: TAppHnd; APIName, Desc: string; OnNotify: TAPI_Notify_M): integer;
+function API_Reg_Sync_Notify_M(appHnd: TAppHnd___; APIName, Desc: string; OnNotify: TAPI_Notify_M): integer;
 
   {****************************************************************************
     API_Sync
@@ -648,7 +650,7 @@ function API_Sync(): integer;
     API_UnReg
     【external 导入】动态注销已注册的 API。
     参数：
-      appHnd   : TAppHnd – 应用句柄。
+      appHnd   : TAppHnd___ – 应用句柄。
       APIName  : PAnsiChar – 要注销的 API 名称（UTF‑8 + #0）。
     返回：1 成功（API 存在并移除），0 失败（名称不存在）。
     设计意图：支持热更新、插件卸载、权限动态调整。
@@ -658,27 +660,27 @@ function API_Sync(): integer;
       • 正在执行中的回调不受影响（正常完成）。
     AI 翻译提示：其他语言应提供对应注销函数，并理解最终一致性延迟。
   ****************************************************************************}
-function API_UnReg(appHnd: TAppHnd; APIName: pansichar): integer; cdecl; external libapi_hub name 'API_UnReg';
+function API_UnReg(appHnd: TAppHnd___; APIName: pansichar): integer; cdecl; external libapi_hub name 'API_UnReg';
 
   {****************************************************************************
     API_UnReg2
     【Pascal 辅助】自动 UTF‑8 转换的便利版本。
   ****************************************************************************}
-function API_UnReg2(appHnd: TAppHnd; APIName: string): integer;
+function API_UnReg2(appHnd: TAppHnd___; APIName: string): integer;
 
   {****************************************************************************
     API_Local_APP_Call
     【external 导入】在本地（同一进程）同步执行 Call API，绕过网络。
     参数：
-      appHnd : TAppHnd – 应用句柄。
-      Param  : TDataHnd – 输入句柄（包含 API 名称和参数）。
-    返回：新 TDataHnd – 结果句柄（需释放）。若 API 未找到或出错，大小 = 0。
+      appHnd : TAppHnd___ – 应用句柄。
+      Param  : TDataHnd___ – 输入句柄（包含 API 名称和参数）。
+    返回：新 TDataHnd___ – 结果句柄（需释放）。若 API 未找到或出错，大小 = 0。
     设计意图：用于单元测试、调试或内部调用，无网络开销。
     注意事项：输入句柄不被释放，调用者需负责释放。
     线程安全：是。
     AI 翻译提示：其他语言应提供类似的本地调用方法，用于测试。
   ****************************************************************************}
-function API_Local_APP_Call(appHnd: TAppHnd; Param: TDataHnd): TDataHnd; cdecl; external libapi_hub name 'API_Local_APP_Call';
+function API_Local_APP_Call(appHnd: TAppHnd___; Param: TDataHnd___): TDataHnd___; cdecl; external libapi_hub name 'API_Local_APP_Call';
 
   {****************************************************************************
     API_Local_APP_Notify
@@ -686,7 +688,7 @@ function API_Local_APP_Call(appHnd: TAppHnd; Param: TDataHnd): TDataHnd; cdecl; 
     参数：同 API_Local_APP_Call，但无返回。
     线程安全：是。
   ****************************************************************************}
-procedure API_Local_APP_Notify(appHnd: TAppHnd; Param: TDataHnd); cdecl; external libapi_hub name 'API_Local_APP_Notify';
+procedure API_Local_APP_Notify(appHnd: TAppHnd___; Param: TDataHnd___); cdecl; external libapi_hub name 'API_Local_APP_Notify';
 
 
 {===============================================================================
@@ -763,7 +765,7 @@ function API_Prepare_Service2(ListeningAddr_, PhysicsAddr_: string): integer;
 
     参数：
       PhysicsAddr_ : PAnsiChar – 远程服务地址（必须与服务的公布地址一致）。
-      appHnd       : TAppHnd   – 可选应用句柄。
+      appHnd       : TAppHnd___   – 可选应用句柄。
                                  若提供（非 nil），客户端会将该应用注册到
                                  服务网格（暴露 API 给其他节点）。
                                  若为 nil，则纯消费，不暴露任何 API。
@@ -786,13 +788,13 @@ function API_Prepare_Service2(ListeningAddr_, PhysicsAddr_: string): integer;
     AI 翻译提示：
       其他语言应提供等价方法，地址字符串需为 UTF‑8。
   ****************************************************************************}
-function API_Prepare_Client(PhysicsAddr_: pansichar; appHnd: TAppHnd): integer; cdecl; external libapi_hub name 'API_Prepare_Client';
+function API_Prepare_Client(PhysicsAddr_: pansichar; appHnd: TAppHnd___): integer; cdecl; external libapi_hub name 'API_Prepare_Client';
 
   {****************************************************************************
     API_Prepare_Client2 (带 appHnd)
     【Pascal 辅助】自动 UTF‑8 转换的便利版本。
   ****************************************************************************}
-function API_Prepare_Client2(PhysicsAddr_: string; appHnd: TAppHnd): integer; overload;
+function API_Prepare_Client2(PhysicsAddr_: string; appHnd: TAppHnd___): integer; overload;
 
   {****************************************************************************
     API_Prepare_Client2 (不带 appHnd)
@@ -861,9 +863,9 @@ procedure API_Exit_MainThread; cdecl; external libapi_hub name 'API_Exit_MainThr
     【external 导入】同步远程调用（或本地优化）。
     参数：
       appName   : PAnsiChar – 目标应用名（UTF‑8 + #0）。
-      Param     : TDataHnd – 输入句柄（内部克隆，调用者仍负责释放原句柄）。
+      Param     : TDataHnd___ – 输入句柄（内部克隆，调用者仍负责释放原句柄）。
       Timeout_  : UInt64 – 超时毫秒数，0 表示无限等待（慎用）。
-    返回：新 TDataHnd – 结果句柄，永远非 nil。若超时或失败，大小 = 0。
+    返回：新 TDataHnd___ – 结果句柄，永远非 nil。若超时或失败，大小 = 0。
     设计意图：主要 RPC 入口，自动路由、负载均衡、重试。
     注意事项：
       • 调用者必须释放返回的句柄（即使大小为 0），否则内存泄漏。
@@ -872,31 +874,31 @@ procedure API_Exit_MainThread; cdecl; external libapi_hub name 'API_Exit_MainThr
     线程安全：完全线程安全。
     AI 翻译提示：其他语言应提供同步调用方法，注意超时参数和句柄释放。
   ****************************************************************************}
-function API_Call(appName: pansichar; Param: TDataHnd; Timeout_: uint64): TDataHnd; cdecl; external libapi_hub name 'API_Call';
+function API_Call(appName: pansichar; Param: TDataHnd___; Timeout_: uint64): TDataHnd___; cdecl; external libapi_hub name 'API_Call';
 
   {****************************************************************************
     API_Call2
     【Pascal 辅助】自动 UTF‑8 转换的便利版本。
   ****************************************************************************}
-function API_Call2(appName: string; Param: TDataHnd; Timeout_: uint64): TDataHnd;
+function API_Call2(appName: string; Param: TDataHnd___; Timeout_: uint64): TDataHnd___;
 
   {****************************************************************************
     API_Notify
     【external 导入】单向通知（fire‑and‑forget）。
     参数：
       appName : PAnsiChar – 目标应用名（UTF‑8 + #0）。
-      Param   : TDataHnd – 输入句柄（内部克隆，调用者释放原句柄）。
+      Param   : TDataHnd___ – 输入句柄（内部克隆，调用者释放原句柄）。
     设计意图：用于日志、事件等无需响应的场景。
     线程安全：是。
     AI 翻译提示：其他语言提供异步发送方法，无返回值。
   ****************************************************************************}
-procedure API_Notify(appName: pansichar; Param: TDataHnd); cdecl; external libapi_hub name 'API_Notify';
+procedure API_Notify(appName: pansichar; Param: TDataHnd___); cdecl; external libapi_hub name 'API_Notify';
 
   {****************************************************************************
     API_Notify2
     【Pascal 辅助】自动 UTF‑8 转换的便利版本。
   ****************************************************************************}
-procedure API_Notify2(appName: string; Param: TDataHnd);
+procedure API_Notify2(appName: string; Param: TDataHnd___);
 
 {****************************************************************************
   API_SetOption
@@ -1157,12 +1159,12 @@ uses SyncObjs;
 {-------------------------------------------------------------------------------
   6.1  便利重载（UTF‑8 自动转换）
 -------------------------------------------------------------------------------}
-function API_Create_DataHnd2(APIName: string): TDataHnd;
+function API_Create_DataHnd2(APIName: string): TDataHnd___;
 begin
   Result := API_Create_DataHnd(pansichar(UTF8Encode(APIName)));
 end;
 
-function API_GetBuffer2(Hnd: TDataHnd; Offset: nativeint): Pointer;
+function API_GetBuffer2(Hnd: TDataHnd___; Offset: nativeint): Pointer;
 var
   base: Pointer;
 begin
@@ -1176,52 +1178,52 @@ end;
 {-------------------------------------------------------------------------------
   6.2  原子写入辅助（基于 API_WriteBuffer）
 -------------------------------------------------------------------------------}
-function API_WriteInt8(Hnd: TDataHnd; Value: int8): boolean;
+function API_WriteInt8(Hnd: TDataHnd___; Value: int8): boolean;
 begin
   Result := API_WriteBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
 end;
 
-function API_WriteUInt8(Hnd: TDataHnd; Value: uint8): boolean;
+function API_WriteUInt8(Hnd: TDataHnd___; Value: uint8): boolean;
 begin
   Result := API_WriteBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
 end;
 
-function API_WriteInt16(Hnd: TDataHnd; Value: int16): boolean;
+function API_WriteInt16(Hnd: TDataHnd___; Value: int16): boolean;
 begin
   Result := API_WriteBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
 end;
 
-function API_WriteUInt16(Hnd: TDataHnd; Value: uint16): boolean;
+function API_WriteUInt16(Hnd: TDataHnd___; Value: uint16): boolean;
 begin
   Result := API_WriteBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
 end;
 
-function API_WriteInt32(Hnd: TDataHnd; Value: int32): boolean;
+function API_WriteInt32(Hnd: TDataHnd___; Value: int32): boolean;
 begin
   Result := API_WriteBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
 end;
 
-function API_WriteUInt32(Hnd: TDataHnd; Value: uint32): boolean;
+function API_WriteUInt32(Hnd: TDataHnd___; Value: uint32): boolean;
 begin
   Result := API_WriteBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
 end;
 
-function API_WriteInt64(Hnd: TDataHnd; Value: int64): boolean;
+function API_WriteInt64(Hnd: TDataHnd___; Value: int64): boolean;
 begin
   Result := API_WriteBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
 end;
 
-function API_WriteUInt64(Hnd: TDataHnd; Value: uint64): boolean;
+function API_WriteUInt64(Hnd: TDataHnd___; Value: uint64): boolean;
 begin
   Result := API_WriteBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
 end;
 
-function API_WriteSingle(Hnd: TDataHnd; Value: single): boolean;
+function API_WriteSingle(Hnd: TDataHnd___; Value: single): boolean;
 begin
   Result := API_WriteBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
 end;
 
-function API_WriteDouble(Hnd: TDataHnd; Value: double): boolean;
+function API_WriteDouble(Hnd: TDataHnd___; Value: double): boolean;
 begin
   Result := API_WriteBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
 end;
@@ -1229,7 +1231,7 @@ end;
 {-------------------------------------------------------------------------------
   API_WriteString – 写入 UTF‑8 字节 + #0 终止符
 -------------------------------------------------------------------------------}
-function API_WriteString(Hnd: TDataHnd; const Value: string): boolean;
+function API_WriteString(Hnd: TDataHnd___; const Value: string): boolean;
 var
   utf8: TBytes;
   len: integer;
@@ -1252,52 +1254,52 @@ end;
 {-------------------------------------------------------------------------------
   6.3  原子读取辅助（基于 API_ReadBuffer）
 -------------------------------------------------------------------------------}
-function API_ReadInt8(Hnd: TDataHnd; out Value: int8): boolean;
+function API_ReadInt8(Hnd: TDataHnd___; out Value: int8): boolean;
 begin
   Result := API_ReadBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
 end;
 
-function API_ReadUInt8(Hnd: TDataHnd; out Value: uint8): boolean;
+function API_ReadUInt8(Hnd: TDataHnd___; out Value: uint8): boolean;
 begin
   Result := API_ReadBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
 end;
 
-function API_ReadInt16(Hnd: TDataHnd; out Value: int16): boolean;
+function API_ReadInt16(Hnd: TDataHnd___; out Value: int16): boolean;
 begin
   Result := API_ReadBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
 end;
 
-function API_ReadUInt16(Hnd: TDataHnd; out Value: uint16): boolean;
+function API_ReadUInt16(Hnd: TDataHnd___; out Value: uint16): boolean;
 begin
   Result := API_ReadBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
 end;
 
-function API_ReadInt32(Hnd: TDataHnd; out Value: int32): boolean;
+function API_ReadInt32(Hnd: TDataHnd___; out Value: int32): boolean;
 begin
   Result := API_ReadBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
 end;
 
-function API_ReadUInt32(Hnd: TDataHnd; out Value: uint32): boolean;
+function API_ReadUInt32(Hnd: TDataHnd___; out Value: uint32): boolean;
 begin
   Result := API_ReadBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
 end;
 
-function API_ReadInt64(Hnd: TDataHnd; out Value: int64): boolean;
+function API_ReadInt64(Hnd: TDataHnd___; out Value: int64): boolean;
 begin
   Result := API_ReadBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
 end;
 
-function API_ReadUInt64(Hnd: TDataHnd; out Value: uint64): boolean;
+function API_ReadUInt64(Hnd: TDataHnd___; out Value: uint64): boolean;
 begin
   Result := API_ReadBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
 end;
 
-function API_ReadSingle(Hnd: TDataHnd; out Value: single): boolean;
+function API_ReadSingle(Hnd: TDataHnd___; out Value: single): boolean;
 begin
   Result := API_ReadBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
 end;
 
-function API_ReadDouble(Hnd: TDataHnd; out Value: double): boolean;
+function API_ReadDouble(Hnd: TDataHnd___; out Value: double): boolean;
 begin
   Result := API_ReadBuffer(Hnd, @Value, SizeOf(Value)) = SizeOf(Value);
 end;
@@ -1305,61 +1307,61 @@ end;
 {-------------------------------------------------------------------------------
   直接返回版本（失败返回 0）
 -------------------------------------------------------------------------------}
-function API_ReadInt8(Hnd: TDataHnd): int8;
+function API_ReadInt8(Hnd: TDataHnd___): int8;
 var v: int8;
 begin
   if API_ReadInt8(Hnd, v) then Result := v else Result := 0;
 end;
 
-function API_ReadUInt8(Hnd: TDataHnd): uint8;
+function API_ReadUInt8(Hnd: TDataHnd___): uint8;
 var v: uint8;
 begin
   if API_ReadUInt8(Hnd, v) then Result := v else Result := 0;
 end;
 
-function API_ReadInt16(Hnd: TDataHnd): int16;
+function API_ReadInt16(Hnd: TDataHnd___): int16;
 var v: int16;
 begin
   if API_ReadInt16(Hnd, v) then Result := v else Result := 0;
 end;
 
-function API_ReadUInt16(Hnd: TDataHnd): uint16;
+function API_ReadUInt16(Hnd: TDataHnd___): uint16;
 var v: uint16;
 begin
   if API_ReadUInt16(Hnd, v) then Result := v else Result := 0;
 end;
 
-function API_ReadInt32(Hnd: TDataHnd): int32;
+function API_ReadInt32(Hnd: TDataHnd___): int32;
 var v: int32;
 begin
   if API_ReadInt32(Hnd, v) then Result := v else Result := 0;
 end;
 
-function API_ReadUInt32(Hnd: TDataHnd): uint32;
+function API_ReadUInt32(Hnd: TDataHnd___): uint32;
 var v: uint32;
 begin
   if API_ReadUInt32(Hnd, v) then Result := v else Result := 0;
 end;
 
-function API_ReadInt64(Hnd: TDataHnd): int64;
+function API_ReadInt64(Hnd: TDataHnd___): int64;
 var v: int64;
 begin
   if API_ReadInt64(Hnd, v) then Result := v else Result := 0;
 end;
 
-function API_ReadUInt64(Hnd: TDataHnd): uint64;
+function API_ReadUInt64(Hnd: TDataHnd___): uint64;
 var v: uint64;
 begin
   if API_ReadUInt64(Hnd, v) then Result := v else Result := 0;
 end;
 
-function API_ReadSingle(Hnd: TDataHnd): single;
+function API_ReadSingle(Hnd: TDataHnd___): single;
 var v: single;
 begin
   if API_ReadSingle(Hnd, v) then Result := v else Result := 0.0;
 end;
 
-function API_ReadDouble(Hnd: TDataHnd): double;
+function API_ReadDouble(Hnd: TDataHnd___): double;
 var v: double;
 begin
   if API_ReadDouble(Hnd, v) then Result := v else Result := 0.0;
@@ -1368,7 +1370,7 @@ end;
 {-------------------------------------------------------------------------------
   API_ReadString – 扫描 #0 终止符并解码 UTF‑8
 -------------------------------------------------------------------------------}
-function API_ReadString(Hnd: TDataHnd; out Value: string): boolean;
+function API_ReadString(Hnd: TDataHnd___; out Value: string): boolean;
 type
   TByteArray = array [0..0] of byte;
   PByteArray = ^TByteArray;
@@ -1409,7 +1411,7 @@ begin
   Result := True;
 end;
 
-function API_ReadString(Hnd: TDataHnd): string;
+function API_ReadString(Hnd: TDataHnd___): string;
 begin
   API_ReadString(Hnd, Result);
 end;
@@ -1417,22 +1419,22 @@ end;
 {-------------------------------------------------------------------------------
   应用句柄便利重载
 -------------------------------------------------------------------------------}
-function API_Create_APPHnd2(appName, Desc: string): TAppHnd;
+function API_Create_APPHnd2(appName, Desc: string): TAppHnd___;
 begin
   Result := API_Create_APPHnd(pansichar(UTF8Encode(appName)), pansichar(UTF8Encode(Desc)));
 end;
 
-function API_Reg_Call2(appHnd: TAppHnd; APIName, Desc: string; Trigger: Pointer; OnCall: TAPI_Call): integer;
+function API_Reg_Call2(appHnd: TAppHnd___; APIName, Desc: string; Trigger: Pointer; OnCall: TAPI_Call): integer;
 begin
   Result := API_Reg_Call(appHnd, pansichar(UTF8Encode(APIName)), pansichar(UTF8Encode(Desc)), Trigger, OnCall);
 end;
 
-function API_Reg_Notify2(appHnd: TAppHnd; APIName, Desc: string; Trigger: Pointer; OnNotify: TAPI_Notify): integer;
+function API_Reg_Notify2(appHnd: TAppHnd___; APIName, Desc: string; Trigger: Pointer; OnNotify: TAPI_Notify): integer;
 begin
   Result := API_Reg_Notify(appHnd, pansichar(UTF8Encode(APIName)), pansichar(UTF8Encode(Desc)), Trigger, OnNotify);
 end;
 
-function API_UnReg2(appHnd: TAppHnd; APIName: string): integer;
+function API_UnReg2(appHnd: TAppHnd___; APIName: string): integer;
 begin
   Result := API_UnReg(appHnd, pansichar(UTF8Encode(APIName)));
 end;
@@ -1442,7 +1444,7 @@ begin
   Result := API_Prepare_Service(pansichar(UTF8Encode(ListeningAddr_)), pansichar(UTF8Encode(PhysicsAddr_)));
 end;
 
-function API_Prepare_Client2(PhysicsAddr_: string; appHnd: TAppHnd): integer;
+function API_Prepare_Client2(PhysicsAddr_: string; appHnd: TAppHnd___): integer;
 begin
   Result := API_Prepare_Client(pansichar(UTF8Encode(PhysicsAddr_)), appHnd);
 end;
@@ -1452,12 +1454,12 @@ begin
   Result := API_Prepare_Client2(PhysicsAddr_, nil);
 end;
 
-function API_Call2(appName: string; Param: TDataHnd; Timeout_: uint64): TDataHnd;
+function API_Call2(appName: string; Param: TDataHnd___; Timeout_: uint64): TDataHnd___;
 begin
   Result := API_Call(pansichar(UTF8Encode(appName)), Param, Timeout_);
 end;
 
-procedure API_Notify2(appName: string; Param: TDataHnd);
+procedure API_Notify2(appName: string; Param: TDataHnd___);
 begin
   API_Notify(pansichar(UTF8Encode(appName)), Param);
 end;
@@ -1821,7 +1823,7 @@ var
   Soft_Sync: TSoft_Synchronize_Tool;  // 需在初始化时创建
 
 // 非同步版本（直接在 C 线程池执行）
-procedure Do_Internal_Call__(Trigger: Pointer; Input: TDataHnd; Output: TDataHnd); cdecl;
+procedure Do_Internal_Call__(Trigger: Pointer; Input: TDataHnd___; Output: TDataHnd___); cdecl;
 var
   p: PM;
   ev: TAPI_Call_M;
@@ -1832,7 +1834,7 @@ begin
 end;
 
 // 同步到主线程版本（通过 Soft_Sync）
-procedure Do_Internal_Sync_Call__(Trigger: Pointer; Input: TDataHnd; Output: TDataHnd); cdecl;
+procedure Do_Internal_Sync_Call__(Trigger: Pointer; Input: TDataHnd___; Output: TDataHnd___); cdecl;
 var
   p: PM;
   ev: TAPI_Call_M;
@@ -1852,7 +1854,7 @@ begin
   {$ENDIF FPC}
 end;
 
-procedure Do_Internal_Notify__(Trigger: Pointer; Input: TDataHnd); cdecl;
+procedure Do_Internal_Notify__(Trigger: Pointer; Input: TDataHnd___); cdecl;
 var
   p: PM;
   ev: TAPI_Notify_M;
@@ -1862,7 +1864,7 @@ begin
   ev(Input);
 end;
 
-procedure Do_Internal_Sync_Notify__(Trigger: Pointer; Input: TDataHnd); cdecl;
+procedure Do_Internal_Sync_Notify__(Trigger: Pointer; Input: TDataHnd___); cdecl;
 var
   p: PM;
   ev: TAPI_Notify_M;
@@ -1882,22 +1884,22 @@ begin
   {$ENDIF FPC}
 end;
 
-function API_Reg_Call_M(appHnd: TAppHnd; APIName, Desc: string; OnCall: TAPI_Call_M): integer;
+function API_Reg_Call_M(appHnd: TAppHnd___; APIName, Desc: string; OnCall: TAPI_Call_M): integer;
 begin
   Result := API_Reg_Call2(appHnd, APIName, Desc, @API_Event_Pool.Push(TMethod(OnCall)).Data, Do_Internal_Call__);
 end;
 
-function API_Reg_Sync_Call_M(appHnd: TAppHnd; APIName, Desc: string; OnCall: TAPI_Call_M): integer;
+function API_Reg_Sync_Call_M(appHnd: TAppHnd___; APIName, Desc: string; OnCall: TAPI_Call_M): integer;
 begin
   Result := API_Reg_Call2(appHnd, APIName, Desc, @API_Event_Pool.Push(TMethod(OnCall)).Data, Do_Internal_Sync_Call__);
 end;
 
-function API_Reg_Notify_M(appHnd: TAppHnd; APIName, Desc: string; OnNotify: TAPI_Notify_M): integer;
+function API_Reg_Notify_M(appHnd: TAppHnd___; APIName, Desc: string; OnNotify: TAPI_Notify_M): integer;
 begin
   Result := API_Reg_Notify2(appHnd, APIName, Desc, @API_Event_Pool.Push(TMethod(OnNotify)).Data, Do_Internal_Notify__);
 end;
 
-function API_Reg_Sync_Notify_M(appHnd: TAppHnd; APIName, Desc: string; OnNotify: TAPI_Notify_M): integer;
+function API_Reg_Sync_Notify_M(appHnd: TAppHnd___; APIName, Desc: string; OnNotify: TAPI_Notify_M): integer;
 begin
   Result := API_Reg_Notify2(appHnd, APIName, Desc, @API_Event_Pool.Push(TMethod(OnNotify)).Data, Do_Internal_Sync_Notify__);
 end;

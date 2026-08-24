@@ -2,7 +2,7 @@
   z_api_hubtool_helper – 高性能 Pascal RAII 封装 (v2.5.0)
   ═══════════════════════════════════════════════════════════════════════════════
   本单元基于 z_api_hubtool_import 提供面向对象的 RAII 包装，
-  自动管理 TDataHnd 和 TAppHnd 的生命周期，避免手动释放。
+  自动管理 TDataHnd___ 和 TAppHnd___ 的生命周期，避免手动释放。
 
   ═══════════════════════════════════════════════════════════════════════════════
   设计哲学（AI 必读）
@@ -88,12 +88,12 @@ type
       {************************************************************************
         TDataHandle – 数据句柄 RAII 包装器（线程安全，无异常）
         ═════════════════════════════════════════════════════════════════════════
-        封装 TDataHnd，自动管理内存。
+        封装 TDataHnd___，自动管理内存。
         所有读写方法内部加锁，可安全并发调用。
 
         创建：
           • Create(const APIName: string) – 新建句柄，绑定 API 名称。
-          • Create(AHandle: TDataHnd; Owned: boolean = True) – 包装已有句柄，
+          • Create(AHandle: TDataHnd___; Owned: boolean = True) – 包装已有句柄，
             若 Owned=True 则析构时释放。
 
         释放：
@@ -121,7 +121,7 @@ type
       ************************************************************************}
       TDataHandle = class
       private
-        FHandle: TDataHnd;
+        FHandle: TDataHnd___;
         FOwned: boolean;
         FDisposed: boolean;
         FLock: TCritical;
@@ -143,7 +143,7 @@ type
           @param Owned 是否拥有所有权，若为 True 则析构时释放该句柄
           注意：若 Owned=False，调用者需自行释放原句柄。
         }
-        constructor Create(AHandle: TDataHnd; const Owned: boolean = False); overload;
+        constructor Create(AHandle: TDataHnd___; const Owned: boolean = False); overload;
 
         destructor Destroy; override;
 
@@ -251,13 +251,13 @@ type
         function GetBuffer(): Pointer;
 
         { 原始句柄（只读） }
-        property Handle: TDataHnd read FHandle;
+        property Handle: TDataHnd___ read FHandle;
       end;
 
       {************************************************************************
         TAppHandle – 应用句柄 RAII 包装器（无异常）
         ═════════════════════════════════════════════════════════════════════════
-        封装 TAppHnd，自动管理应用生命周期。
+        封装 TAppHnd___，自动管理应用生命周期。
         提供注册 Call/Notify API、本地调用、动态注销功能。
 
         创建：
@@ -277,7 +277,7 @@ type
           LocalNotify(Param) – 本地发送通知。
 
         属性：
-          Handle – 原始 TAppHnd。
+          Handle – 原始 TAppHnd___。
           Name – 应用名。
 
         线程安全：底层函数线程安全，本类无额外锁。
@@ -286,7 +286,7 @@ type
       ************************************************************************}
       TAppHandle = class
       private
-        FHandle: TAppHnd;
+        FHandle: TAppHnd___;
         FName: string;
       public
         { 创建应用句柄。
@@ -308,7 +308,7 @@ type
           @return True 成功，False 失败（名称重复）
           注意：回调运行在 C 线程池，不可阻塞，不可调用 API_Call/Notify
           示例：
-            procedure MyAdd(Trigger: Pointer; Input, Output: TDataHnd); cdecl;
+            procedure MyAdd(Trigger: Pointer; Input, Output: TDataHnd___); cdecl;
             begin ... end;
             app.RegisterCall('add', 'Addition', nil, @MyAdd);
         }
@@ -322,7 +322,7 @@ type
           @return True 成功，False 失败
           注意：对象方法直接在 C 线程池中执行，不要阻塞。
           示例：
-            procedure TMyClass.MyAdd(Input, Output: TDataHnd);
+            procedure TMyClass.MyAdd(Input, Output: TDataHnd___);
             begin ... end;
             app.RegisterCall('add', 'Addition', MyAdd);
         }
@@ -362,7 +362,7 @@ type
         { 在本地发送通知（无返回）。 }
         procedure LocalNotify(Param: TDataHandle);
 
-        property Handle: TAppHnd read FHandle;
+        property Handle: TAppHnd___ read FHandle;
         property Name: string read FName;
       end;
 
@@ -545,7 +545,7 @@ type
       功能：创建数据句柄，绑定 API 名称。
       参数：
         APIName : PAnsiChar – UTF‑8 编码、以 #0 结尾的 API 名称。
-      返回：新 TDataHnd，正常情况永不返回 nil。
+      返回：新 TDataHnd___，正常情况永不返回 nil。
       设计意图：句柄创建后，API 名称固定，后续所有读写只影响载荷。
       关联：API_Free_DataHnd
       注意事项：名称被内部复制，调用后可立即释放原字符串。
@@ -553,32 +553,32 @@ type
       AI 翻译提示：其他语言应直接 FFI 调用同名 C 函数，
                     并确保传入的字符串为 UTF‑8 + #0。
       示例：
-        var d: TDataHnd;
+        var d: TDataHnd___;
         d := API__.API_Create_DataHnd('add');
         ...
         API__.API_Free_DataHnd(d);
     **************************************************************************}
-    class function API_Create_DataHnd(APIName: pansichar): TDataHnd; static;
+    class function API_Create_DataHnd(APIName: pansichar): TDataHnd___; static;
 
     {**************************************************************************
       【直接映射】API_Create_DataHnd2 – Pascal 便利重载，自动 UTF‑8 转换。
       仅供 Pascal 便利，其他语言无需实现。
     **************************************************************************}
-    class function API_Create_DataHnd2(APIName: string): TDataHnd; static;
+    class function API_Create_DataHnd2(APIName: string): TDataHnd___; static;
 
     {**************************************************************************
       【直接映射】API_Free_DataHnd
       功能：销毁数据句柄，释放内存。
-      参数：Hnd : TDataHnd – 要释放的句柄，传 nil 无操作。
+      参数：Hnd : TDataHnd___ – 要释放的句柄，传 nil 无操作。
       线程安全：是，但释放后句柄不可再用。
       AI 翻译提示：其他语言应确保每个 Create 都有对应的 Free（或 RAII 自动释放）。
     **************************************************************************}
-    class procedure API_Free_DataHnd(Hnd: TDataHnd); static;
+    class procedure API_Free_DataHnd(Hnd: TDataHnd___); static;
 
     {**************************************************************************
       【直接映射】API_GetBuffer
       功能：返回内部缓冲区的直接指针（零拷贝访问）。
-      参数：Hnd : TDataHnd – 数据句柄。
+      参数：Hnd : TDataHnd___ – 数据句柄。
       返回：Pointer – 缓冲区起始地址，若无数据则返回 nil。
       设计意图：高性能场景下直接读写原始内存，避免复制。
       注意事项：
@@ -588,18 +588,18 @@ type
       线程安全：读安全，写需串行化。
       AI 翻译提示：其他语言可通过 FFI 获取指针，然后用 Unsafe 操作访问。
     **************************************************************************}
-    class function API_GetBuffer(Hnd: TDataHnd): Pointer; static;
+    class function API_GetBuffer(Hnd: TDataHnd___): Pointer; static;
 
     {**************************************************************************
       【直接映射】API_GetBuffer2 – Pascal 便利函数，返回带偏移的缓冲区指针。
     **************************************************************************}
-    class function API_GetBuffer2(Hnd: TDataHnd; Offset: nativeint): Pointer; static;
+    class function API_GetBuffer2(Hnd: TDataHnd___; Offset: nativeint): Pointer; static;
 
     {**************************************************************************
       【直接映射】API_WriteBuffer
       功能：向句柄缓冲区写入原始字节（从当前位置开始）。
       参数：
-        Hnd  : TDataHnd – 数据句柄。
+        Hnd  : TDataHnd___ – 数据句柄。
         Buff : Pointer – 源数据指针。
         Size : int64   – 要写入的字节数。
       返回：实际写入字节数（通常等于 Size）。
@@ -608,13 +608,13 @@ type
       线程安全：同一句柄的写操作需串行化。
       AI 翻译提示：其他语言应直接调用同名 C 函数，传递字节数组指针。
     **************************************************************************}
-    class function API_WriteBuffer(Hnd: TDataHnd; Buff: Pointer; Size: int64): int64; static;
+    class function API_WriteBuffer(Hnd: TDataHnd___; Buff: Pointer; Size: int64): int64; static;
 
     {**************************************************************************
       【直接映射】API_ReadBuffer
       功能：从当前位置读取原始字节到调用者缓冲区。
       参数：
-        Hnd  : TDataHnd – 数据句柄。
+        Hnd  : TDataHnd___ – 数据句柄。
         Buff : Pointer – 目标缓冲区指针。
         Size : int64   – 最大读取字节数。
       返回：实际读取字节数（可能小于 Size，若到达缓冲区尾部）。
@@ -622,54 +622,54 @@ type
       线程安全：同一句柄的读与写不可并发；多读可并发。
       AI 翻译提示：其他语言直接调用同名 C 函数。
     **************************************************************************}
-    class function API_ReadBuffer(Hnd: TDataHnd; Buff: Pointer; Size: int64): int64; static;
+    class function API_ReadBuffer(Hnd: TDataHnd___; Buff: Pointer; Size: int64): int64; static;
 
     // ==================== 原子写入 ====================
     {**************************************************************************
       【直接映射】API_WriteInt8 – 写入有符号 8 位整数。
     **************************************************************************}
-    class function API_WriteInt8(Hnd: TDataHnd; Value: int8): boolean; static;
+    class function API_WriteInt8(Hnd: TDataHnd___; Value: int8): boolean; static;
     {**************************************************************************
       【直接映射】API_WriteUInt8 – 写入无符号 8 位整数。
     **************************************************************************}
-    class function API_WriteUInt8(Hnd: TDataHnd; Value: uint8): boolean; static;
+    class function API_WriteUInt8(Hnd: TDataHnd___; Value: uint8): boolean; static;
     {**************************************************************************
       【直接映射】API_WriteInt16 – 写入有符号 16 位整数（小端）。
     **************************************************************************}
-    class function API_WriteInt16(Hnd: TDataHnd; Value: int16): boolean; static;
+    class function API_WriteInt16(Hnd: TDataHnd___; Value: int16): boolean; static;
     {**************************************************************************
       【直接映射】API_WriteUInt16 – 写入无符号 16 位整数（小端）。
     **************************************************************************}
-    class function API_WriteUInt16(Hnd: TDataHnd; Value: uint16): boolean; static;
+    class function API_WriteUInt16(Hnd: TDataHnd___; Value: uint16): boolean; static;
     {**************************************************************************
       【直接映射】API_WriteInt32 – 写入有符号 32 位整数（小端）。
     **************************************************************************}
-    class function API_WriteInt32(Hnd: TDataHnd; Value: int32): boolean; static;
+    class function API_WriteInt32(Hnd: TDataHnd___; Value: int32): boolean; static;
     {**************************************************************************
       【直接映射】API_WriteUInt32 – 写入无符号 32 位整数（小端）。
     **************************************************************************}
-    class function API_WriteUInt32(Hnd: TDataHnd; Value: uint32): boolean; static;
+    class function API_WriteUInt32(Hnd: TDataHnd___; Value: uint32): boolean; static;
     {**************************************************************************
       【直接映射】API_WriteInt64 – 写入有符号 64 位整数（小端）。
     **************************************************************************}
-    class function API_WriteInt64(Hnd: TDataHnd; Value: int64): boolean; static;
+    class function API_WriteInt64(Hnd: TDataHnd___; Value: int64): boolean; static;
     {**************************************************************************
       【直接映射】API_WriteUInt64 – 写入无符号 64 位整数（小端）。
     **************************************************************************}
-    class function API_WriteUInt64(Hnd: TDataHnd; Value: uint64): boolean; static;
+    class function API_WriteUInt64(Hnd: TDataHnd___; Value: uint64): boolean; static;
     {**************************************************************************
       【直接映射】API_WriteSingle – 写入 32 位浮点数（小端 IEEE 754）。
     **************************************************************************}
-    class function API_WriteSingle(Hnd: TDataHnd; Value: single): boolean; static;
+    class function API_WriteSingle(Hnd: TDataHnd___; Value: single): boolean; static;
     {**************************************************************************
       【直接映射】API_WriteDouble – 写入 64 位浮点数（小端 IEEE 754）。
     **************************************************************************}
-    class function API_WriteDouble(Hnd: TDataHnd; Value: double): boolean; static;
+    class function API_WriteDouble(Hnd: TDataHnd___; Value: double): boolean; static;
     {**************************************************************************
       【直接映射】API_WriteString – 写入 Pascal 字符串，自动转换为 UTF‑8 字节，
       并追加一个 #0 终止符。
       参数：
-        Hnd   : TDataHnd – 数据句柄。
+        Hnd   : TDataHnd___ – 数据句柄。
         Value : string   – Pascal 字符串（将按 UTF‑8 编码）。
       返回：Boolean – 写入成功（含终止符）返回 True。
       设计意图：统一跨语言字符串协议（UTF‑8 + #0）。
@@ -677,96 +677,96 @@ type
       线程安全：同一句柄写操作需串行。
       AI 翻译提示：其他语言应写入 UTF‑8 字节序列后显式追加一个 0 字节。
     **************************************************************************}
-    class function API_WriteString(Hnd: TDataHnd; const Value: string): boolean; static;
+    class function API_WriteString(Hnd: TDataHnd___; const Value: string): boolean; static;
 
     // ==================== 原子读取（out 版本） ====================
     {**************************************************************************
       【直接映射】API_ReadInt8 (out 版本) – 读取有符号 8 位整数。
     **************************************************************************}
-    class function API_ReadInt8(Hnd: TDataHnd; out Value: int8): boolean; overload; static;
+    class function API_ReadInt8(Hnd: TDataHnd___; out Value: int8): boolean; overload; static;
     {**************************************************************************
       【直接映射】API_ReadUInt8 (out 版本) – 读取无符号 8 位整数。
     **************************************************************************}
-    class function API_ReadUInt8(Hnd: TDataHnd; out Value: uint8): boolean; overload; static;
+    class function API_ReadUInt8(Hnd: TDataHnd___; out Value: uint8): boolean; overload; static;
     {**************************************************************************
       【直接映射】API_ReadInt16 (out 版本) – 读取有符号 16 位整数（小端）。
     **************************************************************************}
-    class function API_ReadInt16(Hnd: TDataHnd; out Value: int16): boolean; overload; static;
+    class function API_ReadInt16(Hnd: TDataHnd___; out Value: int16): boolean; overload; static;
     {**************************************************************************
       【直接映射】API_ReadUInt16 (out 版本) – 读取无符号 16 位整数（小端）。
     **************************************************************************}
-    class function API_ReadUInt16(Hnd: TDataHnd; out Value: uint16): boolean; overload; static;
+    class function API_ReadUInt16(Hnd: TDataHnd___; out Value: uint16): boolean; overload; static;
     {**************************************************************************
       【直接映射】API_ReadInt32 (out 版本) – 读取有符号 32 位整数（小端）。
     **************************************************************************}
-    class function API_ReadInt32(Hnd: TDataHnd; out Value: int32): boolean; overload; static;
+    class function API_ReadInt32(Hnd: TDataHnd___; out Value: int32): boolean; overload; static;
     {**************************************************************************
       【直接映射】API_ReadUInt32 (out 版本) – 读取无符号 32 位整数（小端）。
     **************************************************************************}
-    class function API_ReadUInt32(Hnd: TDataHnd; out Value: uint32): boolean; overload; static;
+    class function API_ReadUInt32(Hnd: TDataHnd___; out Value: uint32): boolean; overload; static;
     {**************************************************************************
       【直接映射】API_ReadInt64 (out 版本) – 读取有符号 64 位整数（小端）。
     **************************************************************************}
-    class function API_ReadInt64(Hnd: TDataHnd; out Value: int64): boolean; overload; static;
+    class function API_ReadInt64(Hnd: TDataHnd___; out Value: int64): boolean; overload; static;
     {**************************************************************************
       【直接映射】API_ReadUInt64 (out 版本) – 读取无符号 64 位整数（小端）。
     **************************************************************************}
-    class function API_ReadUInt64(Hnd: TDataHnd; out Value: uint64): boolean; overload; static;
+    class function API_ReadUInt64(Hnd: TDataHnd___; out Value: uint64): boolean; overload; static;
     {**************************************************************************
       【直接映射】API_ReadSingle (out 版本) – 读取 32 位浮点数（小端 IEEE 754）。
     **************************************************************************}
-    class function API_ReadSingle(Hnd: TDataHnd; out Value: single): boolean; overload; static;
+    class function API_ReadSingle(Hnd: TDataHnd___; out Value: single): boolean; overload; static;
     {**************************************************************************
       【直接映射】API_ReadDouble (out 版本) – 读取 64 位浮点数（小端 IEEE 754）。
     **************************************************************************}
-    class function API_ReadDouble(Hnd: TDataHnd; out Value: double): boolean; overload; static;
+    class function API_ReadDouble(Hnd: TDataHnd___; out Value: double): boolean; overload; static;
 
     // ==================== 原子读取（直接返回版本） ====================
     {**************************************************************************
       【直接映射】API_ReadInt8 (直接返回) – 读取有符号 8 位整数，失败返回 0。
     **************************************************************************}
-    class function API_ReadInt8(Hnd: TDataHnd): int8; overload; static;
+    class function API_ReadInt8(Hnd: TDataHnd___): int8; overload; static;
     {**************************************************************************
       【直接映射】API_ReadUInt8 (直接返回) – 读取无符号 8 位整数，失败返回 0。
     **************************************************************************}
-    class function API_ReadUInt8(Hnd: TDataHnd): uint8; overload; static;
+    class function API_ReadUInt8(Hnd: TDataHnd___): uint8; overload; static;
     {**************************************************************************
       【直接映射】API_ReadInt16 (直接返回) – 读取有符号 16 位整数，失败返回 0。
     **************************************************************************}
-    class function API_ReadInt16(Hnd: TDataHnd): int16; overload; static;
+    class function API_ReadInt16(Hnd: TDataHnd___): int16; overload; static;
     {**************************************************************************
       【直接映射】API_ReadUInt16 (直接返回) – 读取无符号 16 位整数，失败返回 0。
     **************************************************************************}
-    class function API_ReadUInt16(Hnd: TDataHnd): uint16; overload; static;
+    class function API_ReadUInt16(Hnd: TDataHnd___): uint16; overload; static;
     {**************************************************************************
       【直接映射】API_ReadInt32 (直接返回) – 读取有符号 32 位整数，失败返回 0。
     **************************************************************************}
-    class function API_ReadInt32(Hnd: TDataHnd): int32; overload; static;
+    class function API_ReadInt32(Hnd: TDataHnd___): int32; overload; static;
     {**************************************************************************
       【直接映射】API_ReadUInt32 (直接返回) – 读取无符号 32 位整数，失败返回 0。
     **************************************************************************}
-    class function API_ReadUInt32(Hnd: TDataHnd): uint32; overload; static;
+    class function API_ReadUInt32(Hnd: TDataHnd___): uint32; overload; static;
     {**************************************************************************
       【直接映射】API_ReadInt64 (直接返回) – 读取有符号 64 位整数，失败返回 0。
     **************************************************************************}
-    class function API_ReadInt64(Hnd: TDataHnd): int64; overload; static;
+    class function API_ReadInt64(Hnd: TDataHnd___): int64; overload; static;
     {**************************************************************************
       【直接映射】API_ReadUInt64 (直接返回) – 读取无符号 64 位整数，失败返回 0。
     **************************************************************************}
-    class function API_ReadUInt64(Hnd: TDataHnd): uint64; overload; static;
+    class function API_ReadUInt64(Hnd: TDataHnd___): uint64; overload; static;
     {**************************************************************************
       【直接映射】API_ReadSingle (直接返回) – 读取 32 位浮点数，失败返回 0.0。
     **************************************************************************}
-    class function API_ReadSingle(Hnd: TDataHnd): single; overload; static;
+    class function API_ReadSingle(Hnd: TDataHnd___): single; overload; static;
     {**************************************************************************
       【直接映射】API_ReadDouble (直接返回) – 读取 64 位浮点数，失败返回 0.0。
     **************************************************************************}
-    class function API_ReadDouble(Hnd: TDataHnd): double; overload; static;
+    class function API_ReadDouble(Hnd: TDataHnd___): double; overload; static;
     {**************************************************************************
       【直接映射】API_ReadString (out 版本)
       功能：从当前位置读取 UTF‑8 字符串，直到遇到 #0 终止符。
       参数：
-        Hnd   : TDataHnd – 数据句柄。
+        Hnd   : TDataHnd___ – 数据句柄。
         out Value : string – 返回解码后的 Pascal 字符串。
       返回：Boolean – 成功读取到终止符返回 True，否则 False（Value 置空）。
       设计意图：与 WriteString 对称，实现跨语言字符串传输。
@@ -774,29 +774,29 @@ type
       线程安全：同一句柄读与写不可并发。
       AI 翻译提示：其他语言应实现“逐个字节扫描直到 0”的读取逻辑。
     **************************************************************************}
-    class function API_ReadString(Hnd: TDataHnd; out Value: string): boolean; overload; static;
+    class function API_ReadString(Hnd: TDataHnd___; out Value: string): boolean; overload; static;
     {**************************************************************************
       【直接映射】API_ReadString (直接返回) – 读取字符串，失败返回空字符串。
     **************************************************************************}
-    class function API_ReadString(Hnd: TDataHnd): string; overload; static;
+    class function API_ReadString(Hnd: TDataHnd___): string; overload; static;
 
     // ==================== 位置与大小 ====================
     {**************************************************************************
       【直接映射】API_GetPos – 获取当前读写位置（字节偏移，0‑起始）。
     **************************************************************************}
-    class function API_GetPos(Hnd: TDataHnd): int64; static;
+    class function API_GetPos(Hnd: TDataHnd___): int64; static;
     {**************************************************************************
       【直接映射】API_SetPos – 设置读写位置，若超出大小则扩展缓冲区（填充零）。
     **************************************************************************}
-    class procedure API_SetPos(Hnd: TDataHnd; Pos_: int64); static;
+    class procedure API_SetPos(Hnd: TDataHnd___; Pos_: int64); static;
     {**************************************************************************
       【直接映射】API_GetSize – 获取缓冲区总大小（字节）。
     **************************************************************************}
-    class function API_GetSize(Hnd: TDataHnd): int64; static;
+    class function API_GetSize(Hnd: TDataHnd___): int64; static;
     {**************************************************************************
       【直接映射】API_SetSize – 调整缓冲区大小（截断或扩展）。
     **************************************************************************}
-    class procedure API_SetSize(Hnd: TDataHnd; Size_: int64); static;
+    class procedure API_SetSize(Hnd: TDataHnd___; Size_: int64); static;
 
     // ==================== 应用句柄操作 ====================
     {**************************************************************************
@@ -805,31 +805,31 @@ type
       参数：
         appName : PAnsiChar – 应用名称（UTF‑8 + #0，区分大小写，网络唯一）。
         Desc    : PAnsiChar – 描述（UTF‑8 + #0，可为空）。
-      返回：新 TAppHnd，正常情况下不返回 nil。
+      返回：新 TAppHnd___，正常情况下不返回 nil。
       设计意图：应用是 API 的容器，一个应用可注册多个 API。
       关联：API_Free_APPHnd
       线程安全：是。
       AI 翻译提示：其他语言直接调用 C 函数，应用名需全局唯一。
     **************************************************************************}
-    class function API_Create_APPHnd(AppName, Desc: pansichar): TAppHnd; static;
+    class function API_Create_APPHnd(AppName, Desc: pansichar): TAppHnd___; static;
     {**************************************************************************
       【直接映射】API_Create_APPHnd2 – Pascal 便利重载，自动 UTF‑8 转换。
     **************************************************************************}
-    class function API_Create_APPHnd2(AppName, Desc: string): TAppHnd; static;
+    class function API_Create_APPHnd2(AppName, Desc: string): TAppHnd___; static;
     {**************************************************************************
       【直接映射】API_Free_APPHnd
       功能：销毁应用句柄，释放所有注册的 API 和资源。
-      参数：appHnd : TAppHnd – 应用句柄。
+      参数：appHnd : TAppHnd___ – 应用句柄。
       线程安全：是，但确保其他线程不再使用。
     **************************************************************************}
-    class procedure API_Free_APPHnd(appHnd: TAppHnd); static;
+    class procedure API_Free_APPHnd(appHnd: TAppHnd___); static;
 
     // ==================== 注册 Call ====================
     {**************************************************************************
       【直接映射】API_Reg_Call
       功能：在应用中注册一个请求-响应（Call）API。
       参数：
-        appHnd   : TAppHnd – 应用句柄。
+        appHnd   : TAppHnd___ – 应用句柄。
         APIName  : PAnsiChar – API 名称（UTF‑8 + #0，应用内唯一）。
         Desc     : PAnsiChar – 描述（UTF‑8 + #0，可选）。
         Trigger  : Pointer – 用户数据，回调时原样传回。
@@ -840,19 +840,19 @@ type
       回调约束：见 TAPI_Call 说明。
       AI 翻译提示：其他语言使用对应的注册函数，并确保回调函数遵循 C ABI。
     **************************************************************************}
-    class function API_Reg_Call(appHnd: TAppHnd; APIName, Desc: pansichar; Trigger: Pointer; OnCall: TAPI_Call): integer; static;
+    class function API_Reg_Call(appHnd: TAppHnd___; APIName, Desc: pansichar; Trigger: Pointer; OnCall: TAPI_Call): integer; static;
     {**************************************************************************
       【直接映射】API_Reg_Call2 – Pascal 辅助，自动 UTF‑8 转换。
     **************************************************************************}
-    class function API_Reg_Call2(appHnd: TAppHnd; APIName, Desc: string; Trigger: Pointer; OnCall: TAPI_Call): integer; static;
+    class function API_Reg_Call2(appHnd: TAppHnd___; APIName, Desc: string; Trigger: Pointer; OnCall: TAPI_Call): integer; static;
     {**************************************************************************
       【直接映射】API_Reg_Call_M – Pascal 辅助，注册对象方法（非同步）。
     **************************************************************************}
-    class function API_Reg_Call_M(appHnd: TAppHnd; APIName, Desc: string; OnCall: TAPI_Call_M): integer; static;
+    class function API_Reg_Call_M(appHnd: TAppHnd___; APIName, Desc: string; OnCall: TAPI_Call_M): integer; static;
     {**************************************************************************
       【直接映射】API_Reg_Sync_Call_M – Pascal 辅助，注册对象方法（同步到主线程）。
     **************************************************************************}
-    class function API_Reg_Sync_Call_M(appHnd: TAppHnd; APIName, Desc: string; OnCall: TAPI_Call_M): integer; static;
+    class function API_Reg_Sync_Call_M(appHnd: TAppHnd___; APIName, Desc: string; OnCall: TAPI_Call_M): integer; static;
 
     // ==================== 注册 Notify ====================
     {**************************************************************************
@@ -863,26 +863,26 @@ type
       注意事项：回调中可调用 API_Notify，但应避免长时间执行。
       AI 翻译提示：其他语言使用对应的无返回值回调函数。
     **************************************************************************}
-    class function API_Reg_Notify(appHnd: TAppHnd; APIName, Desc: pansichar; Trigger: Pointer; OnNotify: TAPI_Notify): integer; static;
+    class function API_Reg_Notify(appHnd: TAppHnd___; APIName, Desc: pansichar; Trigger: Pointer; OnNotify: TAPI_Notify): integer; static;
     {**************************************************************************
       【直接映射】API_Reg_Notify2 – Pascal 辅助，自动 UTF‑8 转换。
     **************************************************************************}
-    class function API_Reg_Notify2(appHnd: TAppHnd; APIName, Desc: string; Trigger: Pointer; OnNotify: TAPI_Notify): integer; static;
+    class function API_Reg_Notify2(appHnd: TAppHnd___; APIName, Desc: string; Trigger: Pointer; OnNotify: TAPI_Notify): integer; static;
     {**************************************************************************
       【直接映射】API_Reg_Notify_M – Pascal 辅助，注册对象方法（非同步）。
     **************************************************************************}
-    class function API_Reg_Notify_M(appHnd: TAppHnd; APIName, Desc: string; OnNotify: TAPI_Notify_M): integer; static;
+    class function API_Reg_Notify_M(appHnd: TAppHnd___; APIName, Desc: string; OnNotify: TAPI_Notify_M): integer; static;
     {**************************************************************************
       【直接映射】API_Reg_Sync_Notify_M – Pascal 辅助，注册对象方法（同步到主线程）。
     **************************************************************************}
-    class function API_Reg_Sync_Notify_M(appHnd: TAppHnd; APIName, Desc: string; OnNotify: TAPI_Notify_M): integer; static;
+    class function API_Reg_Sync_Notify_M(appHnd: TAppHnd___; APIName, Desc: string; OnNotify: TAPI_Notify_M): integer; static;
 
     // ==================== 注销 ====================
     {**************************************************************************
       【直接映射】API_UnReg
       功能：动态注销已注册的 API。
       参数：
-        appHnd   : TAppHnd – 应用句柄。
+        appHnd   : TAppHnd___ – 应用句柄。
         APIName  : PAnsiChar – 要注销的 API 名称（UTF‑8 + #0）。
       返回：1 成功（API 存在并移除），0 失败（名称不存在）。
       设计意图：支持热更新、插件卸载、权限动态调整。
@@ -892,33 +892,33 @@ type
         • 正在执行中的回调不受影响（正常完成）。
       AI 翻译提示：其他语言应提供对应注销函数，并理解最终一致性延迟。
     **************************************************************************}
-    class function API_UnReg(appHnd: TAppHnd; APIName: pansichar): integer; static;
+    class function API_UnReg(appHnd: TAppHnd___; APIName: pansichar): integer; static;
     {**************************************************************************
       【直接映射】API_UnReg2 – Pascal 辅助，自动 UTF‑8 转换。
     **************************************************************************}
-    class function API_UnReg2(appHnd: TAppHnd; APIName: string): integer; static;
+    class function API_UnReg2(appHnd: TAppHnd___; APIName: string): integer; static;
 
     // ==================== 本地调用 ====================
     {**************************************************************************
       【直接映射】API_Local_APP_Call
       功能：在本地（同一进程）同步执行 Call API，绕过网络。
       参数：
-        appHnd : TAppHnd – 应用句柄。
-        Param  : TDataHnd – 输入句柄（包含 API 名称和参数）。
-      返回：新 TDataHnd – 结果句柄（需释放）。若 API 未找到或出错，大小 = 0。
+        appHnd : TAppHnd___ – 应用句柄。
+        Param  : TDataHnd___ – 输入句柄（包含 API 名称和参数）。
+      返回：新 TDataHnd___ – 结果句柄（需释放）。若 API 未找到或出错，大小 = 0。
       设计意图：用于单元测试、调试或内部调用，无网络开销。
       注意事项：输入句柄不被释放，调用者需负责释放。
       线程安全：是。
       AI 翻译提示：其他语言应提供类似的本地调用方法，用于测试。
     **************************************************************************}
-    class function API_Local_APP_Call(appHnd: TAppHnd; Param: TDataHnd): TDataHnd; static;
+    class function API_Local_APP_Call(appHnd: TAppHnd___; Param: TDataHnd___): TDataHnd___; static;
     {**************************************************************************
       【直接映射】API_Local_APP_Notify
       功能：本地发送通知，无结果。
       参数：同 API_Local_APP_Call，但无返回。
       线程安全：是。
     **************************************************************************}
-    class procedure API_Local_APP_Notify(appHnd: TAppHnd; Param: TDataHnd); static;
+    class procedure API_Local_APP_Notify(appHnd: TAppHnd___; Param: TDataHnd___); static;
 
     // ==================== 网络层 ====================
     {**************************************************************************
@@ -955,17 +955,17 @@ type
       功能：准备一个客户端连接。
       参数：
         PhysicsAddr_ : PAnsiChar – 远程服务地址（必须与服务的公布地址一致）。
-        appHnd       : TAppHnd – 可选应用句柄。若提供，客户端会将该应用注册
+        appHnd       : TAppHnd___ – 可选应用句柄。若提供，客户端会将该应用注册
                                   到服务网格（暴露 API）；若为 nil，则纯消费。
       返回：内部标签。
       设计意图：建立连接并自动注册应用，支持断线重连。
       线程安全：是。
     **************************************************************************}
-    class function API_Prepare_Client(PhysicsAddr_: pansichar; appHnd: TAppHnd): integer; static;
+    class function API_Prepare_Client(PhysicsAddr_: pansichar; appHnd: TAppHnd___): integer; static;
     {**************************************************************************
       【直接映射】API_Prepare_Client2 (带 appHnd) – Pascal 辅助。
     **************************************************************************}
-    class function API_Prepare_Client2(PhysicsAddr_: string; appHnd: TAppHnd): integer; overload; static;
+    class function API_Prepare_Client2(PhysicsAddr_: string; appHnd: TAppHnd___): integer; overload; static;
     {**************************************************************************
       【直接映射】API_Prepare_Client2 (不带 appHnd) – 纯消费客户端。
     **************************************************************************}
@@ -997,9 +997,9 @@ type
       功能：同步远程调用（或本地优化）。
       参数：
         appName   : PAnsiChar – 目标应用名（UTF‑8 + #0）。
-        Param     : TDataHnd – 输入句柄（内部克隆，调用者仍负责释放原句柄）。
+        Param     : TDataHnd___ – 输入句柄（内部克隆，调用者仍负责释放原句柄）。
         Timeout_  : UInt64 – 超时毫秒数，0 表示无限等待（慎用）。
-      返回：新 TDataHnd – 结果句柄，永远非 nil。若超时或失败，大小 = 0。
+      返回：新 TDataHnd___ – 结果句柄，永远非 nil。若超时或失败，大小 = 0。
       设计意图：主要 RPC 入口，自动路由、负载均衡、重试。
       注意事项：
         • 调用者必须释放返回的句柄（即使大小为 0）。
@@ -1007,27 +1007,27 @@ type
       线程安全：完全线程安全。
       AI 翻译提示：其他语言应提供同步调用方法，注意超时参数和句柄释放。
     **************************************************************************}
-    class function API_Call(AppName: pansichar; Param: TDataHnd; Timeout_: uint64): TDataHnd; static;
+    class function API_Call(AppName: pansichar; Param: TDataHnd___; Timeout_: uint64): TDataHnd___; static;
     {**************************************************************************
       【直接映射】API_Call2 – Pascal 辅助，自动 UTF‑8 转换。
     **************************************************************************}
-    class function API_Call2(AppName: string; Param: TDataHnd; Timeout_: uint64): TDataHnd; static;
+    class function API_Call2(AppName: string; Param: TDataHnd___; Timeout_: uint64): TDataHnd___; static;
 
     {**************************************************************************
       【直接映射】API_Notify
       功能：单向通知（fire‑and‑forget）。
       参数：
         appName : PAnsiChar – 目标应用名（UTF‑8 + #0）。
-        Param   : TDataHnd – 输入句柄（内部克隆，调用者释放原句柄）。
+        Param   : TDataHnd___ – 输入句柄（内部克隆，调用者释放原句柄）。
       设计意图：用于日志、事件等无需响应的场景。
       线程安全：是。
       AI 翻译提示：其他语言提供异步发送方法，无返回值。
     **************************************************************************}
-    class procedure API_Notify(AppName: pansichar; Param: TDataHnd); static;
+    class procedure API_Notify(AppName: pansichar; Param: TDataHnd___); static;
     {**************************************************************************
       【直接映射】API_Notify2 – Pascal 辅助，自动 UTF‑8 转换。
     **************************************************************************}
-    class procedure API_Notify2(AppName: string; Param: TDataHnd); static;
+    class procedure API_Notify2(AppName: string; Param: TDataHnd___); static;
 
     // ==================== 配置与同步 ====================
     {**************************************************************************
@@ -1121,7 +1121,7 @@ begin
   FLock := TCritical.Create;
 end;
 
-constructor API.TDataHandle.Create(AHandle: TDataHnd; const Owned: boolean = False);
+constructor API.TDataHandle.Create(AHandle: TDataHnd___; const Owned: boolean = False);
 begin
   inherited Create;
   FHandle := AHandle;
@@ -1765,7 +1765,7 @@ end;
 
 function API.TAppHandle.LocalCall(Param: TDataHandle): TDataHandle;
 var
-  Res: TDataHnd;
+  Res: TDataHnd___;
 begin
   if FHandle = nil then
     Result := TDataHandle.Create(nil, True)
@@ -1823,7 +1823,7 @@ end;
 
 class function API.CallApp(const AppName: string; Param: TDataHandle; TimeoutMs: uint64): TDataHandle;
 var
-  Res: TDataHnd;
+  Res: TDataHnd___;
 begin
   Res := API_Call2(AppName, Param.Handle, TimeoutMs);
   Result := TDataHandle.Create(Res, True);
@@ -1878,297 +1878,297 @@ end;
   API__ 静态方法实现 – 直接转发至 import
 =============================================================================}
 
-class function API__.API_Create_DataHnd(APIName: pansichar): TDataHnd;
+class function API__.API_Create_DataHnd(APIName: pansichar): TDataHnd___;
 begin
   Result := z_api_hubtool_import.API_Create_DataHnd(APIName);
 end;
 
-class function API__.API_Create_DataHnd2(APIName: string): TDataHnd;
+class function API__.API_Create_DataHnd2(APIName: string): TDataHnd___;
 begin
   Result := z_api_hubtool_import.API_Create_DataHnd2(APIName);
 end;
 
-class procedure API__.API_Free_DataHnd(Hnd: TDataHnd);
+class procedure API__.API_Free_DataHnd(Hnd: TDataHnd___);
 begin
   z_api_hubtool_import.API_Free_DataHnd(Hnd);
 end;
 
-class function API__.API_GetBuffer(Hnd: TDataHnd): Pointer;
+class function API__.API_GetBuffer(Hnd: TDataHnd___): Pointer;
 begin
   Result := z_api_hubtool_import.API_GetBuffer(Hnd);
 end;
 
-class function API__.API_GetBuffer2(Hnd: TDataHnd; Offset: nativeint): Pointer;
+class function API__.API_GetBuffer2(Hnd: TDataHnd___; Offset: nativeint): Pointer;
 begin
   Result := z_api_hubtool_import.API_GetBuffer2(Hnd, Offset);
 end;
 
-class function API__.API_WriteBuffer(Hnd: TDataHnd; Buff: Pointer; Size: int64): int64;
+class function API__.API_WriteBuffer(Hnd: TDataHnd___; Buff: Pointer; Size: int64): int64;
 begin
   Result := z_api_hubtool_import.API_WriteBuffer(Hnd, Buff, Size);
 end;
 
-class function API__.API_ReadBuffer(Hnd: TDataHnd; Buff: Pointer; Size: int64): int64;
+class function API__.API_ReadBuffer(Hnd: TDataHnd___; Buff: Pointer; Size: int64): int64;
 begin
   Result := z_api_hubtool_import.API_ReadBuffer(Hnd, Buff, Size);
 end;
 
-class function API__.API_WriteInt8(Hnd: TDataHnd; Value: int8): boolean;
+class function API__.API_WriteInt8(Hnd: TDataHnd___; Value: int8): boolean;
 begin
   Result := z_api_hubtool_import.API_WriteInt8(Hnd, Value);
 end;
 
-class function API__.API_WriteUInt8(Hnd: TDataHnd; Value: uint8): boolean;
+class function API__.API_WriteUInt8(Hnd: TDataHnd___; Value: uint8): boolean;
 begin
   Result := z_api_hubtool_import.API_WriteUInt8(Hnd, Value);
 end;
 
-class function API__.API_WriteInt16(Hnd: TDataHnd; Value: int16): boolean;
+class function API__.API_WriteInt16(Hnd: TDataHnd___; Value: int16): boolean;
 begin
   Result := z_api_hubtool_import.API_WriteInt16(Hnd, Value);
 end;
 
-class function API__.API_WriteUInt16(Hnd: TDataHnd; Value: uint16): boolean;
+class function API__.API_WriteUInt16(Hnd: TDataHnd___; Value: uint16): boolean;
 begin
   Result := z_api_hubtool_import.API_WriteUInt16(Hnd, Value);
 end;
 
-class function API__.API_WriteInt32(Hnd: TDataHnd; Value: int32): boolean;
+class function API__.API_WriteInt32(Hnd: TDataHnd___; Value: int32): boolean;
 begin
   Result := z_api_hubtool_import.API_WriteInt32(Hnd, Value);
 end;
 
-class function API__.API_WriteUInt32(Hnd: TDataHnd; Value: uint32): boolean;
+class function API__.API_WriteUInt32(Hnd: TDataHnd___; Value: uint32): boolean;
 begin
   Result := z_api_hubtool_import.API_WriteUInt32(Hnd, Value);
 end;
 
-class function API__.API_WriteInt64(Hnd: TDataHnd; Value: int64): boolean;
+class function API__.API_WriteInt64(Hnd: TDataHnd___; Value: int64): boolean;
 begin
   Result := z_api_hubtool_import.API_WriteInt64(Hnd, Value);
 end;
 
-class function API__.API_WriteUInt64(Hnd: TDataHnd; Value: uint64): boolean;
+class function API__.API_WriteUInt64(Hnd: TDataHnd___; Value: uint64): boolean;
 begin
   Result := z_api_hubtool_import.API_WriteUInt64(Hnd, Value);
 end;
 
-class function API__.API_WriteSingle(Hnd: TDataHnd; Value: single): boolean;
+class function API__.API_WriteSingle(Hnd: TDataHnd___; Value: single): boolean;
 begin
   Result := z_api_hubtool_import.API_WriteSingle(Hnd, Value);
 end;
 
-class function API__.API_WriteDouble(Hnd: TDataHnd; Value: double): boolean;
+class function API__.API_WriteDouble(Hnd: TDataHnd___; Value: double): boolean;
 begin
   Result := z_api_hubtool_import.API_WriteDouble(Hnd, Value);
 end;
 
-class function API__.API_WriteString(Hnd: TDataHnd; const Value: string): boolean;
+class function API__.API_WriteString(Hnd: TDataHnd___; const Value: string): boolean;
 begin
   Result := z_api_hubtool_import.API_WriteString(Hnd, Value);
 end;
 
-class function API__.API_ReadInt8(Hnd: TDataHnd; out Value: int8): boolean;
+class function API__.API_ReadInt8(Hnd: TDataHnd___; out Value: int8): boolean;
 begin
   Result := z_api_hubtool_import.API_ReadInt8(Hnd, Value);
 end;
 
-class function API__.API_ReadUInt8(Hnd: TDataHnd; out Value: uint8): boolean;
+class function API__.API_ReadUInt8(Hnd: TDataHnd___; out Value: uint8): boolean;
 begin
   Result := z_api_hubtool_import.API_ReadUInt8(Hnd, Value);
 end;
 
-class function API__.API_ReadInt16(Hnd: TDataHnd; out Value: int16): boolean;
+class function API__.API_ReadInt16(Hnd: TDataHnd___; out Value: int16): boolean;
 begin
   Result := z_api_hubtool_import.API_ReadInt16(Hnd, Value);
 end;
 
-class function API__.API_ReadUInt16(Hnd: TDataHnd; out Value: uint16): boolean;
+class function API__.API_ReadUInt16(Hnd: TDataHnd___; out Value: uint16): boolean;
 begin
   Result := z_api_hubtool_import.API_ReadUInt16(Hnd, Value);
 end;
 
-class function API__.API_ReadInt32(Hnd: TDataHnd; out Value: int32): boolean;
+class function API__.API_ReadInt32(Hnd: TDataHnd___; out Value: int32): boolean;
 begin
   Result := z_api_hubtool_import.API_ReadInt32(Hnd, Value);
 end;
 
-class function API__.API_ReadUInt32(Hnd: TDataHnd; out Value: uint32): boolean;
+class function API__.API_ReadUInt32(Hnd: TDataHnd___; out Value: uint32): boolean;
 begin
   Result := z_api_hubtool_import.API_ReadUInt32(Hnd, Value);
 end;
 
-class function API__.API_ReadInt64(Hnd: TDataHnd; out Value: int64): boolean;
+class function API__.API_ReadInt64(Hnd: TDataHnd___; out Value: int64): boolean;
 begin
   Result := z_api_hubtool_import.API_ReadInt64(Hnd, Value);
 end;
 
-class function API__.API_ReadUInt64(Hnd: TDataHnd; out Value: uint64): boolean;
+class function API__.API_ReadUInt64(Hnd: TDataHnd___; out Value: uint64): boolean;
 begin
   Result := z_api_hubtool_import.API_ReadUInt64(Hnd, Value);
 end;
 
-class function API__.API_ReadSingle(Hnd: TDataHnd; out Value: single): boolean;
+class function API__.API_ReadSingle(Hnd: TDataHnd___; out Value: single): boolean;
 begin
   Result := z_api_hubtool_import.API_ReadSingle(Hnd, Value);
 end;
 
-class function API__.API_ReadDouble(Hnd: TDataHnd; out Value: double): boolean;
+class function API__.API_ReadDouble(Hnd: TDataHnd___; out Value: double): boolean;
 begin
   Result := z_api_hubtool_import.API_ReadDouble(Hnd, Value);
 end;
 
-class function API__.API_ReadInt8(Hnd: TDataHnd): int8;
+class function API__.API_ReadInt8(Hnd: TDataHnd___): int8;
 begin
   Result := z_api_hubtool_import.API_ReadInt8(Hnd);
 end;
 
-class function API__.API_ReadUInt8(Hnd: TDataHnd): uint8;
+class function API__.API_ReadUInt8(Hnd: TDataHnd___): uint8;
 begin
   Result := z_api_hubtool_import.API_ReadUInt8(Hnd);
 end;
 
-class function API__.API_ReadInt16(Hnd: TDataHnd): int16;
+class function API__.API_ReadInt16(Hnd: TDataHnd___): int16;
 begin
   Result := z_api_hubtool_import.API_ReadInt16(Hnd);
 end;
 
-class function API__.API_ReadUInt16(Hnd: TDataHnd): uint16;
+class function API__.API_ReadUInt16(Hnd: TDataHnd___): uint16;
 begin
   Result := z_api_hubtool_import.API_ReadUInt16(Hnd);
 end;
 
-class function API__.API_ReadInt32(Hnd: TDataHnd): int32;
+class function API__.API_ReadInt32(Hnd: TDataHnd___): int32;
 begin
   Result := z_api_hubtool_import.API_ReadInt32(Hnd);
 end;
 
-class function API__.API_ReadUInt32(Hnd: TDataHnd): uint32;
+class function API__.API_ReadUInt32(Hnd: TDataHnd___): uint32;
 begin
   Result := z_api_hubtool_import.API_ReadUInt32(Hnd);
 end;
 
-class function API__.API_ReadInt64(Hnd: TDataHnd): int64;
+class function API__.API_ReadInt64(Hnd: TDataHnd___): int64;
 begin
   Result := z_api_hubtool_import.API_ReadInt64(Hnd);
 end;
 
-class function API__.API_ReadUInt64(Hnd: TDataHnd): uint64;
+class function API__.API_ReadUInt64(Hnd: TDataHnd___): uint64;
 begin
   Result := z_api_hubtool_import.API_ReadUInt64(Hnd);
 end;
 
-class function API__.API_ReadSingle(Hnd: TDataHnd): single;
+class function API__.API_ReadSingle(Hnd: TDataHnd___): single;
 begin
   Result := z_api_hubtool_import.API_ReadSingle(Hnd);
 end;
 
-class function API__.API_ReadDouble(Hnd: TDataHnd): double;
+class function API__.API_ReadDouble(Hnd: TDataHnd___): double;
 begin
   Result := z_api_hubtool_import.API_ReadDouble(Hnd);
 end;
 
-class function API__.API_ReadString(Hnd: TDataHnd; out Value: string): boolean;
+class function API__.API_ReadString(Hnd: TDataHnd___; out Value: string): boolean;
 begin
   Result := z_api_hubtool_import.API_ReadString(Hnd, Value);
 end;
 
-class function API__.API_ReadString(Hnd: TDataHnd): string;
+class function API__.API_ReadString(Hnd: TDataHnd___): string;
 begin
   Result := z_api_hubtool_import.API_ReadString(Hnd);
 end;
 
-class function API__.API_GetPos(Hnd: TDataHnd): int64;
+class function API__.API_GetPos(Hnd: TDataHnd___): int64;
 begin
   Result := z_api_hubtool_import.API_GetPos(Hnd);
 end;
 
-class procedure API__.API_SetPos(Hnd: TDataHnd; Pos_: int64);
+class procedure API__.API_SetPos(Hnd: TDataHnd___; Pos_: int64);
 begin
   z_api_hubtool_import.API_SetPos(Hnd, Pos_);
 end;
 
-class function API__.API_GetSize(Hnd: TDataHnd): int64;
+class function API__.API_GetSize(Hnd: TDataHnd___): int64;
 begin
   Result := z_api_hubtool_import.API_GetSize(Hnd);
 end;
 
-class procedure API__.API_SetSize(Hnd: TDataHnd; Size_: int64);
+class procedure API__.API_SetSize(Hnd: TDataHnd___; Size_: int64);
 begin
   z_api_hubtool_import.API_SetSize(Hnd, Size_);
 end;
 
-class function API__.API_Create_APPHnd(AppName, Desc: pansichar): TAppHnd;
+class function API__.API_Create_APPHnd(AppName, Desc: pansichar): TAppHnd___;
 begin
   Result := z_api_hubtool_import.API_Create_APPHnd(AppName, Desc);
 end;
 
-class function API__.API_Create_APPHnd2(AppName, Desc: string): TAppHnd;
+class function API__.API_Create_APPHnd2(AppName, Desc: string): TAppHnd___;
 begin
   Result := z_api_hubtool_import.API_Create_APPHnd2(AppName, Desc);
 end;
 
-class procedure API__.API_Free_APPHnd(appHnd: TAppHnd);
+class procedure API__.API_Free_APPHnd(appHnd: TAppHnd___);
 begin
   z_api_hubtool_import.API_Free_APPHnd(appHnd);
 end;
 
-class function API__.API_Reg_Call(appHnd: TAppHnd; APIName, Desc: pansichar; Trigger: Pointer; OnCall: TAPI_Call): integer;
+class function API__.API_Reg_Call(appHnd: TAppHnd___; APIName, Desc: pansichar; Trigger: Pointer; OnCall: TAPI_Call): integer;
 begin
   Result := z_api_hubtool_import.API_Reg_Call(appHnd, APIName, Desc, Trigger, OnCall);
 end;
 
-class function API__.API_Reg_Call2(appHnd: TAppHnd; APIName, Desc: string; Trigger: Pointer; OnCall: TAPI_Call): integer;
+class function API__.API_Reg_Call2(appHnd: TAppHnd___; APIName, Desc: string; Trigger: Pointer; OnCall: TAPI_Call): integer;
 begin
   Result := z_api_hubtool_import.API_Reg_Call2(appHnd, APIName, Desc, Trigger, OnCall);
 end;
 
-class function API__.API_Reg_Call_M(appHnd: TAppHnd; APIName, Desc: string; OnCall: TAPI_Call_M): integer;
+class function API__.API_Reg_Call_M(appHnd: TAppHnd___; APIName, Desc: string; OnCall: TAPI_Call_M): integer;
 begin
   Result := z_api_hubtool_import.API_Reg_Call_M(appHnd, APIName, Desc, OnCall);
 end;
 
-class function API__.API_Reg_Sync_Call_M(appHnd: TAppHnd; APIName, Desc: string; OnCall: TAPI_Call_M): integer;
+class function API__.API_Reg_Sync_Call_M(appHnd: TAppHnd___; APIName, Desc: string; OnCall: TAPI_Call_M): integer;
 begin
   Result := z_api_hubtool_import.API_Reg_Sync_Call_M(appHnd, APIName, Desc, OnCall);
 end;
 
-class function API__.API_Reg_Notify(appHnd: TAppHnd; APIName, Desc: pansichar; Trigger: Pointer; OnNotify: TAPI_Notify): integer;
+class function API__.API_Reg_Notify(appHnd: TAppHnd___; APIName, Desc: pansichar; Trigger: Pointer; OnNotify: TAPI_Notify): integer;
 begin
   Result := z_api_hubtool_import.API_Reg_Notify(appHnd, APIName, Desc, Trigger, OnNotify);
 end;
 
-class function API__.API_Reg_Notify2(appHnd: TAppHnd; APIName, Desc: string; Trigger: Pointer; OnNotify: TAPI_Notify): integer;
+class function API__.API_Reg_Notify2(appHnd: TAppHnd___; APIName, Desc: string; Trigger: Pointer; OnNotify: TAPI_Notify): integer;
 begin
   Result := z_api_hubtool_import.API_Reg_Notify2(appHnd, APIName, Desc, Trigger, OnNotify);
 end;
 
-class function API__.API_Reg_Notify_M(appHnd: TAppHnd; APIName, Desc: string; OnNotify: TAPI_Notify_M): integer;
+class function API__.API_Reg_Notify_M(appHnd: TAppHnd___; APIName, Desc: string; OnNotify: TAPI_Notify_M): integer;
 begin
   Result := z_api_hubtool_import.API_Reg_Notify_M(appHnd, APIName, Desc, OnNotify);
 end;
 
-class function API__.API_Reg_Sync_Notify_M(appHnd: TAppHnd; APIName, Desc: string; OnNotify: TAPI_Notify_M): integer;
+class function API__.API_Reg_Sync_Notify_M(appHnd: TAppHnd___; APIName, Desc: string; OnNotify: TAPI_Notify_M): integer;
 begin
   Result := z_api_hubtool_import.API_Reg_Sync_Notify_M(appHnd, APIName, Desc, OnNotify);
 end;
 
-class function API__.API_UnReg(appHnd: TAppHnd; APIName: pansichar): integer;
+class function API__.API_UnReg(appHnd: TAppHnd___; APIName: pansichar): integer;
 begin
   Result := z_api_hubtool_import.API_UnReg(appHnd, APIName);
 end;
 
-class function API__.API_UnReg2(appHnd: TAppHnd; APIName: string): integer;
+class function API__.API_UnReg2(appHnd: TAppHnd___; APIName: string): integer;
 begin
   Result := z_api_hubtool_import.API_UnReg2(appHnd, APIName);
 end;
 
-class function API__.API_Local_APP_Call(appHnd: TAppHnd; Param: TDataHnd): TDataHnd;
+class function API__.API_Local_APP_Call(appHnd: TAppHnd___; Param: TDataHnd___): TDataHnd___;
 begin
   Result := z_api_hubtool_import.API_Local_APP_Call(appHnd, Param);
 end;
 
-class procedure API__.API_Local_APP_Notify(appHnd: TAppHnd; Param: TDataHnd);
+class procedure API__.API_Local_APP_Notify(appHnd: TAppHnd___; Param: TDataHnd___);
 begin
   z_api_hubtool_import.API_Local_APP_Notify(appHnd, Param);
 end;
@@ -2183,12 +2183,12 @@ begin
   Result := z_api_hubtool_import.API_Prepare_Service2(ListeningAddr_, PhysicsAddr_);
 end;
 
-class function API__.API_Prepare_Client(PhysicsAddr_: pansichar; appHnd: TAppHnd): integer;
+class function API__.API_Prepare_Client(PhysicsAddr_: pansichar; appHnd: TAppHnd___): integer;
 begin
   Result := z_api_hubtool_import.API_Prepare_Client(PhysicsAddr_, appHnd);
 end;
 
-class function API__.API_Prepare_Client2(PhysicsAddr_: string; appHnd: TAppHnd): integer;
+class function API__.API_Prepare_Client2(PhysicsAddr_: string; appHnd: TAppHnd___): integer;
 begin
   Result := z_api_hubtool_import.API_Prepare_Client2(PhysicsAddr_, appHnd);
 end;
@@ -2213,22 +2213,22 @@ begin
   z_api_hubtool_import.API_Exit_MainThread;
 end;
 
-class function API__.API_Call(AppName: pansichar; Param: TDataHnd; Timeout_: uint64): TDataHnd;
+class function API__.API_Call(AppName: pansichar; Param: TDataHnd___; Timeout_: uint64): TDataHnd___;
 begin
   Result := z_api_hubtool_import.API_Call(AppName, Param, Timeout_);
 end;
 
-class function API__.API_Call2(AppName: string; Param: TDataHnd; Timeout_: uint64): TDataHnd;
+class function API__.API_Call2(AppName: string; Param: TDataHnd___; Timeout_: uint64): TDataHnd___;
 begin
   Result := z_api_hubtool_import.API_Call2(AppName, Param, Timeout_);
 end;
 
-class procedure API__.API_Notify(AppName: pansichar; Param: TDataHnd);
+class procedure API__.API_Notify(AppName: pansichar; Param: TDataHnd___);
 begin
   z_api_hubtool_import.API_Notify(AppName, Param);
 end;
 
-class procedure API__.API_Notify2(AppName: string; Param: TDataHnd);
+class procedure API__.API_Notify2(AppName: string; Param: TDataHnd___);
 begin
   z_api_hubtool_import.API_Notify2(AppName, Param);
 end;
