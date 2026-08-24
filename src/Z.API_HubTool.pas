@@ -243,14 +243,13 @@ type
     * @Method Progress: Scans the pool and frees idle handles.
     * @Method Free_All_Hnd: Frees all handles in the pool.
     * @Method Update_Hnd_For_Usage: Updates the timestamp for a given handle. }
-  TAPI_Data_Pool = class(TBig_Hash_Pair_Pool<PAPI_Data, TTimeTick>)
+  TAPI_Data_Pool = class(TBigList<PAPI_Data>)
   private
     Update_Time__: TTimeTick; // last time Progress() was executed (for throttling)
   public
-    procedure CreateAfter; override;
+    constructor Create;
     procedure Progress;
     procedure Free_All_Hnd;
-    procedure Update_Hnd_For_Usage(hnd: PAPI_Data);
   end;
 
   { * TAPI_Data: Represents either a parameter or a result for an API invocation.
@@ -274,6 +273,9 @@ type
     * @Method Get_Size: Returns total size of data buffer.
     * @Method Set_Size: Resizes data buffer. }
   TAPI_Data = record
+  private
+    P___: TAPI_Data_Pool.PQueueStruct;
+    Last_Update__: TTimeTick;
   public
     Data_Param: TMemory_Param_Tool;
     Data_Result: TMem64;
@@ -527,11 +529,11 @@ end;
   TAPI_Data_Pool Implementation
   ---------------------------------------------------------------------------- }
 
-procedure TAPI_Data_Pool.CreateAfter;
+constructor TAPI_Data_Pool.Create;
 { * Initializes the Update_Time__ field to the current tick. }
 begin
-  inherited CreateAfter;
-  Update_Time__ := GetTimeTick;
+  inherited Create;
+  Update_Time__ := GetTimeTick();
 end;
 
 procedure TAPI_Data_Pool.Progress;
@@ -554,15 +556,16 @@ begin
       with repeat_ do
         repeat
           // Check if the handle's last usage time is older than 5 minutes
-          if tk - queue^.Data^.Data.Second > Z.Core.C_Tick_Second * 60 * 5 then
+          if tk - queue^.Data^.Last_Update__ > Z.Core.C_Tick_Second * 60 * 5 then
             begin
-              L.Push(queue^.Data^.Data.Primary); // collect handle
-              Push_To_Recycle_Pool2(queue); // mark entry for removal
+              queue^.Data^.P___ := nil;
+              L.Push(queue^.Data); // collect handle
+              Push_To_Recycle_Pool(queue); // mark entry for removal
             end;
         until not Next;
     Free_Recycle_Pool; // physically remove all marked entries
   finally
-    UnLock;
+      UnLock;
   end;
 
   // Free the collected handles outside the lock to reduce contention
@@ -570,10 +573,10 @@ begin
     begin
       DoStatus('hint: Data handle pool "%d" handles were idle for more than 5 minutes and have been automatically freed.', [L.Num]);
       if L.Num > 5 then
-        DoStatus('...');
+          DoStatus('...');
       repeat
         if L.Num < 5 then
-          DoStatus('hint: automatically free handles ' + L.First^.Data^.Data_Info.Text);
+            DoStatus('hint: automatically free handles ' + L.First^.Data^.Data_Info.Text);
         TAPI_Data.Free_Data(L.First^.Data); // actually free the handle
         L.Next;
       until L.Num <= 0;
@@ -594,11 +597,12 @@ begin
     if Num > 0 then
       with repeat_ do
         repeat
-          L.Push(queue^.Data^.Data.Primary);
+          queue^.Data^.P___ := nil;
+          L.Push(queue^.Data); // collect handle
         until not Next;
-    Clear; // clears the hash map without freeing the handles themselves
+    Clear;
   finally
-    UnLock;
+      UnLock;
   end;
 
   // Free all collected handles outside the lock
@@ -611,31 +615,13 @@ begin
         end;
       repeat
         if L.Num < 5 then
-          DoStatus('hint: automatically free handles ' + L.First^.Data^.Data_Info.Text);
+            DoStatus('hint: automatically free handles ' + L.First^.Data^.Data_Info.Text);
         TAPI_Data.Free_Data(L.First^.Data);
         L.Next;
       until L.Num <= 0;
     end;
 
   DisposeObject(L);
-end;
-
-procedure TAPI_Data_Pool.Update_Hnd_For_Usage(hnd: PAPI_Data);
-{ * Updates the timestamp for the given handle to the current time,
-  * effectively resetting its idle timer.
-  * @Param hnd: The handle to update.
-  * @Note This is called on every read/write operation on a handle. }
-var
-  p: PValue_;
-begin
-  Lock;
-  try
-    p := Get_Value_Ptr(hnd);
-    if p <> nil then
-      p^ := GetTimeTick;
-  finally
-    UnLock;
-  end;
 end;
 
 { ----------------------------------------------------------------------------
@@ -645,6 +631,9 @@ end;
 procedure TAPI_Data.Init;
 { * Sets both Data_Param and Data_Result to nil. Used before allocation. }
 begin
+  P___ := nil;
+  Last_Update__ := GetTimeTick();
+
   Data_Param := nil;
   Data_Result := nil;
   Data_Info := '';
@@ -665,8 +654,11 @@ begin
   p^.Data_Info := PFormat('api "%s" parameter.', [apiName.Text]);
 
   API_Data_Pool.Lock;
-  API_Data_Pool.Add(p, GetTimeTick(), False);
-  API_Data_Pool.UnLock;
+  try
+      p^.P___ := API_Data_Pool.Add(p);
+  finally
+      API_Data_Pool.UnLock;
+  end;
 
   Result := p;
 end;
@@ -684,8 +676,11 @@ begin
   p^.Data_Param.DecryptFromMem(Data_);
 
   API_Data_Pool.Lock;
-  API_Data_Pool.Add(p, GetTimeTick(), False);
-  API_Data_Pool.UnLock;
+  try
+      p^.P___ := API_Data_Pool.Add(p);
+  finally
+      API_Data_Pool.UnLock;
+  end;
 
   Result := p;
 end;
@@ -701,8 +696,11 @@ begin
   p^.Data_Result := TMem64.Create;
 
   API_Data_Pool.Lock;
-  API_Data_Pool.Add(p, GetTimeTick(), False);
-  API_Data_Pool.UnLock;
+  try
+      p^.P___ := API_Data_Pool.Add(p);
+  finally
+      API_Data_Pool.UnLock;
+  end;
 
   Result := p;
 end;
@@ -720,8 +718,11 @@ begin
   p^.Data_Result.Position := 0;
 
   API_Data_Pool.Lock;
-  API_Data_Pool.Add(p, GetTimeTick(), False);
-  API_Data_Pool.UnLock;
+  try
+      p^.P___ := API_Data_Pool.Add(p);
+  finally
+      API_Data_Pool.UnLock;
+  end;
 
   Result := p;
 end;
@@ -734,9 +735,16 @@ class procedure TAPI_Data.Free_Data(hnd: PAPI_Data);
 begin
   if hnd = nil then exit;
 
-  API_Data_Pool.Lock;
-  API_Data_Pool.Delete(hnd);
-  API_Data_Pool.UnLock;
+  if hnd^.P___ <> nil then
+    begin
+      API_Data_Pool.Lock;
+      try
+          API_Data_Pool.Remove_P(hnd^.P___);
+      finally
+          API_Data_Pool.UnLock;
+      end;
+      hnd^.P___ := nil;
+    end;
 
   hnd^.Data_Info := '';
   DisposeObjectAndNil(hnd^.Data_Param);
@@ -750,9 +758,16 @@ function TAPI_Data.GetBuffer: Pointer;
 begin
   Result := nil;
   if Data_Param <> nil then
-    Result := Data_Param.Param.Memory
+      Result := Data_Param.Param.Memory
   else if Data_Result <> nil then
-    Result := Data_Result.Memory;
+      Result := Data_Result.Memory;
+
+  API_Data_Pool.Lock;
+  try
+      Last_Update__ := GetTimeTick();
+  finally
+      API_Data_Pool.UnLock;
+  end;
 end;
 
 function TAPI_Data.WriteBuff(Buff: Pointer; Size: Int64): Int64;
@@ -763,9 +778,16 @@ function TAPI_Data.WriteBuff(Buff: Pointer; Size: Int64): Int64;
 begin
   Result := 0;
   if Data_Param <> nil then
-    Result := Data_Param.Param.WritePtr(Buff, Size)
+      Result := Data_Param.Param.WritePtr(Buff, Size)
   else if Data_Result <> nil then
-    Result := Data_Result.WritePtr(Buff, Size);
+      Result := Data_Result.WritePtr(Buff, Size);
+
+  API_Data_Pool.Lock;
+  try
+      Last_Update__ := GetTimeTick();
+  finally
+      API_Data_Pool.UnLock;
+  end;
 end;
 
 function TAPI_Data.ReadBuff(Buff: Pointer; Size: Int64): Int64;
@@ -776,9 +798,16 @@ function TAPI_Data.ReadBuff(Buff: Pointer; Size: Int64): Int64;
 begin
   Result := 0;
   if Data_Param <> nil then
-    Result := Data_Param.Param.ReadPtr(Buff, Size)
+      Result := Data_Param.Param.ReadPtr(Buff, Size)
   else if Data_Result <> nil then
-    Result := Data_Result.ReadPtr(Buff, Size);
+      Result := Data_Result.ReadPtr(Buff, Size);
+
+  API_Data_Pool.Lock;
+  try
+      Last_Update__ := GetTimeTick();
+  finally
+      API_Data_Pool.UnLock;
+  end;
 end;
 
 function TAPI_Data.Get_Pos: Int64;
@@ -786,9 +815,16 @@ function TAPI_Data.Get_Pos: Int64;
 begin
   Result := 0;
   if Data_Param <> nil then
-    Result := Data_Param.Param.Position
+      Result := Data_Param.Param.Position
   else if Data_Result <> nil then
-    Result := Data_Result.Position;
+      Result := Data_Result.Position;
+
+  API_Data_Pool.Lock;
+  try
+      Last_Update__ := GetTimeTick();
+  finally
+      API_Data_Pool.UnLock;
+  end;
 end;
 
 procedure TAPI_Data.Set_Pos(Pos_: Int64);
@@ -796,9 +832,16 @@ procedure TAPI_Data.Set_Pos(Pos_: Int64);
   * @Param Pos_: New position (must be >= 0). }
 begin
   if Data_Param <> nil then
-    Data_Param.Param.Position := Pos_
+      Data_Param.Param.Position := Pos_
   else if Data_Result <> nil then
-    Data_Result.Position := Pos_;
+      Data_Result.Position := Pos_;
+
+  API_Data_Pool.Lock;
+  try
+      Last_Update__ := GetTimeTick();
+  finally
+      API_Data_Pool.UnLock;
+  end;
 end;
 
 function TAPI_Data.Get_Size: Int64;
@@ -806,9 +849,16 @@ function TAPI_Data.Get_Size: Int64;
 begin
   Result := 0;
   if Data_Param <> nil then
-    Result := Data_Param.Param.Size
+      Result := Data_Param.Param.Size
   else if Data_Result <> nil then
-    Result := Data_Result.Size;
+      Result := Data_Result.Size;
+
+  API_Data_Pool.Lock;
+  try
+      Last_Update__ := GetTimeTick();
+  finally
+      API_Data_Pool.UnLock;
+  end;
 end;
 
 procedure TAPI_Data.Set_Size(Size_: Int64);
@@ -816,9 +866,16 @@ procedure TAPI_Data.Set_Size(Size_: Int64);
   * @Param Size_: New size. }
 begin
   if Data_Param <> nil then
-    Data_Param.Param.Size := Size_
+      Data_Param.Param.Size := Size_
   else if Data_Result <> nil then
-    Data_Result.Size := Size_;
+      Data_Result.Size := Size_;
+
+  API_Data_Pool.Lock;
+  try
+      Last_Update__ := GetTimeTick();
+  finally
+      API_Data_Pool.UnLock;
+  end;
 end;
 
 { ----------------------------------------------------------------------------
@@ -852,7 +909,7 @@ var
 begin
   Result := False;
   if API_Pool.Exists_Key(apiName) then
-    exit;
+      exit;
   api_ := TAPI_Info.Create;
   api_.Name := apiName;
   api_.Desc := Desc;
@@ -877,7 +934,7 @@ var
 begin
   Result := False;
   if API_Pool.Exists_Key(apiName) then
-    exit;
+      exit;
   api_ := TAPI_Info.Create;
   api_.Name := apiName;
   api_.Desc := Desc;
@@ -899,7 +956,7 @@ var
 begin
   Result := False;
   if not API_Pool.Exists_Key(apiName) then
-    exit;
+      exit;
   API_Pool.Delete(apiName);
   APP.DoChange();
   Result := True;
@@ -1029,7 +1086,7 @@ begin
       repeat
         try
           if Assigned(queue^.Data^.Data.Second) then
-            queue^.Data^.Data.Second(Self);
+              queue^.Data^.Data.Second(Self);
         except
         end;
       until not Next;
@@ -1100,7 +1157,7 @@ end;
 
 initialization
 
-API_Data_Pool := TAPI_Data_Pool.Create($FFFF, 0);
+API_Data_Pool := TAPI_Data_Pool.Create;
 Running_API_Num := TAtomInt.Create(0);
 
 finalization
@@ -1109,4 +1166,3 @@ DisposeObjectAndNil(Running_API_Num);
 DisposeObjectAndNil(API_Data_Pool);
 
 end.
-
