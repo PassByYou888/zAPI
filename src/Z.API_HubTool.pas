@@ -1,114 +1,114 @@
 ﻿{
- * --------------------------------------------------------------------------
- * Z.API_HubTool – Core RPC framework for defining, registering, and invoking
- *               language-neutral APIs locally or over a distributed network.
- *
- * This unit is the backbone of the API Hub system. It provides the data
- * structures and logic that allow an application (TAPI_APP) to expose
- * callable functions (APIs) and one-way notifications. These APIs can be
- * executed directly inside the same process or routed over a network using
- * the companion C4 transport layer.
- *
- * The design is built around three primary concepts:
- *
- *   – TAPI_APP : A named container that groups a set of related APIs.
- *                Each app has a unique name (used for routing) and contains
- *                a TAPI_Tool instance that manages its API registry.
- *
- *   – TAPI_Tool: The engine that holds the registry of all APIs for a given
- *                app. It provides methods to register new APIs (Reg_Call,
- *                Reg_Notify) and to execute them locally (Execute_Call,
- *                Execute_Notify). It uses a thread-safe hash pool to store
- *                API metadata (TAPI_Info).
- *
- *   – TMemory_Param_Tool: A helper that packs an API name and a binary
- *                payload into a single TMem64 block. This block can be sent
- *                over the network or passed between threads. The format is:
- *                [API name as a Pascal string] + [4-byte payload size] +
- *                [payload bytes]. This is the standard wire format used by
- *                the API Hub system.
- *
- * The unit also defines an opaque handle (TDataHnd) and an application
- * handle (TAppHnd) that are used by the C ABI export layer (in the separate
- * unit API_HubTool_Export). This allows the framework to be called from
- * other languages (C, C++, Python, etc.) via a cdecl interface.
- *
- * All public classes and methods are designed to be thread-safe, except for
- * the TMemory_Param_Tool which is not thread-safe when shared between
- * threads. Use separate instances per thread or synchronise access.
- *
- * The unit depends on:
- *   – Z.Core                 (foundation: threads, containers, memory)
- *   – Z.PascalStrings        (TPascalString handling)
- *   – Z.UPascalStrings       (Unicode string handling)
- *   – Z.Status               (global logging)
- *   – Z.UnicodeMixedLib      (utility functions)
- *   – Z.HashList.Templet     (generic hash pool)
- *   – Z.MemoryStream         (TMem64 stream)
- *   – Z.Parsing              (text parsing, not heavily used here)
- *   – API_HubTool_Export     (C ABI types)
- *   – Z.Int128               (not directly used, but included for completeness)
- *
- * @Example (registering and calling a simple API locally):
- *   var
- *     App: TAPI_APP;
- *     Param, Result: TMem64;
- *     Tool: TMemory_Param_Tool;
- *   begin
- *     App := TAPI_APP.Create;                 // create an app instance
- *     App.Name := 'MyApp';                    // set its name
- *
- *     // Register a Call API named 'echo' that copies input to output.
- *     App.API.Reg_Call('echo', 'Echo service', nil,
- *       procedure(Trigger: Pointer; Input, Output: PAPI_Data)
- *       begin
- *         // Copy the entire input buffer to output.
- *         Output.Data_Result.CopyFrom(Input.Data_Param.Param, -1);
- *       end
- *     );
- *
- *     // Prepare a parameter block for the API.
- *     Tool := TMemory_Param_Tool.Create;
- *     Tool.apiName := 'echo';                  // set the API name
- *     Tool.Param.WriteString('Hello world');   // write payload
- *
- *     // Pack the parameter into a TMem64.
- *     Param := TMem64.Create;
- *     Tool.EncryptToMem(Param);                // encode apiName and payload
- *     Tool.Free;                               // free the helper
- *
- *     // Execute the call locally.
- *     Result := App.API.Execute_Call(Param);   // synchronous call, returns result
- *     // Result now contains the echoed data.
- *     DisposeObject(Result);
- *     DisposeObject(Param);
- *     DisposeObject(App);
- *   end;
- *
- * @Example (sending a notification):
- *   // Register a Notify API.
- *   App.API.Reg_Notify('log', 'Logging', nil,
- *     procedure(Trigger: Pointer; Input: PAPI_Data)
- *     begin
- *       // Read the message from the input and log it.
- *       var Msg := Input.Data_Param.Param.ReadString;
- *       DoStatus('Log: ' + Msg);
- *     end
- *   );
- *
- *   // Send a notification.
- *   var Tool := TMemory_Param_Tool.Create;
- *   Tool.apiName := 'log';
- *   Tool.Param.WriteString('Hello from notify');
- *   var NotifyParam := TMem64.Create;
- *   Tool.EncryptToMem(NotifyParam);
- *   Tool.Free;
- *   App.API.Execute_Notify(NotifyParam);      // asynchronous, no result
- *   DisposeObject(NotifyParam);
- *
- * For remote execution over the network, refer to the companion units
- * Z.Net.C4.API_Hub and API_HubTool_Export.
- * --------------------------------------------------------------------------
+  * --------------------------------------------------------------------------
+  * Z.API_HubTool – Core RPC framework for defining, registering, and invoking
+  *               language-neutral APIs locally or over a distributed network.
+  *
+  * This unit is the backbone of the API Hub system. It provides the data
+  * structures and logic that allow an application (TAPI_APP) to expose
+  * callable functions (APIs) and one-way notifications. These APIs can be
+  * executed directly inside the same process or routed over a network using
+  * the companion C4 transport layer.
+  *
+  * The design is built around three primary concepts:
+  *
+  *   – TAPI_APP : A named container that groups a set of related APIs.
+  *                Each app has a unique name (used for routing) and contains
+  *                a TAPI_Tool instance that manages its API registry.
+  *
+  *   – TAPI_Tool: The engine that holds the registry of all APIs for a given
+  *                app. It provides methods to register new APIs (Reg_Call,
+  *                Reg_Notify) and to execute them locally (Execute_Call,
+  *                Execute_Notify). It uses a thread-safe hash pool to store
+  *                API metadata (TAPI_Info).
+  *
+  *   – TMemory_Param_Tool: A helper that packs an API name and a binary
+  *                payload into a single TMem64 block. This block can be sent
+  *                over the network or passed between threads. The format is:
+  *                [API name as a Pascal string] + [4-byte payload size] +
+  *                [payload bytes]. This is the standard wire format used by
+  *                the API Hub system.
+  *
+  * The unit also defines an opaque handle (TDataHnd) and an application
+  * handle (TAppHnd) that are used by the C ABI export layer (in the separate
+  * unit API_HubTool_Export). This allows the framework to be called from
+  * other languages (C, C++, Python, etc.) via a cdecl interface.
+  *
+  * All public classes and methods are designed to be thread-safe, except for
+  * the TMemory_Param_Tool which is not thread-safe when shared between
+  * threads. Use separate instances per thread or synchronise access.
+  *
+  * The unit depends on:
+  *   – Z.Core                 (foundation: threads, containers, memory)
+  *   – Z.PascalStrings        (TPascalString handling)
+  *   – Z.UPascalStrings       (Unicode string handling)
+  *   – Z.Status               (global logging)
+  *   – Z.UnicodeMixedLib      (utility functions)
+  *   – Z.HashList.Templet     (generic hash pool)
+  *   – Z.MemoryStream         (TMem64 stream)
+  *   – Z.Parsing              (text parsing, not heavily used here)
+  *   – API_HubTool_Export     (C ABI types)
+  *   – Z.Int128               (not directly used, but included for completeness)
+  *
+  * @Example (registering and calling a simple API locally):
+  *   var
+  *     App: TAPI_APP;
+  *     Param, Result: TMem64;
+  *     Tool: TMemory_Param_Tool;
+  *   begin
+  *     App := TAPI_APP.Create;                 // create an app instance
+  *     App.Name := 'MyApp';                    // set its name
+  *
+  *     // Register a Call API named 'echo' that copies input to output.
+  *     App.API.Reg_Call('echo', 'Echo service', nil,
+  *       procedure(Trigger: Pointer; Input, Output: PAPI_Data)
+  *       begin
+  *         // Copy the entire input buffer to output.
+  *         Output.Data_Result.CopyFrom(Input.Data_Param.Param, -1);
+  *       end
+  *     );
+  *
+  *     // Prepare a parameter block for the API.
+  *     Tool := TMemory_Param_Tool.Create;
+  *     Tool.apiName := 'echo';                  // set the API name
+  *     Tool.Param.WriteString('Hello world');   // write payload
+  *
+  *     // Pack the parameter into a TMem64.
+  *     Param := TMem64.Create;
+  *     Tool.EncryptToMem(Param);                // encode apiName and payload
+  *     Tool.Free;                               // free the helper
+  *
+  *     // Execute the call locally.
+  *     Result := App.API.Execute_Call(Param);   // synchronous call, returns result
+  *     // Result now contains the echoed data.
+  *     DisposeObject(Result);
+  *     DisposeObject(Param);
+  *     DisposeObject(App);
+  *   end;
+  *
+  * @Example (sending a notification):
+  *   // Register a Notify API.
+  *   App.API.Reg_Notify('log', 'Logging', nil,
+  *     procedure(Trigger: Pointer; Input: PAPI_Data)
+  *     begin
+  *       // Read the message from the input and log it.
+  *       var Msg := Input.Data_Param.Param.ReadString;
+  *       DoStatus('Log: ' + Msg);
+  *     end
+  *   );
+  *
+  *   // Send a notification.
+  *   var Tool := TMemory_Param_Tool.Create;
+  *   Tool.apiName := 'log';
+  *   Tool.Param.WriteString('Hello from notify');
+  *   var NotifyParam := TMem64.Create;
+  *   Tool.EncryptToMem(NotifyParam);
+  *   Tool.Free;
+  *   App.API.Execute_Notify(NotifyParam);      // asynchronous, no result
+  *   DisposeObject(NotifyParam);
+  *
+  * For remote execution over the network, refer to the companion units
+  * Z.Net.C4.API_Hub and API_HubTool_Export.
+  * --------------------------------------------------------------------------
 }
 unit Z.API_HubTool;
 
@@ -208,6 +208,19 @@ type
     * External code must never dereference; only pass to API functions. }
   PAPI_Data = ^TAPI_Data;
 
+  TAPI_Data_Order = class(TOrderStruct<PAPI_Data>)
+  end;
+
+  TAPI_Data_Pool = class(TBig_Hash_Pair_Pool<PAPI_Data, TTimeTick>)
+  private
+    Update_Time__: TTimeTick;
+  public
+    procedure CreateAfter; override;
+    procedure Progress;
+    procedure Free_All_Hnd;
+    procedure Update_Hnd_For_Usage(hnd: PAPI_Data);
+  end;
+
   { * TAPI_Data: Represents either a parameter or a result for an API invocation.
     * Discriminated union: either Data_Param (input) or Data_Result (output) is non-nil.
     * Static factory methods simplify creation and destruction.
@@ -230,6 +243,7 @@ type
   public
     Data_Param: TMemory_Param_Tool;
     Data_Result: TMem64;
+    Data_Info: TAPI_String;
 
     procedure Init;
 
@@ -359,6 +373,7 @@ type
   end;
 
 var
+  API_Data_Pool: TAPI_Data_Pool;
   Running_API_Num: TAtomInt; // global atomic counter of currently executing API calls
 
 implementation
@@ -475,6 +490,104 @@ begin
   inherited;
 end;
 
+procedure TAPI_Data_Pool.CreateAfter;
+begin
+  inherited CreateAfter;
+  Update_Time__ := GetTimeTick;
+end;
+
+procedure TAPI_Data_Pool.Progress;
+var
+  tk: TTimeTick;
+  L: TAPI_Data_Order;
+begin
+  tk := GetTimeTick();
+  if tk - Update_Time__ < 5000 then exit;
+  Update_Time__ := tk;
+  L := TAPI_Data_Order.Create;
+
+  Lock;
+  try
+    if Num > 0 then
+      with repeat_ do
+        repeat
+          if tk - queue^.Data^.Data.Second > Z.Core.C_Tick_Second * 60 * 5 then
+            begin
+              L.Push(queue^.Data^.Data.Primary);
+              Push_To_Recycle_Pool2(queue);
+            end;
+        until not Next;
+    Free_Recycle_Pool;
+  finally
+      UnLock;
+  end;
+
+  if L.Num > 0 then
+    begin
+      DoStatus('hint: Data handle pool "%d" handles were idle for more than 5 minutes and have been automatically freed.', [L.Num]);
+      if L.Num > 5 then
+          DoStatus('...');
+      repeat
+        if L.Num < 5 then
+            DoStatus('hint: automatically free handles ' + L.First^.Data^.Data_Info.Text);
+        TAPI_Data.Free_Data(L.First^.Data);
+        L.Next;
+      until L.Num <= 0;
+    end;
+
+  DisposeObject(L);
+end;
+
+procedure TAPI_Data_Pool.Free_All_Hnd;
+var
+  L: TAPI_Data_Order;
+begin
+  L := TAPI_Data_Order.Create;
+
+  Lock;
+  try
+    if Num > 0 then
+      with repeat_ do
+        repeat
+            L.Push(queue^.Data^.Data.Primary);
+        until not Next;
+    Clear;
+  finally
+      UnLock;
+  end;
+
+  if L.Num > 0 then
+    begin
+      if L.Num > 5 then
+        begin
+          DoStatus('hint: Data handle pool "%d" do automatically freed.', [L.Num]);
+          DoStatus('...');
+        end;
+      repeat
+        if L.Num < 5 then
+            DoStatus('hint: automatically free handles ' + L.First^.Data^.Data_Info.Text);
+        TAPI_Data.Free_Data(L.First^.Data);
+        L.Next;
+      until L.Num <= 0;
+    end;
+
+  DisposeObject(L);
+end;
+
+procedure TAPI_Data_Pool.Update_Hnd_For_Usage(hnd: PAPI_Data);
+var
+  p: PValue_;
+begin
+  Lock;
+  try
+    p := Get_Value_Ptr(hnd);
+    if p <> nil then
+        p^ := GetTimeTick;
+  finally
+      UnLock;
+  end;
+end;
+
 { ----------------------------------------------------------------------------
   TAPI_Data Implementation
   ---------------------------------------------------------------------------- }
@@ -484,6 +597,7 @@ procedure TAPI_Data.Init;
 begin
   Data_Param := nil;
   Data_Result := nil;
+  Data_Info := '';
 end;
 
 class function TAPI_Data.New_Param(apiName: TAPI_String): PAPI_Data;
@@ -498,6 +612,12 @@ begin
   p^.Init;
   p^.Data_Param := TMemory_Param_Tool.Create;
   p^.Data_Param.apiName := apiName;
+  p^.Data_Info := PFormat('api "%s" parameter.', [apiName.Text]);
+
+  API_Data_Pool.Lock;
+  API_Data_Pool.Add(p, GetTimeTick(), False);
+  API_Data_Pool.UnLock;
+
   Result := p;
 end;
 
@@ -512,6 +632,11 @@ begin
   p^.Init;
   p^.Data_Param := TMemory_Param_Tool.Create;
   p^.Data_Param.DecryptFromMem(Data_);
+
+  API_Data_Pool.Lock;
+  API_Data_Pool.Add(p, GetTimeTick(), False);
+  API_Data_Pool.UnLock;
+
   Result := p;
 end;
 
@@ -524,6 +649,11 @@ begin
   New(p);
   p^.Init;
   p^.Data_Result := TMem64.Create;
+
+  API_Data_Pool.Lock;
+  API_Data_Pool.Add(p, GetTimeTick(), False);
+  API_Data_Pool.UnLock;
+
   Result := p;
 end;
 
@@ -538,6 +668,11 @@ begin
   p^.Init;
   p^.Data_Result := Data_;
   p^.Data_Result.Position := 0;
+
+  API_Data_Pool.Lock;
+  API_Data_Pool.Add(p, GetTimeTick(), False);
+  API_Data_Pool.UnLock;
+
   Result := p;
 end;
 
@@ -546,6 +681,13 @@ class procedure TAPI_Data.Free_Data(hnd: PAPI_Data);
   * @Param hnd: The pointer returned by one of the New_* methods.
   * @Note This will free Data_Param (if any) and Data_Result (if any), then dispose the record itself. }
 begin
+  if hnd = nil then exit;
+
+  API_Data_Pool.Lock;
+  API_Data_Pool.Delete(hnd);
+  API_Data_Pool.UnLock;
+
+  hnd^.Data_Info := '';
   DisposeObjectAndNil(hnd^.Data_Param);
   DisposeObjectAndNil(hnd^.Data_Result);
   Dispose(hnd);
@@ -832,14 +974,14 @@ procedure TAPI_APP.Do_APIReg_Event__;
 begin
   FAPIUpdate_Event_Pool.Lock;
   if FAPIUpdate_Event_Pool.Num > 0 then
-    with FAPIUpdate_Event_Pool.Repeat_ do
+    with FAPIUpdate_Event_Pool.repeat_ do
       repeat
         try
-          if Assigned(Queue^.Data^.Data.Second) then
-              Queue^.Data^.Data.Second(Self);
+          if Assigned(queue^.Data^.Data.Second) then
+              queue^.Data^.Data.Second(Self);
         except
         end;
-      until not next;
+      until not Next;
   FAPIUpdate_Event_Pool.UnLock;
 end;
 
@@ -907,10 +1049,12 @@ end;
 
 initialization
 
+API_Data_Pool := TAPI_Data_Pool.Create($FFFF, 0);
 Running_API_Num := TAtomInt.Create(0);
 
 finalization
 
-DisposeObject(Running_API_Num);
+DisposeObjectAndNil(Running_API_Num);
+DisposeObjectAndNil(API_Data_Pool);
 
 end.
