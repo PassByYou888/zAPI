@@ -229,6 +229,7 @@ procedure Wait_DoStatus_Queue;
   * @Example
   *   DoStatus('Server started', 1);
 }
+procedure DoStatus__(Text_: SystemString; const ID: Integer);
 procedure DoStatus(Text_: SystemString; const ID: Integer); overload;
 
 {
@@ -456,13 +457,18 @@ end;
   * DoStatus (ID overload) – The central entry point for all status messages.  *
   * It calls the global OnDoStatusHook (default InternalDoStatus).             *
   ****************************************************************************** }
-procedure DoStatus(Text_: SystemString; const ID: Integer);
+procedure DoStatus__(Text_: SystemString; const ID: Integer);
 begin
   try
       OnDoStatusHook(Text_, ID);
   except
     // silently ignore any exceptions from hooks
   end;
+end;
+
+procedure DoStatus(Text_: SystemString; const ID: Integer);
+begin
+  DoStatus__(Text_, ID);
 end;
 
 {
@@ -595,17 +601,17 @@ end;
 }
 procedure DoStatus(const v: SystemString);
 begin
-  DoStatus(v, 0);
+  DoStatus__(v, 0);
 end;
 
 procedure DoStatus(const v1, v2: SystemString);
 begin
-  DoStatus(v1 + v2, 0);
+  DoStatus__(v1 + v2, 0);
 end;
 
 procedure DoStatus(const v1, v2, v3: SystemString);
 begin
-  DoStatus(v1 + v2 + v3, 0);
+  DoStatus__(v1 + v2 + v3, 0);
 end;
 
 { -----------------------------------------------------------------------------
@@ -613,32 +619,32 @@ end;
 }
 procedure DoStatus(const v: TPascalString);
 begin
-  DoStatus(v, 0);
+  DoStatus__(v, 0);
 end;
 
 procedure DoStatus(const v1, v2: TPascalString);
 begin
-  DoStatus(v1 + v2, 0);
+  DoStatus__(v1 + v2, 0);
 end;
 
 procedure DoStatus(const v1, v2, v3: TPascalString);
 begin
-  DoStatus(v1 + v2 + v3, 0);
+  DoStatus__(v1 + v2 + v3, 0);
 end;
 
 procedure DoStatus(const v: TUPascalString);
 begin
-  DoStatus(v, 0);
+  DoStatus__(v, 0);
 end;
 
 procedure DoStatus(const v1, v2: TUPascalString);
 begin
-  DoStatus(v1 + v2, 0);
+  DoStatus__(v1 + v2, 0);
 end;
 
 procedure DoStatus(const v1, v2, v3: TUPascalString);
 begin
-  DoStatus(v1 + v2 + v3, 0);
+  DoStatus__(v1 + v2 + v3, 0);
 end;
 
 procedure DoStatus(const v: TMD5);
@@ -1256,7 +1262,7 @@ var
   }
 procedure DoCheckThreadSynchronize;
 begin
-  DoStatus(); // Process the queue.
+  CheckDoStatus(); // Process the queue.
   if Assigned(Hooked_OnCheckThreadSynchronize) then
       Hooked_OnCheckThreadSynchronize();
 end;
