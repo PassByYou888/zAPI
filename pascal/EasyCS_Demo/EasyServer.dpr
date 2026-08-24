@@ -35,6 +35,7 @@ begin
   if not App.RegisterCall('add', 'a + b', nil, @AddCallback) then
   begin
     Writeln('×¢²áÊ§°Ü');
+    API.Shutdown;
     Halt(1);
   end;
 
@@ -47,6 +48,7 @@ begin
   if not API.PrepareDone then
   begin
     Writeln('ÍøÂçÆô¶¯Ê§°Ü');
+    API.Shutdown;
     Halt(1);
   end;
 
