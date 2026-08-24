@@ -28,6 +28,25 @@ begin
       FOnFreeOrderStruct(Data);
 end;
 
+procedure TOrderStruct<T_>.SwapInstance(source: TOrderStruct<T_>);
+var
+  FFirst_: POrderStruct;
+  FLast_: POrderStruct;
+  FNum_: NativeInt;
+begin
+  FFirst_ := FFirst;
+  FLast_ := FLast;
+  FNum_ := FNum;
+
+  FFirst := source.FFirst;
+  FLast := source.FLast;
+  FNum := source.FNum;
+
+  source.FFirst := FFirst_;
+  source.FLast := FLast_;
+  source.FNum := FNum_;
+end;
+
 procedure TOrderStruct<T_>.Clear;
 var
   p, N_P: POrderStruct;
@@ -139,6 +158,25 @@ begin
       FOnFreeOrderStruct(Data)
   else
       Dispose(Data);
+end;
+
+procedure TOrderPtrStruct<T_>.SwapInstance(source: TOrderPtrStruct<T_>);
+var
+  FFirst_: POrderPtrStruct;
+  FLast_: POrderPtrStruct;
+  FNum_: NativeInt;
+begin
+  FFirst_ := FFirst;
+  FLast_ := FLast;
+  FNum_ := FNum;
+
+  FFirst := source.FFirst;
+  FLast := source.FLast;
+  FNum := source.FNum;
+
+  source.FFirst := FFirst_;
+  source.FLast := FLast_;
+  source.FNum := FNum_;
 end;
 
 procedure TOrderPtrStruct<T_>.Clear;
@@ -253,6 +291,31 @@ procedure TCriticalOrderStruct<T_>.DoFree(var Data: T_);
 begin
   if Assigned(FOnFreeCriticalOrderStruct) then
       FOnFreeCriticalOrderStruct(Data);
+end;
+
+procedure TCriticalOrderStruct<T_>.SwapInstance(source: TCriticalOrderStruct<T_>);
+var
+  FFirst_: POrderStruct;
+  FLast_: POrderStruct;
+  FNum_: NativeInt;
+begin
+  FCritical__.Lock;
+  source.FCritical__.Lock;
+
+  FFirst_ := FFirst;
+  FLast_ := FLast;
+  FNum_ := FNum;
+
+  FFirst := source.FFirst;
+  FLast := source.FLast;
+  FNum := source.FNum;
+
+  source.FFirst := FFirst_;
+  source.FLast := FLast_;
+  source.FNum := FNum_;
+
+  FCritical__.UnLock;
+  source.FCritical__.UnLock;
 end;
 
 procedure TCriticalOrderStruct<T_>.Clear;
@@ -390,6 +453,31 @@ begin
       FOnFreeCriticalOrderStruct(Data)
   else
       Dispose(Data);
+end;
+
+procedure TCriticalOrderPtrStruct<T_>.SwapInstance(source: TCriticalOrderPtrStruct<T_>);
+var
+  FFirst_: POrderPtrStruct;
+  FLast_: POrderPtrStruct;
+  FNum_: NativeInt;
+begin
+  FCritical__.Lock;
+  source.FCritical__.Lock;
+
+  FFirst_ := FFirst;
+  FLast_ := FLast;
+  FNum_ := FNum;
+
+  FFirst := source.FFirst;
+  FLast := source.FLast;
+  FNum := source.FNum;
+
+  source.FFirst := FFirst_;
+  source.FLast := FLast_;
+  source.FNum := FNum_;
+
+  FCritical__.UnLock;
+  source.FCritical__.UnLock;
 end;
 
 procedure TCriticalOrderPtrStruct<T_>.Clear;
