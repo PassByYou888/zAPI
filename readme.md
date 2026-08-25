@@ -10,11 +10,11 @@
 
 **zAPI 是一个完全开放、非商业性的开源项目。**
 
-- ✅ **永久免费**：MIT 许可证，任何个人、团队、企业均可自由使用，包括商业用途
-- ✅ **无商业捆绑**：没有任何收费功能、付费订阅或商业版本
-- ✅ **社区驱动**：所有发展决策来自社区贡献者，而非商业公司
-- ✅ **开放协作**：欢迎任何形式的贡献——代码、文档、测试、Issue 讨论
-- ✅ **透明开发**：所有源码公开，构建过程可复现，无闭源组件
+- ✅ **永久免费**：MIT 许可证，任何个人、团队、企业均可自由使用，包括商业用途。
+- ✅ **无商业捆绑**：没有任何收费功能、付费订阅或商业版本。
+- ✅ **社区驱动**：所有发展决策来自社区贡献者，而非商业公司。
+- ✅ **开放协作**：欢迎任何形式的贡献——代码、文档、测试、Issue 讨论。
+- ✅ **透明开发**：所有源码公开，构建过程可复现，无闭源组件。
 
 > 💡 **我们相信：** 跨语言通信应该是每个开发者的基本权利，而不应该被商业壁垒所限制。zAPI 将始终如一地保持开放、免费、社区驱动。
 
@@ -196,7 +196,7 @@ php client.php
 | **Linux（有 Lazarus 包）** | 包管理器安装 Lazarus → `lazbuild z_api_hub.lpi` |
 | **Linux（无 Lazarus / FPC 版本过低）** | 手动编译 `lazbuild`（使用 FPC 3.3.1）→ 构建 zAPI |
 
-**构建核心命令（前提：已安装 Lazarus 且 FPC ≥ 3.2.2）：**
+**构建核心命令（前提：已安装 Lazarus 且 FPC ≥ 3.2.2）**：
 
 ```bash
 git clone --recursive https://github.com/PassByYou888/zAPI.git
@@ -228,9 +228,9 @@ lazbuild z_api_hub.lpi
 | HTTP REST (JSON) | ~10-20 ms | +9-18 ms |
 
 **性能优势来源：**
-1. **零拷贝数据传递：** `API_GetBuffer()` 直接返回内部指针，无二次复制
-2. **二进制协议：** 无 JSON/Protobuf 编解码开销
-3. **C 层并发调度：** 回调在 C 线程池执行，不受 Python/Node 等语言的 GIL 限制
+1. **零拷贝数据传递：** `API_GetBuffer()` 直接返回内部指针，无二次复制。
+2. **二进制协议：** 无 JSON/Protobuf 编解码开销。
+3. **C 层并发调度：** 回调在 C 线程池执行，不受 Python/Node 等语言的 GIL 限制。
 
 ---
 
@@ -281,6 +281,9 @@ zAPI/
 │   │   ├── PHP/           # PHP 客户端库
 │   │   ├── node.js/       # Node.js 客户端库（v2.0）
 │   │   └── pascal/        # Pascal Bridge 示例
+│   ├── cross/             # ⭐ 跨语言 Cross Demo（多语言负载均衡演示）
+│   │   ├── nodejs/        # Node.js 客户端示例
+│   │   └── php/           # PHP 客户端示例
 │   ├── node/              # Node.js 网关（旧版，已被 Bridge 取代）
 │   └── web/               # Web.js 浏览器网关
 ├── Go/                    # Go 绑定 + 14 个示例
@@ -299,12 +302,12 @@ zAPI/
 **ZAPI Bridge** 是一个 HTTP ↔ zAPI 双向网关，让 PHP、Node.js 以及任何能发起 HTTP 请求的语言都能接入 zAPI 生态。
 
 **核心功能：**
-- 🌉 **双向调用**：从 PHP/Node.js 调用 zAPI 服务，同时将 PHP/Node.js 函数暴露为 zAPI 服务
-- 🐘 **PHP 完整支持**：提供 `invoke()`、`notify()`、`registerHook()`、`unregisterHook()` 等完整客户端 API
-- 🟢 **Node.js v2.0**：现代化 Promise 风格客户端，取代旧版 npm 方案
-- 📦 **零原生依赖**：无需 FFI、无需编译——只需 HTTP
-- 🚀 **高性能**：本地调用典型延迟 1-3ms
-- 🔧 **热注册**：运行时动态注册/注销 Webhook
+- 🌉 **双向调用**：从 PHP/Node.js 调用 zAPI 服务，同时将 PHP/Node.js 函数暴露为 zAPI 服务。
+- 🐘 **PHP 完整支持**：提供 `invoke()`、`notify()`、`registerHook()`、`unregisterHook()` 等完整客户端 API。
+- 🟢 **Node.js v2.0**：现代化 Promise 风格客户端，取代旧版 npm 方案。
+- 📦 **零原生依赖**：无需 FFI、无需编译——只需 HTTP。
+- 🚀 **高性能**：本地调用典型延迟 1-3ms。
+- 🔧 **热注册**：运行时动态注册/注销 Webhook。
 
 ### Bridge 文档
 - [📖 ZAPI Bridge 完整使用手册](./Py/bridge/📖%20ZAPI%20Bridge%20完整使用手册.md)
@@ -337,10 +340,10 @@ const result = await client.invoke('Calculator', 'add', [10, 20]);
 
 回调函数（`TAPI_Call` / `TAPI_Notify`）在**后台线程池**中执行。这意味着：
 
-- ❌ **禁止**在回调中调用 `API_Call` 或 `API_Notify`——可能导致死锁
-- ❌ **禁止**在回调中做长时间阻塞操作
-- ❌ **禁止**在回调中直接访问 UI 组件
-- ✅ **推荐**将耗时任务异步提交到自己的工作线程
+- ❌ **禁止**在回调中调用 `API_Call` 或 `API_Notify`——可能导致死锁。
+- ❌ **禁止**在回调中做长时间阻塞操作。
+- ❌ **禁止**在回调中直接访问 UI 组件。
+- ✅ **推荐**将耗时任务异步提交到自己的工作线程。
 
 ```cpp
 // ❌ 错误做法：在回调中调用 API_Call
@@ -411,6 +414,9 @@ static void __cdecl GoodCallback(void* trigger, void* input, void* output) {
 - [Go 微服务架构实战：用 zAPI 替换 gRPC 后，我们的延迟大幅降低](./Go/Go%20微服务架构实战：用%20zAPI%20替换%20gRPC%20后，我们的延迟大幅降低.md)
 - [Python 微服务选型：为什么我们用 zAPI 替代 Flask 作为推理服务网关](./Py/web/Python%20微服务选型：为什么我们用%20zAPI%20替代%20Flask%20作为推理服务网关.md)
 - [浏览器调用 C++ 的三种方案对比：为什么我们选择了 zAPI 网关](./Py/web/浏览器调用%20C++%20的三种方案对比：为什么我们选择了%20zAPI%20网关.md)
+
+### 运维与进阶
+- [ZAPI 数据句柄自动化内存回收机制 —— 为长期稳定运行而设计](./ZAPI%20数据句柄自动化内存回收机制%20——%20为长期稳定运行而设计.md) —— 深入理解 zAPI 的内存管理策略，保障 7×24 小时高可用。
 
 ---
 
