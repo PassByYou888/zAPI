@@ -1,18 +1,18 @@
 # API Hub Tool for C# – 让 .NET 融入多语言分布式世界
 
-## 一个 NuGet 级的头文件，让 C# 与 C/C++/Python/Java/Go/Pascal/PHP/Node.js 无缝互通
+## 一个 .cs 文件，让 C# 与 10+ 种语言无缝互通
 
-**版本：** 2.0（与 ZAPI 核心 v2.0 同步）
+**版本：** 2.1（与 ZAPI 核心 v2.1 同步）
 
 ---
 
 **API Hub Tool** 是一个基于纯 C ABI 的分布式 RPC 框架，为 C# 提供了 **P/Invoke 绑定**，让您的 .NET 应用能够：
 
-- 将任意 C# 方法暴露为远程可调用 API（请求‑响应或单向通知）
+- 将任意 C# 方法暴露为远程可调用 API（请求‑响应 `Call` 或单向通知 `Notify`）
 - 无痛调用其他语言（C/C++、Python、Java、Go、Rust、Pascal、PHP、Node.js 等）编写的服务
 - 在同一台机器上通过 **IPC**（< 1ms）或跨云通过 **TCP** 实现高性能通信
 - 享受 **自动服务发现、智能负载均衡、断线重连、NAT 穿透** 等企业级能力
-- **v2.0 新增**：支持 `API_UnReg` 动态注销 API 和 `API_SetOption` 运行时配置
+- **v2.1 新增**：支持 `API_Reg_Call_Sync` / `API_Reg_Notify_Sync` —— **UI 主线程同步回调**，对标 Pascal `TSoft_Synchronize_Tool` 机制，业务代码可直接操作 UI 控件，无需手动 `BeginInvoke`
 
 **您只需引用一个 .cs 文件，就能让 .NET 应用瞬间成为分布式服务网格的一等公民。**
 
@@ -42,20 +42,19 @@ private static void AddCallback(IntPtr trigger, IntPtr input, IntPtr output)
 {
     DataHnd hInput = new DataHnd { Handle = input };
     DataHnd hOutput = new DataHnd { Handle = output };
-    byte[] buf = ReadAllBytes(hInput);
-    if (buf.Length >= 8)
+    
+    // 使用类型安全读写（对标 Pascal 的原子读写）
+    if (API_ReadInt32(hInput, out int a) && API_ReadInt32(hInput, out int b))
     {
-        int a = BitConverter.ToInt32(buf, 0);
-        int b = BitConverter.ToInt32(buf, 4);
         int sum = a + b;
-        API_WriteBuffer(hOutput, BitConverter.GetBytes(sum), 4);
+        API_WriteInt32(hOutput, sum);
     }
 }
 
 // 在 Main 中
 AppHnd app = API_Create_APPHnd("Calc", "Calculator");
 APICallDelegate del = AddCallback;
-GCHandle.Alloc(del);  // 防止 GC 回收
+GCHandle.Alloc(del);  // ⚠️ 防止 GC 回收
 API_Reg_Call(app, "add", "Addition", IntPtr.Zero, del);
 ```
 
@@ -63,11 +62,13 @@ API_Reg_Call(app, "add", "Addition", IntPtr.Zero, del);
 
 ```csharp
 DataHnd param = API_Create_DataHnd("add");
-WriteInt(param, 5);
-WriteInt(param, 7);
+API_WriteInt32(param, 5);
+API_WriteInt32(param, 7);
 DataHnd result = API_Local_APP_Call(app, param);
-int sum = ReadInt(result);
+int sum = API_ReadInt32(result);
 Console.WriteLine($"5 + 7 = {sum}");
+API_Free_DataHnd(param);
+API_Free_DataHnd(result);
 ```
 
 ### 4. 远程调用（跨进程/跨语言）
@@ -78,16 +79,50 @@ API_Prepare_Client("ipc:calc_service", app);  // 连接服务
 if (API_Prepare_Done() == 1)
 {
     DataHnd param = API_Create_DataHnd("add");
-    WriteInt(param, 10);
-    WriteInt(param, 20);
+    API_WriteInt32(param, 10);
+    API_WriteInt32(param, 20);
     DataHnd result = API_Call("CalcService", param, 5000);
-    int sum = ReadInt(result);
+    int sum = API_ReadInt32(result);
     Console.WriteLine($"远程调用结果：{sum}");
+    API_Free_DataHnd(param);
     API_Free_DataHnd(result);
 }
 ```
 
-### 5. v2.0 新增：动态注销 API
+### 5. v2.1 新增：UI 主线程同步回调（对标 Pascal 软同步）
+
+**Pascal 开发者** 使用 `API_Reg_Sync_Call_M` + `API.Sync` 将回调安全迁移到主线程。  
+**C# 开发者** 使用 `API_Reg_Call_Sync` + `ProcessSyncQueue` —— **完全相同的设计理念**：
+
+```csharp
+// 注册同步回调（回调将在主线程执行）
+int r1 = API_Reg_Call_Sync(app, "add", "add(int a, int b)", IntPtr.Zero, AddCallback);
+
+// 回调中直接操作 UI — 无需任何 Invoke 代码！
+private void AddCallback(IntPtr trigger, IntPtr input, IntPtr output)
+{
+    DataHnd hInput = new DataHnd { Handle = input };
+    DataHnd hOutput = new DataHnd { Handle = output };
+    
+    if (API_ReadInt32(hInput, out int a) && API_ReadInt32(hInput, out int b))
+    {
+        int c = a + b;
+        API_WriteInt32(hOutput, c);
+        // 直接更新 UI — 运行在主线程！
+        this.lstLog.Items.Add($"收到加法请求: {a}+{b}={c}");
+    }
+}
+
+// 主线程定期驱动同步队列（对标 Pascal API.Sync）
+private void Timer_Tick(object sender, EventArgs e)
+{
+    API.ProcessSyncQueue();
+}
+```
+
+**技术原理**：桥接委托使用 `ManualResetEvent` 阻塞等待主线程执行完毕，确保 `input`/`output` 句柄在回调期间有效，完全对标 Pascal `TSoft_Synchronize_Tool.Synchronize` 的阻塞等待语义。
+
+### 6. 动态注销 API
 
 ```csharp
 // 运行时注销 API
@@ -97,7 +132,7 @@ if (API_UnReg(app, "add") == 1)
 }
 ```
 
-### 6. v2.0 新增：运行时配置
+### 7. 运行时配置
 
 ```csharp
 // 动态调整配置，无需重启
@@ -109,17 +144,16 @@ API_SetOption("IPC_Serv_ThreadCount", "8");
 
 ## 🌍 真正的跨语言互通
 
-| 语言 | 接入方式 | 代码量 | v2.0 新特性 |
+| 语言 | 接入方式 | 代码量 | 同步回调支持 |
 |------|---------|--------|-------------|
-| **C#** | `API_HubTool.cs` | 最少 | ✅ `API_UnReg` + `API_SetOption` |
-| **C/C++** | `API_HubTool.h` / `.hpp` | 极少 | ✅ 动态注销 |
-| **Python** | `ctypes.CDLL` | 10 行 | ✅ `App.unregister()` |
-| **Java** | JNA | 15 行 | ✅ `AppHandle.unregister()` |
-| **Go** | cgo | 15 行 | ✅ `Server.Unregister()` |
-| **Pascal** | `z_api_hubtool_import.pas` | 极简 | ✅ `API_UnReg` |
-| **Rust** | extern "C" | 20 行 | ✅ `AppHandle::unregister()` |
-| **PHP (v2.0 新增)** | ZAPI Bridge HTTP 网关 | 极少 | ✅ 双向调用、零原生依赖 |
-| **Node.js (v2.0 新增)** | ZAPI Bridge HTTP 网关 | 极少 | ✅ 双向调用、零原生依赖 |
+| **C#** | `API_HubTool.cs` | 最少 | ✅ `API_Reg_Call_Sync` |
+| **Pascal** | `z_api_hubtool_import.pas` | 极简 | ✅ `API_Reg_Sync_Call_M` |
+| **C/C++** | `API_HubTool.h` / `.hpp` | 极少 | ❌ (需手动调度) |
+| **Python** | `ctypes.CDLL` | 10 行 | ❌ (需手动调度) |
+| **Java** | JNA | 15 行 | ❌ (需手动调度) |
+| **Go** | cgo | 15 行 | ❌ (需手动调度) |
+| **Rust** | extern "C" | 20 行 | ❌ (需手动调度) |
+| **PHP / Node.js** | ZAPI Bridge HTTP 网关 | 极少 | ✅ 通过 Bridge 回调 |
 
 **同一个服务，可被任意语言调用，无需修改一行服务端代码。**
 
@@ -134,8 +168,8 @@ API Hub 底层是久经考验的 **C4 服务网格**，提供：
 - **透明容错**：断线自动重连，业务代码无感知。
 - **NAT 穿透**：跨公网、跨云、跨机房开箱即用。
 - **IPC 零拷贝通道**：同机延迟 < 1ms，吞吐 10,000+ 请求/秒。
-- **动态 API 注销（v2.0）**：运行时移除 API，约 3 秒广播传播，支持热卸载。
-- **运行时配置（v2.0）**：动态调整认证密码、等待连接、IPC 线程池等。
+- **动态 API 注销**：运行时移除 API，约 3 秒广播传播，支持热卸载。
+- **运行时配置**：动态调整认证密码、等待连接、IPC 线程池等。
 
 ---
 
@@ -146,7 +180,6 @@ API Hub 底层是久经考验的 **C4 服务网格**，提供：
 | 本地 IPC（同机） | **< 1 ms** | **10,000+ 次/秒** |
 | 本地 TCP 回环 | ~2–5 ms | ~3,000 次/秒 |
 | 跨机房 TCP | 网络延迟决定 | ~1,000 次/秒 |
-| 1000 并发线程 | 线性扩展 | 无性能衰减 |
 
 ### 为什么这么快？
 
@@ -162,15 +195,22 @@ API Hub 底层是久经考验的 **C4 服务网格**，提供：
 > **所有 API 函数都是完全线程安全的。**  
 > 您可以在成千上万个线程中同时调用 `API_Call`，无需加锁。
 
-但**回调函数（`APICallDelegate` / `APINotifyDelegate`）在后台线程池中执行**，因此：
+但**回调函数（`APICallDelegate` / `APINotifyDelegate`）的执行上下文取决于注册方式**：
 
-- ❌ **禁止**在回调中调用 `API_Call` 或 `API_Notify`（可能死锁）。
-- ❌ **禁止**在回调中执行长时间阻塞操作。
-- ❌ **禁止**在回调中直接访问 UI 控件。
-- ✅ **推荐**将耗时任务投递到自己的工作队列，回调快速返回。
+### 异步注册（`API_Reg_Call`）
+- 回调在 **C 线程池** 中执行。
+- ❌ **禁止**调用 `API_Call` 或 `API_Notify`（可能死锁）。
+- ❌ **禁止**长时间阻塞。
+- ❌ **禁止**直接访问 UI 控件。
+
+### 同步注册（`API_Reg_Call_Sync`）
+- 回调在 **主线程** 中执行（对标 Pascal `API_Reg_Sync_Call_M`）。
+- ✅ 可直接操作 UI 控件。
+- ⚠️ 会增加主线程负担，不适合高吞吐场景。
+- **必须定期调用 `ProcessSyncQueue` 驱动队列**。
 
 ```csharp
-// ❌ 错误：在回调中调用远程 API
+// ❌ 错误：在异步回调中调用远程 API
 private static void BadCallback(IntPtr trigger, IntPtr input, IntPtr output)
 {
     DataHnd result = API_Call("OtherApp", input, 5000);  // 死锁风险！
@@ -209,7 +249,7 @@ private static void GoodCallback(IntPtr trigger, IntPtr input, IntPtr output)
 
 ## ⚖️ 为什么选择 API Hub？
 
-| 特性 | API Hub v2.0 | gRPC | REST | ZeroMQ |
+| 特性 | API Hub v2.1 | gRPC | REST | ZeroMQ |
 |------|---------|------|------|--------|
 | **多语言 C ABI** | ✅ | ❌ (需 stub) | ❌ | ✅ |
 | **无需 IDL/代码生成** | ✅ | ❌ | ❌ | ❌ |
@@ -219,11 +259,10 @@ private static void GoodCallback(IntPtr trigger, IntPtr input, IntPtr output)
 | **自动重连** | ✅ | ❌ | ❌ | ❌ |
 | **IPC（<1ms）** | ✅ | ❌ | ❌ | ✅ |
 | **零拷贝** | ✅ | ❌ | ❌ | ❌ |
-| **动态注销 API** | ✅ (v2.0) | ❌ | ❌ | ❌ |
-| **运行时配置** | ✅ (v2.0) | ❌ | ❌ | ❌ |
-| **PHP/Node.js 支持** | ✅ (v2.0) | ✅ | ✅ | ❌ |
+| **动态注销 API** | ✅ | ❌ | ❌ | ❌ |
+| **运行时配置** | ✅ | ❌ | ❌ | ❌ |
+| **UI 主线程同步回调** | ✅ | ❌ | ❌ | ❌ |
 | **学习曲线** | **极低** | 高 | 中 | 中 |
-| **代码量** | **极少** | 多 | 中 | 中 |
 
 ---
 
@@ -238,6 +277,7 @@ private static void GoodCallback(IntPtr trigger, IntPtr input, IntPtr output)
 4. **运行示例**：
    - `HelloWorld.cs` – 本地调用入门
    - `Service.cs` + `Client1.cs` / `Client2.cs` – 多客户端交互
+   - `CrossNodeUI/MainForm.cs` – UI 同步回调演示
    - `FuncService.cs` + `FuncClient.cs` – 13 个 API 并发性能测试
    - `ComprehensiveDemo.cs` – 综合业务模拟
 
@@ -249,15 +289,16 @@ private static void GoodCallback(IntPtr trigger, IntPtr input, IntPtr output)
 
 我们提供了丰富的示例，覆盖从入门到高级的所有场景：
 
-| 示例 | 说明 |
-|------|------|
-| `HelloWorld.cs` | 本地调用，无网络，验证基本流程 |
-| `Service.cs` | 注册 11 个 API，通过 IPC 暴露 |
-| `Client1.cs` | 注册自己的 API，调用 Service 和 Client2 |
-| `Client2.cs` | 注册自己的 API，调用 Service 和 Client1 |
-| `FuncService.cs` | 13 个 API（含 SHA3-256），支持 IPC 和 TCP |
-| `FuncClient.cs` | 真正并发压测，展示线程安全 |
-| `ComprehensiveDemo.cs` | 模拟用户/订单/文件/统计业务 |
+| 示例 | 说明 | 对标 Pascal |
+|------|------|-------------|
+| `HelloWorld.cs` | 本地调用，无网络，验证基本流程 | `HelloWorld` |
+| `Service.cs` | 注册 11 个 API，通过 IPC 暴露 | `Service` |
+| `Client1.cs` / `Client2.cs` | 注册自己的 API，调用 Service 和对方 | `Client1` / `Client2` |
+| `CrossNodeUI` | UI 同步回调演示（WinForms） | `cross_node_ui` |
+| `CrossService/Node/Call` | 跨语言负载均衡演示 | `cross_demo` |
+| `FuncService.cs` | 13 个 API（含 SHA3-256），支持 IPC 和 TCP | `zAPIBenchServer` |
+| `FuncClient.cs` | 真正并发压测，展示线程安全 | `zAPIBenchClient` |
+| `ComprehensiveDemo.cs` | 模拟用户/订单/文件/统计业务 | — |
 
 所有示例均包含**详细中文注释**，让您轻松上手。
 
@@ -266,9 +307,9 @@ private static void GoodCallback(IntPtr trigger, IntPtr input, IntPtr output)
 ## 📚 文档与资源
 
 - [C# 绑定文件](API_HubTool.cs)（含完整注释）
-- [C 语言使用指南](API_HubTool.h)
-- [C++ RAII 封装](API_HubTool.hpp)
-- [Pascal 完整指南](API%20Hub%20Tool%20for%20Pascal%20—%20完整使用指南.md)
+- [C# 完整使用指南](API%20Hub%20Tool%20for%20C%23%20—%20完整使用指南.md)
+- [Pascal 完整指南](../pascal/API%20Hub%20Tool%20for%20Pascal.md) —— 理解原始设计
+- [Cross Demo 全语言实战手册](../🚀%20Cross%20Demo%20全语言实战手册.md)
 - [📖 ZAPI Bridge 完整使用手册](../Py/bridge/📖%20ZAPI%20Bridge%20完整使用手册.md)
 
 ---
@@ -279,7 +320,6 @@ private static void GoodCallback(IntPtr trigger, IntPtr input, IntPtr output)
 
 **（QQ：600585）**  
 项目发起人 & 核心开发者。欢迎技术交流、问题反馈。
-
 
 ---
 
@@ -307,7 +347,6 @@ private static void GoodCallback(IntPtr trigger, IntPtr input, IntPtr output)
 - [API Hub for Go 从零到一掌握多语言互调](../Go/API%20Hub%20for%20Go%20从零到一掌握多语言互调.md)
 - [zAPI Rust 使用指南](../rust/zAPI%20Rust%20使用指南.md)
 - [API Hub Java 使用指南](../java/API%20Hub%20Java%20使用指南.md)
-- [API Hub Tool for C# — 完整使用指南](API%20Hub%20Tool%20for%20C%23%20—%20完整使用指南.md)
 - [API Hub Tool for Pascal](../pascal/API%20Hub%20Tool%20for%20Pascal.md)
 - [Node.js 跨语言调用方案选型：为什么我们选择 Python 网关而非 npm 原生包](../node/Node.js%20跨语言调用方案选型：为什么我们选择%20Python%20网关而非%20npm%20原生包.md)
 - [老哥别卷了,你的 VB.NET 代码今天开始全栈通杀](../VB.NET/老哥别卷了,%20你的%20VB.NET%20代码今天开始全栈通杀.md)
