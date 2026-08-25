@@ -1819,6 +1819,7 @@ var
   Temp_SyncQueue__: TSynchronize_Queue___;
   sync_: PSynchronize_Data___;
 begin
+  Result := 0;
   Soft_Synchronize_Main_Thread := TCore_Thread.CurrentThread;
 
   Temp_SyncQueue__ := TSynchronize_Queue___.Create;
