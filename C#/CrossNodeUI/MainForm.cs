@@ -7,6 +7,10 @@ using static API_HubTool.Bindings.API;
 
 namespace CrossNodeUI
 {
+    /// <summary>
+    /// 跨语言节点 UI 演示窗体 —— 使用同步回调机制优雅更新 UI
+    /// 修复：桥接委托阻塞等待，保证句柄有效；改用 API_Reg_Call_Sync
+    /// </summary>
     public partial class MainForm : Form
     {
         // ---- UI 控件 ----
@@ -27,7 +31,6 @@ namespace CrossNodeUI
 
         public MainForm()
         {
-            // 手动初始化控件，不依赖设计器文件
             InitializeComponentManual();
             this.FormClosing += MainForm_FormClosing;
         }
@@ -73,7 +76,7 @@ namespace CrossNodeUI
             this.Controls.Add(this.btnStop);
             this.Controls.Add(this.lblStatus);
             this.Controls.Add(this.lstLog);
-            this.Text = "CrossNode UI (C#)";
+            this.Text = "CrossNode UI (C#) - 同步回调版";
             this.StartPosition = FormStartPosition.CenterScreen;
 
             this.timerRefresh.Enabled = false;
@@ -121,7 +124,7 @@ namespace CrossNodeUI
             API_shutdown();
         }
 
-        // ---- 后台工作线程 ----
+        // ---- 后台工作线程（负责网络初始化） ----
         private void WorkerThreadProc()
         {
             try
@@ -130,11 +133,13 @@ namespace CrossNodeUI
 
                 _appHandle = API_Create_APPHnd("demo", "C# CrossNode UI");
 
+                // 创建用户回调委托
                 _addDelegate = AddCallback;
                 _invSeriDelegate = InvSeriCallback;
 
-                int r1 = API_Reg_Call(_appHandle, "add", "add(int a, int b)", IntPtr.Zero, _addDelegate);
-                int r2 = API_Reg_Call(_appHandle, "inv_seri", "inv_seri()", IntPtr.Zero, _invSeriDelegate);
+                // 使用官方同步注册接口（内部已实现阻塞等待）
+                int r1 = API_Reg_Call_Sync(_appHandle, "add", "add(int a, int b)", IntPtr.Zero, _addDelegate);
+                int r2 = API_Reg_Call_Sync(_appHandle, "inv_seri", "inv_seri()", IntPtr.Zero, _invSeriDelegate);
 
                 this.BeginInvoke(new Action(() =>
                 {
@@ -181,36 +186,52 @@ namespace CrossNodeUI
             }
         }
 
-        // ---- 加法回调（在 C 线程池中执行） ----
+        // ---- 加法回调（将在主线程执行，因使用了同步注册） ----
         private void AddCallback(IntPtr trigger, IntPtr input, IntPtr output)
         {
             DataHnd hInput = new DataHnd { Handle = input };
             DataHnd hOutput = new DataHnd { Handle = output };
 
+            // 重置位置到开头（安全起见）
+            API_SetPos(hInput, 0);
+            API_SetPos(hOutput, 0);
+
+            long size = API_GetSize(hInput);
+            if (size < 8)
+            {
+                AppendLog($"加法参数大小异常: {size} 字节 (期望至少8)");
+                return;
+            }
+
             if (API_ReadInt32(hInput, out int a) && API_ReadInt32(hInput, out int b))
             {
                 int c = a + b;
                 API_WriteInt32(hOutput, c);
-                this.BeginInvoke(new Action(() =>
-                {
-                    AppendLog($"收到加法请求: {a}+{b}={c}");
-                }));
+                AppendLog($"收到加法请求: {a}+{b}={c}");
                 API_Post_Status($"加法计算: {a}+{b}={c}");
             }
             else
             {
-                this.BeginInvoke(new Action(() =>
-                {
-                    AppendLog("加法参数读取失败");
-                }));
+                AppendLog($"加法参数读取失败 (大小={size})");
+                // 可选：打印调试信息
             }
         }
 
-        // ---- 序列化反转回调 ----
+        // ---- 序列化反转回调（将在主线程执行） ----
         private void InvSeriCallback(IntPtr trigger, IntPtr input, IntPtr output)
         {
             DataHnd hInput = new DataHnd { Handle = input };
             DataHnd hOutput = new DataHnd { Handle = output };
+
+            API_SetPos(hInput, 0);
+            API_SetPos(hOutput, 0);
+
+            long size = API_GetSize(hInput);
+            if (size < 1 + 2 + 4 + 8 + 1 + 4) // 最小20字节
+            {
+                AppendLog($"inv_seri 参数大小异常: {size} 字节 (期望至少20)");
+                return;
+            }
 
             if (API_ReadUInt8(hInput, out byte b) &&
                 API_ReadUInt16(hInput, out ushort w) &&
@@ -227,32 +248,27 @@ namespace CrossNodeUI
                     API_WriteUInt16(hOutput, w);
                     API_WriteUInt8(hOutput, b);
 
-                    this.BeginInvoke(new Action(() =>
-                    {
-                        AppendLog($"inv_seri 接收: [{b}, {w}, {c}, {u64}, \"{s}\", {f}] -> 反向响应");
-                    }));
+                    AppendLog($"inv_seri 接收: [{b}, {w}, {c}, {u64}, \"{s}\", {f}] -> 反向响应");
                     API_Post_Status($"inv_seri 处理完成");
                 }
                 else
                 {
-                    this.BeginInvoke(new Action(() =>
-                    {
-                        AppendLog("inv_seri 读取 float 失败");
-                    }));
+                    AppendLog("inv_seri 读取 float 失败");
                 }
             }
             else
             {
-                this.BeginInvoke(new Action(() =>
-                {
-                    AppendLog("inv_seri 读取基本类型失败");
-                }));
+                AppendLog($"inv_seri 读取基本类型失败 (大小={size})");
             }
         }
 
-        // ---- 定时器刷新 ----
+        // ---- 定时器刷新（运行在 UI 线程） ----
         private void TimerRefresh_Tick(object sender, EventArgs e)
         {
+            // 1. 驱动同步回调队列 —— 所有通过 Sync 注册的回调将在此处执行
+            ProcessSyncQueue();
+
+            // 2. 拉取库内部日志并显示
             int count = API_Get_Status_Num();
             for (int i = 0; i < count; i++)
             {
@@ -261,14 +277,14 @@ namespace CrossNodeUI
                     AppendLog("[库] " + msg);
             }
 
+            // 3. 更新状态显示
             int mainThreadRunning = API_Check_MainThread();
             int appExists = API_Check_App("demo");
-
             string status = $"主线程: {(mainThreadRunning == 1 ? "运行" : "停止")} | 应用 'demo': {(appExists == 1 ? "在线" : "离线")}";
             UpdateStatus(status);
         }
 
-        // ---- 辅助：更新状态 ----
+        // ---- 辅助：更新状态标签（线程安全） ----
         private void UpdateStatus(string text)
         {
             if (lblStatus.InvokeRequired)
@@ -277,7 +293,7 @@ namespace CrossNodeUI
                 lblStatus.Text = text;
         }
 
-        // ---- 辅助：追加日志 ----
+        // ---- 辅助：追加日志（线程安全） ----
         private void AppendLog(string text)
         {
             if (lstLog.InvokeRequired)
