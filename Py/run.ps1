@@ -14,15 +14,6 @@ Write-Host "获取当前脚本所在目录（即 Py 目录）：$ScriptDir"
 $env:PYTHONPATH = $ScriptDir
 Write-Host "设置 PYTHONPATH = $env:PYTHONPATH"
 
-# 设置 PATH，添加 Binary 目录（相对于 Py 目录为 ..\Binary）
-$BinaryDir = Join-Path $ScriptDir "..\Binary"
-if (Test-Path $BinaryDir) {
-    $env:PATH = "$BinaryDir;$env:PATH"
-    Write-Host "添加 Binary 目录到 PATH: $BinaryDir"
-} else {
-    Write-Host "警告：Binary 目录不存在: $BinaryDir" -ForegroundColor Yellow
-}
-
 # 如果传递了参数，则运行指定的脚本，否则默认运行 basic/hello_world.py
 if ($args.Count -eq 0) {
     $ScriptToRun = "examples\basic\hello_world.py"
