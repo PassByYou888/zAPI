@@ -52,86 +52,66 @@ def _find_library():
         return "libz_api_hub.so"  # used on Linux, BSD, and other ELF systems
 
 def _load_library():
-    """Locate and load the shared library, searching common paths across platforms."""
+    """
+    Locate and load the shared library, primarily using the system PATH.
+    Fallback to the current working directory if PATH lookup fails.
+    """
     lib_name = _find_library()
-    
-    # 获取项目根目录和当前模块目录
-    module_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.dirname(module_dir)          # 通常为项目根目录
-    binary_dir = os.path.join(project_root, "..", "Binary")  # 某些项目结构
+    is_64bit = ctypes.sizeof(ctypes.c_void_p) == 8
 
-    # 构建搜索路径列表（优先级从高到低）
-    search_paths = [
-        module_dir,                # 与 _native.py 同目录
-        project_root,              # 项目根目录
-        binary_dir,                # 常见二进制目录
-        os.getcwd(),               # 当前工作目录
-        os.path.dirname(sys.executable),  # Python 解释器目录
-        os.environ.get("Z_API_HUB_PATH", ""),  # 自定义环境变量
-    ]
-    # 移除空路径
-    search_paths = [p for p in search_paths if p and os.path.isdir(p)]
-
-    # ----- Windows 特定处理 -----
+    # ----- Windows specific: add system PATH directories to DLL search path -----
     if sys.platform == "win32":
-        # 将系统 PATH 中的目录加入 DLL 搜索路径（Python 3.8+ 必需）
+        # Add all directories from PATH to the DLL search path (Python 3.8+)
         for p in os.environ.get("PATH", "").split(os.pathsep):
             if p and os.path.isdir(p):
                 try:
                     os.add_dll_directory(p)
                 except Exception:
-                    pass  # 忽略添加失败
+                    pass
 
-        # 预先加载依赖库（如 z_ipc_64.dll），避免主库加载时找不到依赖
-        dep_candidates = ["z_ipc_64.dll", "z_ipc_32.dll"]
-        for dep in dep_candidates:
-            # 在搜索路径中寻找依赖库
-            for base in search_paths:
-                dep_path = os.path.join(base, dep)
-                if os.path.exists(dep_path):
-                    try:
-                        ctypes.WinDLL(dep_path)
-                        print(f"[INFO] Preloaded dependency: {dep_path}")
-                    except Exception as e:
-                        print(f"[WARN] Failed to preload {dep_path}: {e}")
-                    break
-
-    # ----- 尝试加载主库 -----
-    for base in search_paths:
-        full_path = os.path.join(base, lib_name)
-        if os.path.exists(full_path):
-            print(f"[INFO] Attempting to load: {full_path}")
-            try:
-                if sys.platform == "win32":
-                    # winmode=0 使用系统默认搜索顺序（配合 add_dll_directory）
-                    lib = ctypes.WinDLL(full_path, winmode=0)
-                elif sys.platform == "darwin":
-                    # macOS 使用 CDLL
-                    lib = ctypes.CDLL(full_path)
-                else:
-                    # Linux / BSD / 其他 Unix
-                    lib = ctypes.CDLL(full_path)
-                print(f"[INFO] Successfully loaded from: {full_path}")
-                return lib
-            except OSError as e:
-                print(f"[WARN] Failed to load {full_path}: {e}")
+        # Pre-load the IPC dependency library from PATH (only the correct bitness)
+        dep_name = "z_ipc_64.dll" if is_64bit else "z_ipc_32.dll"
+        for p in os.environ.get("PATH", "").split(os.pathsep):
+            if not p:
                 continue
+            dep_path = os.path.join(p, dep_name)
+            if os.path.exists(dep_path):
+                try:
+                    ctypes.WinDLL(dep_path)
+                    # Success, no need to continue
+                    break
+                except Exception:
+                    pass  # ignore individual load failures
 
-    # ----- 最后尝试从系统 PATH 中加载（直接使用库名）-----
-    print(f"[INFO] Attempting to load from system PATH: {lib_name}")
+    # ----- Attempt to load the main library -----
+    # Strategy: first try loading by name (relying on system PATH), then fallback to current directory
     try:
         if sys.platform == "win32":
             lib = ctypes.WinDLL(lib_name, winmode=0)
         else:
             lib = ctypes.CDLL(lib_name)
-        print(f"[INFO] Successfully loaded from system PATH")
+        print(f"[INFO] Successfully loaded from system PATH: {lib_name}")
         return lib
-    except OSError as e:
-        print(f"[ERROR] Cannot load {lib_name} from any path. Last error: {e}")
+    except OSError:
+        pass  # not found in PATH
 
-    # 所有尝试都失败
-    raise ApiError(f"Cannot load library: {lib_name}")
+    # Fallback: try loading from the current working directory
+    cwd_path = os.path.join(os.getcwd(), lib_name)
+    if os.path.exists(cwd_path):
+        try:
+            if sys.platform == "win32":
+                lib = ctypes.WinDLL(cwd_path, winmode=0)
+            else:
+                lib = ctypes.CDLL(cwd_path)
+            print(f"[INFO] Successfully loaded from current directory: {cwd_path}")
+            return lib
+        except OSError:
+            pass
 
+    # If we reach here, loading has failed
+    raise ApiError(f"Cannot load library: {lib_name}. Ensure it is in the system PATH or current directory.")
+
+# Load the library once at module import
 _lib = _load_library()
 
 def _set_func(name, argtypes, restype):
